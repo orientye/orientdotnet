@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package crpc;
+
+option csharp_namespace = "CRpcOptions";
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.ServiceOptions {
+  int32 service_id = 60001;
+}
+
+extend google.protobuf.MethodOptions {
+  int32 method_id = 60002;
+}

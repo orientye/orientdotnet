@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package example;
+
+option csharp_namespace = "Example";
+
+import "google/protobuf/descriptor.proto";
+
+import "crpc-options.proto";
+
+import "helloworld-msg.proto"; 
+
+service Greeter {
+    option (crpc.service_id) = 1000;
+    rpc SayHello (HelloRequest) returns (HelloReply) { option (crpc.method_id) = 1; }
+}
