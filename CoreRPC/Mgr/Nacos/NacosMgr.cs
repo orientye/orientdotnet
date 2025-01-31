@@ -1,31 +1,29 @@
-﻿using CoreRPC.ConfigCenter.Nacos;
-using CoreRPC.Registry.Nacos;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Nacos.V2;
 using Nacos.V2.DependencyInjection;
+
+using CoreRPC.ConfigCenter.Nacos;
+using CoreRPC.Registry.Nacos;
 
 namespace CoreRPC.Mgr.Nacos
 {
     public sealed class NacosMgr
     {
-        private static readonly NacosMgr instance = new NacosMgr();
+        private static readonly NacosMgr Inst = new NacosMgr();
 
         static NacosMgr() { }
         private NacosMgr() {
-            Config = new NacosConfig();
-            Registry = new NacosRegistry();
+            config = new NacosConfig();
+            registry = new NacosRegistry();
         }
         public static NacosMgr Instance
         {
-            get
-            {
-                return instance;
-            }
+            get => Inst;
         }
 
-        public readonly NacosConfig Config;
-        public readonly NacosRegistry Registry;
+        private readonly NacosConfig config;
+        private readonly NacosRegistry registry;
 
         public void Init(string url, string nameSpace, string userName, string password)
         {
@@ -33,7 +31,7 @@ namespace CoreRPC.Mgr.Nacos
 
             services.AddNacosV2Config(x =>
             {
-                x.ServerAddresses = new System.Collections.Generic.List<string> { url };
+                x.ServerAddresses = new List<string> { url };
                 x.EndPoint = "";
                 x.Namespace = nameSpace;
 
@@ -46,14 +44,14 @@ namespace CoreRPC.Mgr.Nacos
 
             services.AddNacosV2Naming(x =>
             {
-                x.ServerAddresses = new System.Collections.Generic.List<string> { url };
+                x.ServerAddresses = new List<string> { url };
                 x.EndPoint = "";
                 x.Namespace = nameSpace;
 
                 x.UserName = userName;
                 x.Password = password;
 
-                // switch to use http or rpc
+                // switch to use http or rpc 
                 x.NamingUseRpc = true;
             });
 
@@ -61,8 +59,8 @@ namespace CoreRPC.Mgr.Nacos
 
             IServiceProvider serviceProvider = services.BuildServiceProvider();
 
-            Config.Srv_ = serviceProvider.GetService<INacosConfigService>();
-            Registry.Srv_ = serviceProvider.GetService<INacosNamingService>();
+            config.Srv_ = serviceProvider.GetService<INacosConfigService>();
+            registry.Srv_ = serviceProvider.GetService<INacosNamingService>();
         }
     }
 }
