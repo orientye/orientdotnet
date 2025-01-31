@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Net;
 using CoreRPC.Rpc.CRpc.Codec;
 using DotNetty.Codecs;
 using DotNetty.Handlers.Logging;
@@ -38,6 +39,12 @@ public sealed class CRpcClient : IRpcClient
     public async Task<IChannel> ConnectAsync(string host, int port)
     {
         channel = await bootstrap.ConnectAsync(host, port);
+        return channel;
+    }
+    
+    public async Task<IChannel> ConnectAsync(IPAddress inetHost, int inetPort)
+    {
+        channel = await bootstrap.ConnectAsync(inetHost, inetPort);
         return channel;
     }
 

@@ -1,5 +1,6 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
+using System.Net;
 using CoreRPC.Rpc.CRpc.Client;
 using Example;
 
@@ -20,7 +21,7 @@ Console.WriteLine("Hello, RPC Client!");
 //::trpc::Status status = proxy->SayHello(client_ctx, req, &rsp);
 
 CRpcClient rpcClient = new CRpcClient();
-await rpcClient.ConnectAsync("127.0.0.1", 7999);
+await rpcClient.ConnectAsync(IPAddress.Loopback, 7999);
 GreeterClient client = new GreeterClient();
 client.__client = rpcClient;
 HelloRequest req = new HelloRequest();
