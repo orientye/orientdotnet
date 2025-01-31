@@ -59,8 +59,8 @@ namespace CoreRPC.Mgr.Nacos
 
             IServiceProvider serviceProvider = services.BuildServiceProvider();
 
-            config.Srv_ = serviceProvider.GetService<INacosConfigService>();
-            registry.Srv_ = serviceProvider.GetService<INacosNamingService>();
+            config.Srv = serviceProvider.GetService<INacosConfigService>();
+            registry.Srv = serviceProvider.GetService<INacosNamingService>();
         }
     }
 }
