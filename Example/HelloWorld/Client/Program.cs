@@ -1,7 +1,7 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
 using System.Net;
-using CoreRPC.Rpc.CRpc.Client;
+using CRPC.Rpc.CRpc.Client;
 using Example;
 
 Console.WriteLine("Hello, RPC Client!");

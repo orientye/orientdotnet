@@ -3,9 +3,9 @@
 
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
-using CoreRPC.Rpc;
-using CoreRPC.Rpc.CRpc.Codec;
-using CoreRPC.Rpc.CRpc.Server;
+using CRPC.Rpc;
+using CRPC.Rpc.CRpc.Codec;
+using CRPC.Rpc.CRpc.Server;
 
 namespace Example {
 

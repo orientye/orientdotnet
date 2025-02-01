@@ -1,5 +1,5 @@
-using CoreRPC.Rpc.CRpc;
-using CoreRPC.Rpc.CRpc.Server;
+using CRPC.Rpc.CRpc;
+using CRPC.Rpc.CRpc.Server;
 
 namespace Example;
 

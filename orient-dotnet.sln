@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.9.34622.214
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CoreRPC", "CoreRPC\CoreRPC.csproj", "{1EF4D075-9E9E-4F01-95F7-D23172BFF7A0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CRPC", "CRPC\CRPC.csproj", "{1EF4D075-9E9E-4F01-95F7-D23172BFF7A0}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HelloWorldServer", "Example\HelloWorld\Server\HelloWorldServer.csproj", "{7CFE9DA8-498E-46B9-A3F1-7860B7E313EA}"
 EndProject
