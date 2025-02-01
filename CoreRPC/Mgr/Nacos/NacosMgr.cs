@@ -14,16 +14,16 @@ namespace CoreRPC.Mgr.Nacos
 
         static NacosMgr() { }
         private NacosMgr() {
-            config = new NacosConfig();
-            registry = new NacosRegistry();
+            Config = new NacosConfig();
+            Registry = new NacosRegistry();
         }
         public static NacosMgr Instance
         {
             get => Inst;
         }
 
-        private readonly NacosConfig config;
-        private readonly NacosRegistry registry;
+        public readonly NacosConfig Config;
+        public readonly NacosRegistry Registry;
 
         public void Init(string url, string nameSpace, string userName, string password)
         {
@@ -59,8 +59,8 @@ namespace CoreRPC.Mgr.Nacos
 
             IServiceProvider serviceProvider = services.BuildServiceProvider();
 
-            config.Srv = serviceProvider.GetService<INacosConfigService>();
-            registry.Srv = serviceProvider.GetService<INacosNamingService>();
+            Config.Srv = serviceProvider.GetService<INacosConfigService>();
+            Registry.Srv = serviceProvider.GetService<INacosNamingService>();
         }
     }
 }

@@ -1,7 +1,7 @@
 ﻿using System.Net.Sockets;
 using System.Net;
 
-namespace CoreRPC.util
+namespace CoreRPC.Util
 {
     public class NetworkHelper
     {
