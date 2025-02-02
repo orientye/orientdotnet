@@ -17,7 +17,7 @@ namespace CRPC.Mgr.Nacos.Test
                 "egotao:fight-srv",
                 Constants.DEFAULT_GROUP,
                 $"{lanip}",
-                20000, 
+                7999, 
                 new Dictionary<string, string> {
                     { "srvId", "1002" }, 
                     { "startTime", $"{dt}" },
