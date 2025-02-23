@@ -45,9 +45,9 @@ namespace CRpcProtobufPlugin
             sb.AppendLine("");
             sb.AppendLine("using Google.Protobuf;");
             sb.AppendLine("using Google.Protobuf.WellKnownTypes;");
-            sb.AppendLine("using CoreRPC.Rpc;");
-            sb.AppendLine("using CoreRPC.Rpc.CRpc.Codec;");
-            sb.AppendLine("using CoreRPC.Rpc.CRpc.Server;");
+            sb.AppendLine("using CRpc.Rpc;");
+            sb.AppendLine("using CRpc.Rpc.CRpc.Codec;");
+            sb.AppendLine("using CRpc.Rpc.CRpc.Server;");
             sb.AppendLine("");
 
             var ns = GetFileNamespace(fileDescriptorProto);
@@ -80,9 +80,9 @@ namespace CRpcProtobufPlugin
             sb.AppendLine("");
             sb.AppendLine("using Google.Protobuf;");
             sb.AppendLine("using Google.Protobuf.WellKnownTypes;");
-            sb.AppendLine("using CoreRPC.Rpc;");
-            sb.AppendLine("using CoreRPC.Rpc.CRpc.Codec;");
-            sb.AppendLine("using CoreRPC.Rpc.CRpc.Client;");
+            sb.AppendLine("using CRpc.Rpc;");
+            sb.AppendLine("using CRpc.Rpc.CRpc.Codec;");
+            sb.AppendLine("using CRpc.Rpc.CRpc.Client;");
             sb.AppendLine("");
 
             var ns = GetFileNamespace(fileDescriptorProto);
