@@ -3,7 +3,7 @@ using DotNetty.Codecs;
 using DotNetty.Common.Utilities;
 using DotNetty.Transport.Channels;
 
-namespace CRPC.Rpc.CRpc.Codec
+namespace CRpc.Rpc.CRpc.Codec
 {
     public class CRpcMessageDecoder : LengthFieldBasedFrameDecoder
     {

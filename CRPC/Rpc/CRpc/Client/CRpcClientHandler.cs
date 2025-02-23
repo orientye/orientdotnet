@@ -1,7 +1,7 @@
-﻿using CRPC.Rpc.CRpc.Codec;
+﻿using CRpc.Rpc.CRpc.Codec;
 using DotNetty.Transport.Channels;
 
-namespace CRPC.Rpc.CRpc.Client;
+namespace CRpc.Rpc.CRpc.Client;
 
 public class CRpcClientHandler : ChannelHandlerAdapter
 {

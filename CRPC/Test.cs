@@ -1,4 +1,4 @@
-﻿using CRPC.Mgr.Nacos.Test;
+﻿using CRpc.Mgr.Nacos.Test;
 
 namespace CRPC
 {

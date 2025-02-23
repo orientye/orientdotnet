@@ -1,6 +1,6 @@
 using DotNetty.Buffers;
 
-namespace CRPC.Rpc.CRpc.Codec
+namespace CRpc.Rpc.CRpc.Codec
 {
     public class ChecksumsUtil
     {

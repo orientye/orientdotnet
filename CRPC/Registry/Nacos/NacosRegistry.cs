@@ -3,7 +3,7 @@ using Nacos.V2.Common;
 using Nacos.V2.Naming.Dtos;
 
 //https://github.com/catcherwong-archive/Nacos2Demo
-namespace CRPC.Registry.Nacos
+namespace CRpc.Registry.Nacos
 {
     public class NacosRegistry
     {

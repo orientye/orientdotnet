@@ -1,13 +1,13 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
-using CRPC.Rpc.CRpc.Codec;
+using CRpc.Rpc.CRpc.Codec;
 using DotNetty.Handlers.Logging;
 using DotNetty.Handlers.Timeout;
 using DotNetty.Transport.Bootstrapping;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Sockets;
 
-namespace CRPC.Rpc.CRpc.Client;
+namespace CRpc.Rpc.CRpc.Client;
 
 public sealed class CRpcClient : IRpcClient
 {

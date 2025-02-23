@@ -1,7 +1,7 @@
 ﻿using Nacos.V2;
 
 //https://github.com/catcherwong-archive/Nacos2Demo
-namespace CRPC.ConfigCenter.Nacos
+namespace CRpc.ConfigCenter.Nacos
 {
     public class NacosConfig
     {

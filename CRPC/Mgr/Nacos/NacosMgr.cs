@@ -3,10 +3,10 @@ using Microsoft.Extensions.Logging;
 using Nacos.V2;
 using Nacos.V2.DependencyInjection;
 
-using CRPC.ConfigCenter.Nacos;
-using CRPC.Registry.Nacos;
+using CRpc.ConfigCenter.Nacos;
+using CRpc.Registry.Nacos;
 
-namespace CRPC.Mgr.Nacos
+namespace CRpc.Mgr.Nacos
 {
     public sealed class NacosMgr
     {

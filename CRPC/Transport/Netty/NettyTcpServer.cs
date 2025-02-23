@@ -1,4 +1,4 @@
-﻿namespace CRPC.transport.netty
+﻿namespace CRpc.transport.netty
 {
     internal class NettyTcpServer
     {

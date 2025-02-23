@@ -1,4 +1,4 @@
-﻿namespace CRPC.Rpc.CRpc.Codec
+﻿namespace CRpc.Rpc.CRpc.Codec
 {
     public class CRpcMessageState
     {

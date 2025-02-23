@@ -1,7 +1,7 @@
 ﻿using System.Net;
 using System.Net.Sockets;
 
-namespace CRPC.Util;
+namespace CRpc.Util;
 
 public static class NetworkHelper
 {

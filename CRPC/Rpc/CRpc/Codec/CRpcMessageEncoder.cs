@@ -2,7 +2,7 @@
 using DotNetty.Codecs;
 using DotNetty.Transport.Channels;
 
-namespace CRPC.Rpc.CRpc.Codec
+namespace CRpc.Rpc.CRpc.Codec
 {
     public class CRpcMessageEncoder : MessageToByteEncoder<Object>
     {

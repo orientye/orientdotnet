@@ -1,4 +1,4 @@
-﻿namespace CRPC.Rpc.CRpc.Server;
+﻿namespace CRpc.Rpc.CRpc.Server;
 
 public class CRpcContext : IRpcContext
 {

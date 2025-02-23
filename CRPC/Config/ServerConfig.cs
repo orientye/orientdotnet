@@ -1,4 +1,4 @@
-﻿namespace CRPC.Config
+﻿namespace CRpc.Config
 {
     internal class ServerConfig
     {

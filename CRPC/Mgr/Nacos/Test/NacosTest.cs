@@ -1,7 +1,7 @@
-﻿using CRPC.Util;
+﻿using CRpc.Util;
 using Nacos.V2.Common;
 
-namespace CRPC.Mgr.Nacos.Test;
+namespace CRpc.Mgr.Nacos.Test;
 
 public class NacosTest
 {

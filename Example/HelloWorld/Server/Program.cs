@@ -1,5 +1,5 @@
 ﻿// See https://aka.ms/new-console-template for more information
-using CRPC.Rpc.CRpc.Server;
+using CRpc.Rpc.CRpc.Server;
 using Example;
 
 Console.WriteLine("Hello, RPC Server!");

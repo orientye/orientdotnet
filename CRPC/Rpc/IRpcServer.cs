@@ -1,4 +1,4 @@
-﻿namespace CRPC.Rpc
+﻿namespace CRpc.Rpc
 {
     public interface IRpcServer
     {

@@ -1,7 +1,7 @@
 ﻿using DotNetty.Buffers;
 using DotNetty.Common.Internal;
 
-namespace CRPC.Rpc.CRpc.Codec
+namespace CRpc.Rpc.CRpc.Codec
 {
     public class CRpcMessageHeader
     {

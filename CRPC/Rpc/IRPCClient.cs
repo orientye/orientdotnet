@@ -1,6 +1,6 @@
-﻿using CRPC.Rpc.CRpc.Codec;
+﻿using CRpc.Rpc.CRpc.Codec;
 
-namespace CRPC.Rpc
+namespace CRpc.Rpc
 {
     public interface IRpcClient
     {

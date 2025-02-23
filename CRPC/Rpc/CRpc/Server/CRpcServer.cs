@@ -1,11 +1,11 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
-using CRPC.Rpc.CRpc.Codec;
+using CRpc.Rpc.CRpc.Codec;
 using DotNetty.Transport.Bootstrapping;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Sockets;
 
-namespace CRPC.Rpc.CRpc.Server;
+namespace CRpc.Rpc.CRpc.Server;
 
 public sealed class CRpcServer : IRpcServer
 {
