@@ -1,18 +1,20 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
-using CRpc.Rpc.CRpc.Codec;
+
 using DotNetty.Transport.Bootstrapping;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Sockets;
+
+using CRpc.Rpc.CRpc.Codec;
 
 namespace CRpc.Rpc.CRpc.Server;
 
 public sealed class CRpcServer : IRpcServer
 {
-    private static readonly int InitialCapacity = 106;
+    private const int InitialCapacity = 106;
     private static readonly int ConcurrencyLevel = Environment.ProcessorCount * 2;
 
-    private static readonly ConcurrentDictionary<int, IRpcService> services = new(ConcurrencyLevel, InitialCapacity);
+    private static readonly ConcurrentDictionary<int, IRpcService> Services = new(ConcurrencyLevel, InitialCapacity);
 
     public void Open()
     {
@@ -25,7 +27,7 @@ public sealed class CRpcServer : IRpcServer
     public void RegisterService(IRpcService service)
     {
         var serviceId = service.GetServiceId();
-        services[serviceId] = service;
+        Services[serviceId] = service;
     }
 
     public void UnregisterService(IRpcService service)
@@ -34,7 +36,7 @@ public sealed class CRpcServer : IRpcServer
 
     public static bool TryGetService(int serviceId, out IRpcService s)
     {
-        var result = services.TryGetValue(serviceId, out s);
+        var result = Services.TryGetValue(serviceId, out s);
         return result;
     }
 
