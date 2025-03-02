@@ -13,7 +13,7 @@ public sealed class CRpcClient : IRpcClient
 {
     private static readonly ConcurrentDictionary<long, TaskCompletionSource<CRpcMessage>> results =
         new ConcurrentDictionary<long, TaskCompletionSource<CRpcMessage>>();
-    private long reqSequence = 0 ;
+    private long reqSequence;
     private IChannel? channel;
 
     private readonly Bootstrap bootstrap = new Bootstrap();
