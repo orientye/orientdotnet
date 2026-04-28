@@ -5,6 +5,13 @@ namespace CRpc.Rpc.CRpc.Client;
 
 public class CRpcClientHandler : ChannelHandlerAdapter
 {
+    private readonly CRpcClient client;
+
+    public CRpcClientHandler(CRpcClient client)
+    {
+        this.client = client;
+    }
+
     public override void ChannelRead(IChannelHandlerContext ctx, object msg)
     {
         var message = (CRpcMessage)msg;
@@ -14,7 +21,7 @@ public class CRpcClientHandler : ChannelHandlerAdapter
         var reqSequence = message.getReqSequence();
         Console.WriteLine($"CRpcClientHandler recv msg: serviceId={serviceId}, methodId={methodId}, reqSequence={reqSequence}");
         
-        CRpcClient.OnReceiveResponse(message);
+        client.OnReceiveResponse(message);
 
         ctx.FireChannelRead(msg);
     }

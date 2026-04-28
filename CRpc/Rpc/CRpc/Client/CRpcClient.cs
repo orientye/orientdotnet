@@ -12,7 +12,7 @@ namespace CRpc.Rpc.CRpc.Client;
 
 public sealed class CRpcClient : IRpcClient
 {
-    private static readonly ConcurrentDictionary<long, PendingCall> results = new();
+    private readonly ConcurrentDictionary<long, PendingCall> results = new();
     private long reqSequence;
     private IChannel? channel;
 
@@ -31,7 +31,7 @@ public sealed class CRpcClient : IRpcClient
                 pipeline.AddLast(new LoggingHandler("crpc-client"));
                 pipeline.AddLast("timeout", new IdleStateHandler(0, 0, 60));
                 pipeline.AddLast("decoder", new CRpcMessageDecoder(32768, 16));
-                pipeline.AddLast("handler", new CRpcClientHandler());
+                pipeline.AddLast("handler", new CRpcClientHandler(this));
             }));
     }
 
@@ -49,18 +49,19 @@ public sealed class CRpcClient : IRpcClient
 
     public CRpcTask<CRpcMessage> CallAsync(short serviceId, short methodId, byte[] body, int timeout)
     {
+        var loop = CRpcLoop.Current
+            ?? throw new InvalidOperationException("CRpcClient.CallAsync must be called from a bound CRpcLoop thread.");
+
         long reqSeq = __IncrementReqId();
-        var pendingCall = __AddResultTaskAsync(reqSeq, timeout);
+        var pendingCall = __AddResultTaskAsync(reqSeq, timeout, loop);
         
         __Send(reqSeq, serviceId, methodId, body);
 
         return pendingCall.Source.Task;
     }
 
-    public static void OnReceiveResponse(CRpcMessage message)
+    internal void OnReceiveResponse(CRpcMessage message)
     {
-        var serviceId = message.getServiceId();
-        var methodId = message.getMethodId();
         var reqSequence = message.getReqSequence();
         if (results.TryRemove(reqSequence, out var pendingCall))
         {
@@ -87,9 +88,9 @@ public sealed class CRpcClient : IRpcClient
         }
     }
 
-    private PendingCall __AddResultTaskAsync(long reqSeq, int timeout)
+    private PendingCall __AddResultTaskAsync(long reqSeq, int timeout, CRpcLoop loop)
     {
-        var pendingCall = new PendingCall(new CRpcTaskCompletionSource<CRpcMessage>());
+        var pendingCall = new PendingCall(new CRpcTaskCompletionSource<CRpcMessage>(loop));
         if (timeout > 0)
         {
             pendingCall.TimeoutTimer = new Timer(

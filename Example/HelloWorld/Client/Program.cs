@@ -1,6 +1,7 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
 using System.Net;
+using CRpc.Async;
 using CRpc.Rpc.CRpc.Client;
 using Example;
 
@@ -26,6 +27,11 @@ GreeterClient client = new GreeterClient();
 client.__client = rpcClient;
 HelloRequest req = new HelloRequest();
 req.Msg = "hi, crpc, I am from client";
-var (result, helloReply) = await client.SayHelloAsync(req);
+var (result, helloReply) = CRpcLoopRunner.RunUntilComplete(
+    CRpcLoop.Main,
+    () => client.SayHelloAsync(req));
 Console.WriteLine($"server return: result={result}, response: {helloReply.Msg}");
-Console.ReadKey();
+if (!Console.IsInputRedirected)
+{
+    Console.ReadKey();
+}
