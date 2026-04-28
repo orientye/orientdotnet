@@ -1,9 +1,11 @@
-﻿namespace CRpc.Rpc
+﻿using CRpc.Async;
+
+namespace CRpc.Rpc
 {
     public interface IRpcService
     {
         public int GetServiceId();
         
-        public Task<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req);
+        public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req);
     }
 }

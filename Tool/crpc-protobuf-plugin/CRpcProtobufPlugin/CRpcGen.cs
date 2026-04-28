@@ -45,6 +45,7 @@ namespace CRpcProtobufPlugin
             sb.AppendLine("");
             sb.AppendLine("using Google.Protobuf;");
             sb.AppendLine("using Google.Protobuf.WellKnownTypes;");
+            sb.AppendLine("using CRpc.Async;");
             sb.AppendLine("using CRpc.Rpc;");
             sb.AppendLine("using CRpc.Rpc.CRpc.Codec;");
             sb.AppendLine("using CRpc.Rpc.CRpc.Server;");
@@ -80,6 +81,7 @@ namespace CRpcProtobufPlugin
             sb.AppendLine("");
             sb.AppendLine("using Google.Protobuf;");
             sb.AppendLine("using Google.Protobuf.WellKnownTypes;");
+            sb.AppendLine("using CRpc.Async;");
             sb.AppendLine("using CRpc.Rpc;");
             sb.AppendLine("using CRpc.Rpc.CRpc.Codec;");
             sb.AppendLine("using CRpc.Rpc.CRpc.Client;");
@@ -126,7 +128,7 @@ namespace CRpcProtobufPlugin
                 var outType = GetTypeName(method.OutputType);
                 var inType = GetTypeName(method.InputType);
 
-                sb.AppendLine($"    public async Task<(int, {outType})> {method.Name}Async({inType} request, int timeOut = 5000)");
+                sb.AppendLine($"    public async CRpcTask<(int, {outType})> {method.Name}Async({inType} request, int timeOut = 5000)");
                 sb.AppendLine( "    {");
                 sb.AppendLine( "        var result = 0;");
                 sb.AppendLine( "        if (0 == result)");
@@ -171,7 +173,7 @@ namespace CRpcProtobufPlugin
                 var outType = GetTypeName(method.OutputType);
                 var inType = GetTypeName(method.InputType);
 
-                sbMethodInner.AppendLine($"    private async Task<(int, byte[])> __OnMessage{method.Name}Async(CRpcContext context, CRpcMessage req)");
+                sbMethodInner.AppendLine($"    private async CRpcTask<(int, byte[])> __OnMessage{method.Name}Async(CRpcContext context, CRpcMessage req)");
                 sbMethodInner.AppendLine("    {");
                 sbMethodInner.AppendLine($"        var request = {inType}.Parser.ParseFrom(req.getBody());");
                 sbMethodInner.AppendLine($"        var (result, data) = await {method.Name}Async(context, request);");
@@ -180,18 +182,18 @@ namespace CRpcProtobufPlugin
                 sbMethodInner.AppendLine("    }");
                 sbMethodInner.AppendLine();
 
-                sbMethodAbstract.AppendLine($"    protected abstract Task<(int, {outType})> {method.Name}Async(CRpcContext context, {inType} request);");
+                sbMethodAbstract.AppendLine($"    protected abstract CRpcTask<(int, {outType})> {method.Name}Async(CRpcContext context, {inType} request);");
 
                 sbMethodCase.AppendLine($"        if (methodId == {methodId}) {{ return this.__OnMessage{method.Name}Async(rpcContext, rpcReq); }}");
             }
             
-            sb.AppendLine("    public Task<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)");
+            sb.AppendLine("    public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)");
             sb.AppendLine("    {");
             sb.AppendLine("        var rpcContext = (CRpcContext)context;");
             sb.AppendLine("        var rpcReq = (CRpcMessage)req;");
             sb.AppendLine("        var methodId = rpcReq.getMethodId();");
             sb.Append(sbMethodCase);
-            sb.AppendLine("        return Task.FromResult((-1, Array.Empty<byte>()));");
+            sb.AppendLine("        return CRpcTask.FromResult((-1, Array.Empty<byte>()));");
             sb.AppendLine("    }");
             sb.AppendLine();
 

@@ -9,6 +9,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HelloWorldServer", "Example
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HelloWorldClient", "Example\HelloWorld\Client\HelloWorldClient.csproj", "{D8FC7197-D447-4577-A789-A2B7AB81546D}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{3D3C20CD-0A65-4D17-AFD7-50E0648EE450}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CRPC.Tests", "Tests\CRPC.Tests\CRPC.Tests.csproj", "{CD3A3253-6E5A-452B-816C-C4BA1FF0F1DF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,11 +31,18 @@ Global
 		{D8FC7197-D447-4577-A789-A2B7AB81546D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D8FC7197-D447-4577-A789-A2B7AB81546D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D8FC7197-D447-4577-A789-A2B7AB81546D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CD3A3253-6E5A-452B-816C-C4BA1FF0F1DF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CD3A3253-6E5A-452B-816C-C4BA1FF0F1DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CD3A3253-6E5A-452B-816C-C4BA1FF0F1DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CD3A3253-6E5A-452B-816C-C4BA1FF0F1DF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {85697249-FACE-4459-97C6-23EAE11CA5EF}
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{CD3A3253-6E5A-452B-816C-C4BA1FF0F1DF} = {3D3C20CD-0A65-4D17-AFD7-50E0648EE450}
 	EndGlobalSection
 EndGlobal

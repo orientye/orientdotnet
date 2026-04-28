@@ -5,6 +5,7 @@ using DotNetty.Transport.Bootstrapping;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Sockets;
 
+using CRpc.Async;
 using CRpc.Rpc.CRpc.Codec;
 
 namespace CRpc.Rpc.CRpc.Server;
@@ -64,7 +65,24 @@ public sealed class CRpcServer : IRpcServer
             var bootstrapChannel = await bootstrap.BindAsync(IPAddress.Any, 7999);
 
             Console.WriteLine($"CRpcServer started, Listening on {bootstrapChannel.LocalAddress}");
-            Console.ReadLine();
+            Console.WriteLine("Press Ctrl+C to stop.");
+
+            using var cts = new CancellationTokenSource();
+            ConsoleCancelEventHandler cancelHandler = (_, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+            };
+            Console.CancelKeyPress += cancelHandler;
+
+            try
+            {
+                CRpcServerLoop.RunUntilCancelled(CRpcLoop.Main, cts.Token);
+            }
+            finally
+            {
+                Console.CancelKeyPress -= cancelHandler;
+            }
 
             await bootstrapChannel.CloseAsync();
         }

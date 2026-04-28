@@ -1,0 +1,198 @@
+using System.Runtime.CompilerServices;
+
+namespace CRpc.Async;
+
+[AsyncMethodBuilder(typeof(CRpcAsyncMethodBuilder))]
+public readonly struct CRpcTask
+{
+    private readonly CRpcTask<CRpcUnit> task;
+
+    internal CRpcTask(CRpcTask<CRpcUnit> task)
+    {
+        this.task = task;
+    }
+
+    public Awaiter GetAwaiter()
+    {
+        return new Awaiter(task.GetAwaiter());
+    }
+
+    public static CRpcTask<T> FromTask<T>(Task<T> task, CRpcLoop? loop = null)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+
+        var source = new CRpcTaskCompletionSource<T>(loop);
+        CompleteFromTask(task, source);
+        return source.Task;
+    }
+
+    public static CRpcTask<T> FromResult<T>(T result, CRpcLoop? loop = null)
+    {
+        var source = new CRpcTaskCompletionSource<T>(loop);
+        source.TrySetResult(result);
+        return source.Task;
+    }
+
+    public static CRpcTask CompletedTask(CRpcLoop? loop = null)
+    {
+        var source = new CRpcTaskCompletionSource<CRpcUnit>(loop);
+        source.TrySetResult(CRpcUnit.Value);
+        return new CRpcTask(source.Task);
+    }
+
+    public static CRpcTask FromTask(Task task, CRpcLoop? loop = null)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+
+        var source = new CRpcTaskCompletionSource<CRpcUnit>(loop);
+        CompleteFromTask(task, source);
+        return new CRpcTask(source.Task);
+    }
+
+    public static CRpcTask Delay(int millisecondsDelay, CRpcLoop? loop = null)
+    {
+        if (millisecondsDelay < -1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(millisecondsDelay));
+        }
+
+        var source = new CRpcTaskCompletionSource<CRpcUnit>(loop);
+        if (millisecondsDelay == 0)
+        {
+            source.TrySetResult(CRpcUnit.Value);
+            return new CRpcTask(source.Task);
+        }
+
+        Timer? timer = null;
+        timer = new Timer(
+            _ =>
+            {
+                timer?.Dispose();
+                source.TrySetResult(CRpcUnit.Value);
+            },
+            null,
+            millisecondsDelay,
+            Timeout.Infinite);
+
+        return new CRpcTask(source.Task);
+    }
+
+    private static void CompleteFromTask<T>(Task<T> task, CRpcTaskCompletionSource<T> source)
+    {
+        if (task.IsCompleted)
+        {
+            SetSourceResult(task, source);
+            return;
+        }
+
+        task.ContinueWith(
+            completedTask => SetSourceResult(completedTask, source),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    private static void SetSourceResult<T>(Task<T> task, CRpcTaskCompletionSource<T> source)
+    {
+        if (task.IsCanceled)
+        {
+            source.TrySetCanceled();
+            return;
+        }
+
+        if (task.IsFaulted)
+        {
+            Exception exception;
+            if (task.Exception?.InnerException is not null)
+            {
+                exception = task.Exception.InnerException;
+            }
+            else if (task.Exception is not null)
+            {
+                exception = task.Exception;
+            }
+            else
+            {
+                exception = new InvalidOperationException("Task failed.");
+            }
+
+            source.TrySetException(exception);
+            return;
+        }
+
+        source.TrySetResult(task.Result);
+    }
+
+    private static void CompleteFromTask(Task task, CRpcTaskCompletionSource<CRpcUnit> source)
+    {
+        if (task.IsCompleted)
+        {
+            SetSourceResult(task, source);
+            return;
+        }
+
+        task.ContinueWith(
+            completedTask => SetSourceResult(completedTask, source),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    private static void SetSourceResult(Task task, CRpcTaskCompletionSource<CRpcUnit> source)
+    {
+        if (task.IsCanceled)
+        {
+            source.TrySetCanceled();
+            return;
+        }
+
+        if (task.IsFaulted)
+        {
+            Exception exception;
+            if (task.Exception?.InnerException is not null)
+            {
+                exception = task.Exception.InnerException;
+            }
+            else if (task.Exception is not null)
+            {
+                exception = task.Exception;
+            }
+            else
+            {
+                exception = new InvalidOperationException("Task failed.");
+            }
+
+            source.TrySetException(exception);
+            return;
+        }
+
+        source.TrySetResult(CRpcUnit.Value);
+    }
+
+    public readonly struct Awaiter : INotifyCompletion
+    {
+        private readonly CRpcTask<CRpcUnit>.Awaiter awaiter;
+
+        internal Awaiter(CRpcTask<CRpcUnit>.Awaiter awaiter)
+        {
+            this.awaiter = awaiter;
+        }
+
+        public bool IsCompleted => awaiter.IsCompleted;
+
+        public void OnCompleted(Action continuation)
+        {
+            awaiter.OnCompleted(continuation);
+        }
+
+        public void GetResult()
+        {
+            awaiter.GetResult();
+        }
+    }
+}
+
+internal readonly struct CRpcUnit
+{
+    public static CRpcUnit Value { get; } = new();
+}

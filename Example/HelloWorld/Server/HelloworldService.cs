@@ -3,6 +3,7 @@
 
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
+using CRpc.Async;
 using CRpc.Rpc;
 using CRpc.Rpc.CRpc.Codec;
 using CRpc.Rpc.CRpc.Server;
@@ -16,16 +17,16 @@ public abstract class GreeterBase : IRpcService
         return 1000;
     }
 
-    public Task<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+    public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
     {
         var rpcContext = (CRpcContext)context;
         var rpcReq = (CRpcMessage)req;
         var methodId = rpcReq.getMethodId();
         if (methodId == 1) { return this.__OnMessageSayHelloAsync(rpcContext, rpcReq); }
-        return Task.FromResult((-1, Array.Empty<byte>()));
+        return CRpcTask.FromResult((-1, Array.Empty<byte>()));
     }
 
-    private async Task<(int, byte[])> __OnMessageSayHelloAsync(CRpcContext context, CRpcMessage req)
+    private async CRpcTask<(int, byte[])> __OnMessageSayHelloAsync(CRpcContext context, CRpcMessage req)
     {
         var request = Example.HelloRequest.Parser.ParseFrom(req.getBody());
         var (result, data) = await SayHelloAsync(context, request);
@@ -34,7 +35,7 @@ public abstract class GreeterBase : IRpcService
     }
 
     // Please implement the following:
-    protected abstract Task<(int, Example.HelloReply)> SayHelloAsync(CRpcContext context, Example.HelloRequest request);
+    protected abstract CRpcTask<(int, Example.HelloReply)> SayHelloAsync(CRpcContext context, Example.HelloRequest request);
 }
 }
 

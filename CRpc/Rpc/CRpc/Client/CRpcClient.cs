@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
+using CRpc.Async;
 using CRpc.Rpc.CRpc.Codec;
 using DotNetty.Handlers.Logging;
 using DotNetty.Handlers.Timeout;
@@ -11,8 +12,7 @@ namespace CRpc.Rpc.CRpc.Client;
 
 public sealed class CRpcClient : IRpcClient
 {
-    private static readonly ConcurrentDictionary<long, TaskCompletionSource<CRpcMessage>> results =
-        new ConcurrentDictionary<long, TaskCompletionSource<CRpcMessage>>();
+    private static readonly ConcurrentDictionary<long, PendingCall> results = new();
     private long reqSequence;
     private IChannel? channel;
 
@@ -47,23 +47,14 @@ public sealed class CRpcClient : IRpcClient
         return channel;
     }
 
-    //public async Task<(int, byte[])> CallAsync(short serviceId, short methodId, byte[] bytes, int timeout)
-    public async Task<CRpcMessage> CallAsync(short serviceId, short methodId, byte[] body, int timeout)
+    public CRpcTask<CRpcMessage> CallAsync(short serviceId, short methodId, byte[] body, int timeout)
     {
         long reqSeq = __IncrementReqId();
-        var respTask = __AddResultTaskAsync(reqSeq);
+        var pendingCall = __AddResultTaskAsync(reqSeq, timeout);
         
         __Send(reqSeq, serviceId, methodId, body);
-        
-        Task timeoutTask = Task.Delay(timeout);
-        Task completedTask = await Task.WhenAny(respTask, timeoutTask);
-        if (completedTask == timeoutTask)
-        {
-            Console.WriteLine($"*********CallAsync timeout: {timeout}");
-            throw new TimeoutException();
-        }
-        var result = await respTask;
-        return result;
+
+        return pendingCall.Source.Task;
     }
 
     public static void OnReceiveResponse(CRpcMessage message)
@@ -71,16 +62,16 @@ public sealed class CRpcClient : IRpcClient
         var serviceId = message.getServiceId();
         var methodId = message.getMethodId();
         var reqSequence = message.getReqSequence();
-        //TaskCompletionSource<CRpcMessage> tcs;
-        if (results.TryGetValue(reqSequence, out TaskCompletionSource<CRpcMessage> tcs))
+        if (results.TryRemove(reqSequence, out var pendingCall))
         {
-            tcs.SetResult(message);
+            pendingCall.TimeoutTimer?.Dispose();
+            pendingCall.Source.TrySetResult(message);
         }
     }
 
     private void __Send(long reqSeq, short serviceId, short methodId, byte[] bytes)
     {
-        CRpcMessageHeader header = CRpcMessageHeader.valueOf(CRpcMessageState.STATE_NONE, 0, reqSequence, serviceId, methodId);
+        CRpcMessageHeader header = CRpcMessageHeader.valueOf(CRpcMessageState.STATE_NONE, 0, reqSeq, serviceId, methodId);
         header.addState(CRpcMessageState.NONE_ENCRYPT);
         CRpcMessage req = CRpcMessage.valueOf(header, bytes);
         req.encryptAndCompress(512, true, true);
@@ -96,17 +87,44 @@ public sealed class CRpcClient : IRpcClient
         }
     }
 
-    private Task<CRpcMessage> __AddResultTaskAsync(long reqSeq)
+    private PendingCall __AddResultTaskAsync(long reqSeq, int timeout)
     {
-        var tcs = new TaskCompletionSource<CRpcMessage>();
-        var task = tcs.Task;
-        results[reqSeq] = tcs;
-        return task;
+        var pendingCall = new PendingCall(new CRpcTaskCompletionSource<CRpcMessage>());
+        if (timeout > 0)
+        {
+            pendingCall.TimeoutTimer = new Timer(
+                _ =>
+                {
+                    if (results.TryRemove(reqSeq, out var removed))
+                    {
+                        Console.WriteLine($"*********CallAsync timeout: {timeout}");
+                        removed.Source.TrySetException(new TimeoutException());
+                    }
+                },
+                null,
+                timeout,
+                Timeout.Infinite);
+        }
+
+        results[reqSeq] = pendingCall;
+        return pendingCall;
     }
     
     private long __IncrementReqId()
     {
         var id = Interlocked.Increment(ref this.reqSequence);
         return id;
+    }
+
+    private sealed class PendingCall
+    {
+        public PendingCall(CRpcTaskCompletionSource<CRpcMessage> source)
+        {
+            Source = source;
+        }
+
+        public CRpcTaskCompletionSource<CRpcMessage> Source { get; }
+
+        public Timer? TimeoutTimer { get; set; }
     }
 }

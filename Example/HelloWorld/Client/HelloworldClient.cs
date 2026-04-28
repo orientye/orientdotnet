@@ -5,6 +5,7 @@
 
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
+using CRpc.Async;
 using CRpc.Rpc;
 using CRpc.Rpc.CRpc.Codec;
 using CRpc.Rpc.CRpc.Client;
@@ -15,7 +16,7 @@ public sealed class GreeterClient
 {
     public IRpcClient __client;
     
-    public async Task<(int, Example.HelloReply)> SayHelloAsync(Example.HelloRequest request, int timeOut = 5000)
+    public async CRpcTask<(int, Example.HelloReply)> SayHelloAsync(Example.HelloRequest request, int timeOut = 5000)
     {
         CRpcMessage message = await __client.CallAsync(1000, 1, request.ToByteArray(), timeOut);
         var result = message.getHeader().getResultCode();
