@@ -76,6 +76,29 @@ public class CRpcServerHandlerTests
     }
 
     [Fact]
+    public void ChannelInactiveLogsNormalClientDisconnect()
+    {
+        var originalOut = Console.Out;
+        using var output = new StringWriter();
+        var inactive = new InactiveCaptureHandler();
+        var channel = new EmbeddedChannel(new CRpcServerHandler(), inactive);
+
+        try
+        {
+            Console.SetOut(output);
+
+            channel.Pipeline.FireChannelInactive();
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+        }
+
+        Assert.True(inactive.WasInactive);
+        Assert.Contains("client disconnected", output.ToString());
+    }
+
+    [Fact]
     public void UnexpectedExceptionsContinueThroughPipeline()
     {
         var exceptions = new ExceptionCaptureHandler();
@@ -153,6 +176,16 @@ public class CRpcServerHandlerTests
         public override void ExceptionCaught(IChannelHandlerContext context, Exception exception)
         {
             Exception = exception;
+        }
+    }
+
+    private sealed class InactiveCaptureHandler : ChannelHandlerAdapter
+    {
+        public bool WasInactive { get; private set; }
+
+        public override void ChannelInactive(IChannelHandlerContext context)
+        {
+            WasInactive = true;
         }
     }
 }

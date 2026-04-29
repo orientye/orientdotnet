@@ -13,8 +13,7 @@ public class CRpcServerHandler : ChannelHandlerAdapter
 
         var serviceId = message.getServiceId();
         var methodId = message.getMethodId();
-        IRpcService rpcService;
-        if (CRpcServer.TryGetService(serviceId, out rpcService))
+        if (CRpcServer.TryGetService(serviceId, out var rpcService))
         {
             CRpcLoop.Main.Post(() => ProcessMessage(rpcService, ctx, msg));
         }
@@ -68,6 +67,12 @@ public class CRpcServerHandler : ChannelHandlerAdapter
         {
             Console.WriteLine($"******************process exception={exception}");
         }
+    }
+
+    public override void ChannelInactive(IChannelHandlerContext context)
+    {
+        Console.WriteLine($"CRpcServerHandler client disconnected: {context.Channel.RemoteAddress}");
+        context.FireChannelInactive();
     }
 
     public override void ExceptionCaught(IChannelHandlerContext context, Exception exception)
