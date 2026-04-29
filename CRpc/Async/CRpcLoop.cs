@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 
 namespace CRpc.Async;
 
@@ -12,6 +13,7 @@ public sealed class CRpcLoop
     public static CRpcLoop? Current => current;
 
     private readonly ConcurrentQueue<Action> actions = new();
+    private readonly PriorityQueue<ScheduledTimer, long> timers = new();
     private int threadId;
 
     public bool IsInLoopThread => threadId != 0 && Environment.CurrentManagedThreadId == threadId;
@@ -28,6 +30,22 @@ public sealed class CRpcLoop
         actions.Enqueue(action);
     }
 
+    internal CRpcLoopTimer ScheduleDelay(int millisecondsDelay, Action action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        if (millisecondsDelay < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(millisecondsDelay));
+        }
+
+        EnsureLoopThread();
+        var timer = new CRpcLoopTimer(action);
+        timers.Enqueue(
+            new ScheduledTimer(timer),
+            Stopwatch.GetTimestamp() + MillisecondsToStopwatchTicks(millisecondsDelay));
+        return timer;
+    }
+
     public void Tick(int maxActions = 1024)
     {
         if (threadId == 0)
@@ -39,7 +57,59 @@ public sealed class CRpcLoop
             current = this;
         }
 
+        RunExpiredTimers();
+
         for (var i = 0; i < maxActions && actions.TryDequeue(out var action); i++)
+        {
+            action();
+        }
+    }
+
+    private void RunExpiredTimers()
+    {
+        var now = Stopwatch.GetTimestamp();
+        while (timers.TryPeek(out var scheduledTimer, out var dueTimestamp) && dueTimestamp <= now)
+        {
+            timers.Dequeue();
+            scheduledTimer.Timer.Invoke();
+        }
+    }
+
+    private static long MillisecondsToStopwatchTicks(int millisecondsDelay)
+    {
+        return millisecondsDelay * Stopwatch.Frequency / 1000;
+    }
+
+    private void EnsureLoopThread()
+    {
+        if (!IsInLoopThread)
+        {
+            throw new InvalidOperationException("CRpcLoop timer operations must run on the loop thread.");
+        }
+    }
+
+    private readonly record struct ScheduledTimer(CRpcLoopTimer Timer);
+}
+
+internal sealed class CRpcLoopTimer
+{
+    private readonly Action action;
+
+    public CRpcLoopTimer(Action action)
+    {
+        this.action = action;
+    }
+
+    public bool IsCanceled { get; private set; }
+
+    public void Cancel()
+    {
+        IsCanceled = true;
+    }
+
+    public void Invoke()
+    {
+        if (!IsCanceled)
         {
             action();
         }

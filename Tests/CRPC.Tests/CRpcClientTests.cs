@@ -49,10 +49,31 @@ public class CRpcClientTests
         worker.Join();
 
         Assert.Null(result);
+        Assert.False(awaiter.IsCompleted);
 
         loop.Tick();
 
         Assert.Same(response, result);
         Assert.Equal(loopThreadId, continuationThreadId);
+    }
+
+    [Fact]
+    public void CallAsyncTimeoutCompletesOnlyWhenCallingLoopTicks()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+
+        var client = new CRpcClient();
+        var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 1);
+        var awaiter = task.GetAwaiter();
+
+        Thread.Sleep(20);
+
+        Assert.False(awaiter.IsCompleted);
+
+        loop.Tick();
+
+        Assert.True(awaiter.IsCompleted);
+        Assert.Throws<TimeoutException>(() => awaiter.GetResult());
     }
 }

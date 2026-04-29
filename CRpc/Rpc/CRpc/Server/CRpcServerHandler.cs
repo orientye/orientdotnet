@@ -54,7 +54,7 @@ public class CRpcServerHandler : ChannelHandlerAdapter
         Console.WriteLine($"*******************channel: {ctx.Channel}");
         var frame = allocator.DirectBuffer(rsp.getSize());
         rsp.toFrame(frame, 16);
-        await CRpcTask.FromTask(ctx.WriteAndFlushAsync(frame));
+        _ = ctx.WriteAndFlushAsync(frame);
     }
 
     private static void CompleteProcessMessage(CRpcTask.Awaiter awaiter)

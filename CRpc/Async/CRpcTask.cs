@@ -21,13 +21,15 @@ public readonly struct CRpcTask
     {
         ArgumentNullException.ThrowIfNull(task);
 
+        loop ??= CRpcLoop.Current ?? CRpcLoop.Main;
         var source = new CRpcTaskCompletionSource<T>(loop);
-        CompleteFromTask(task, source);
+        CompleteFromTask(task, source, loop);
         return source.Task;
     }
 
     public static CRpcTask<T> FromResult<T>(T result, CRpcLoop? loop = null)
     {
+        loop ??= CRpcLoop.Current ?? CRpcLoop.Main;
         var source = new CRpcTaskCompletionSource<T>(loop);
         source.TrySetResult(result);
         return source.Task;
@@ -35,6 +37,7 @@ public readonly struct CRpcTask
 
     public static CRpcTask CompletedTask(CRpcLoop? loop = null)
     {
+        loop ??= CRpcLoop.Current ?? CRpcLoop.Main;
         var source = new CRpcTaskCompletionSource<CRpcUnit>(loop);
         source.TrySetResult(CRpcUnit.Value);
         return new CRpcTask(source.Task);
@@ -44,8 +47,9 @@ public readonly struct CRpcTask
     {
         ArgumentNullException.ThrowIfNull(task);
 
+        loop ??= CRpcLoop.Current ?? CRpcLoop.Main;
         var source = new CRpcTaskCompletionSource<CRpcUnit>(loop);
-        CompleteFromTask(task, source);
+        CompleteFromTask(task, source, loop);
         return new CRpcTask(source.Task);
     }
 
@@ -56,6 +60,7 @@ public readonly struct CRpcTask
             throw new ArgumentOutOfRangeException(nameof(millisecondsDelay));
         }
 
+        loop ??= CRpcLoop.Current ?? CRpcLoop.Main;
         var source = new CRpcTaskCompletionSource<CRpcUnit>(loop);
         if (millisecondsDelay == 0)
         {
@@ -63,30 +68,26 @@ public readonly struct CRpcTask
             return new CRpcTask(source.Task);
         }
 
-        Timer? timer = null;
-        timer = new Timer(
-            _ =>
-            {
-                timer?.Dispose();
-                source.TrySetResult(CRpcUnit.Value);
-            },
-            null,
-            millisecondsDelay,
-            Timeout.Infinite);
+        if (millisecondsDelay > 0)
+        {
+            loop.ScheduleDelay(
+                millisecondsDelay,
+                () => source.TrySetResult(CRpcUnit.Value));
+        }
 
         return new CRpcTask(source.Task);
     }
 
-    private static void CompleteFromTask<T>(Task<T> task, CRpcTaskCompletionSource<T> source)
+    private static void CompleteFromTask<T>(Task<T> task, CRpcTaskCompletionSource<T> source, CRpcLoop loop)
     {
         if (task.IsCompleted)
         {
-            SetSourceResult(task, source);
+            CompleteOnLoop(loop, () => SetSourceResult(task, source));
             return;
         }
 
         task.ContinueWith(
-            completedTask => SetSourceResult(completedTask, source),
+            completedTask => loop.Post(() => SetSourceResult(completedTask, source)),
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
@@ -123,19 +124,30 @@ public readonly struct CRpcTask
         source.TrySetResult(task.Result);
     }
 
-    private static void CompleteFromTask(Task task, CRpcTaskCompletionSource<CRpcUnit> source)
+    private static void CompleteFromTask(Task task, CRpcTaskCompletionSource<CRpcUnit> source, CRpcLoop loop)
     {
         if (task.IsCompleted)
         {
-            SetSourceResult(task, source);
+            CompleteOnLoop(loop, () => SetSourceResult(task, source));
             return;
         }
 
         task.ContinueWith(
-            completedTask => SetSourceResult(completedTask, source),
+            completedTask => loop.Post(() => SetSourceResult(completedTask, source)),
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
+    }
+
+    private static void CompleteOnLoop(CRpcLoop loop, Action complete)
+    {
+        if (loop.IsInLoopThread)
+        {
+            complete();
+            return;
+        }
+
+        loop.Post(complete);
     }
 
     private static void SetSourceResult(Task task, CRpcTaskCompletionSource<CRpcUnit> source)

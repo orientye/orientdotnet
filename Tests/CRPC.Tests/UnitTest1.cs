@@ -6,38 +6,30 @@ namespace CRPC.Tests;
 public class CRpcLoopTests
 {
     [Fact]
-    public void TaskContinuationRunsOnLoopThreadWhenCompletedFromAnotherThread()
+    public void CompletionSourceRejectsCompletionFromNonLoopThread()
     {
         var loop = new CRpcLoop();
         loop.BindToCurrentThread();
-        var loopThreadId = Environment.CurrentManagedThreadId;
 
         var source = new CRpcTaskCompletionSource<int>(loop);
-        var continuationRan = false;
-        int? continuationThreadId = null;
+        Exception? exception = null;
 
         var worker = new Thread(() =>
         {
-            var awaiter = source.Task.GetAwaiter();
-            awaiter.OnCompleted(() =>
+            try
             {
-                continuationRan = true;
-                continuationThreadId = Environment.CurrentManagedThreadId;
-            });
-
-            Assert.True(source.TrySetResult(42));
+                source.TrySetResult(42);
+            }
+            catch (Exception caughtException)
+            {
+                exception = caughtException;
+            }
         });
 
         worker.Start();
         worker.Join();
 
-        Assert.False(continuationRan);
-
-        loop.Tick();
-
-        Assert.True(continuationRan);
-        Assert.Equal(loopThreadId, continuationThreadId);
-        Assert.Equal(42, source.Task.GetAwaiter().GetResult());
+        Assert.Contains("loop thread", exception?.Message);
     }
 
     [Fact]
@@ -59,9 +51,7 @@ public class CRpcLoopTests
             continuationThreadId = Environment.CurrentManagedThreadId;
         });
 
-        var worker = new Thread(() => Assert.True(source.TrySetResult(41)));
-        worker.Start();
-        worker.Join();
+        Assert.True(source.TrySetResult(41));
 
         Assert.Null(result);
 
@@ -94,8 +84,8 @@ public class CRpcLoopTests
         worker.Start();
         worker.Join();
 
-        Assert.True(SpinWait.SpinUntil(() => task.GetAwaiter().IsCompleted, TimeSpan.FromSeconds(1)));
         Assert.Null(result);
+        Assert.False(awaiter.IsCompleted);
 
         loop.Tick();
 
@@ -119,6 +109,24 @@ public class CRpcLoopTests
         PumpUntil(loop, () => continuationThreadId is not null, TimeSpan.FromSeconds(2));
 
         Assert.Equal(loopThreadId, continuationThreadId);
+    }
+
+    [Fact]
+    public void DelayDoesNotCompleteUntilLoopTicksExpiredTimer()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+
+        var task = CRpcTask.Delay(1, loop);
+        var awaiter = task.GetAwaiter();
+
+        Thread.Sleep(20);
+
+        Assert.False(awaiter.IsCompleted);
+
+        loop.Tick();
+
+        Assert.True(awaiter.IsCompleted);
     }
 
     [Fact]

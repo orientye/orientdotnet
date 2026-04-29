@@ -2,7 +2,6 @@ namespace CRpc.Async;
 
 public sealed class CRpcTaskCompletionSource<T>
 {
-    private readonly object syncRoot = new();
     private readonly CRpcLoop loop;
     private readonly List<Action> continuations = new();
     private CRpcTaskStatus status;
@@ -17,16 +16,7 @@ public sealed class CRpcTaskCompletionSource<T>
 
     public CRpcTask<T> Task { get; }
 
-    internal CRpcTaskStatus Status
-    {
-        get
-        {
-            lock (syncRoot)
-            {
-                return status;
-            }
-        }
-    }
+    internal CRpcTaskStatus Status => status;
 
     internal bool IsCompletedOnCurrentThread => Status != CRpcTaskStatus.Pending && loop.IsInLoopThread;
 
@@ -48,57 +38,42 @@ public sealed class CRpcTaskCompletionSource<T>
 
     internal T GetResult()
     {
-        lock (syncRoot)
+        return status switch
         {
-            return status switch
-            {
-                CRpcTaskStatus.Succeeded => result!,
-                CRpcTaskStatus.Faulted => throw exception!,
-                CRpcTaskStatus.Canceled => throw new TaskCanceledException(),
-                _ => throw new InvalidOperationException("CRpcTask has not completed.")
-            };
-        }
+            CRpcTaskStatus.Succeeded => result!,
+            CRpcTaskStatus.Faulted => throw exception!,
+            CRpcTaskStatus.Canceled => throw new TaskCanceledException(),
+            _ => throw new InvalidOperationException("CRpcTask has not completed.")
+        };
     }
 
     internal void OnCompleted(Action continuation)
     {
         ArgumentNullException.ThrowIfNull(continuation);
+        EnsureLoopThread();
 
-        var postNow = false;
-        lock (syncRoot)
+        if (status == CRpcTaskStatus.Pending)
         {
-            if (status == CRpcTaskStatus.Pending)
-            {
-                continuations.Add(continuation);
-            }
-            else
-            {
-                postNow = true;
-            }
+            continuations.Add(continuation);
+            return;
         }
 
-        if (postNow)
-        {
-            loop.Post(continuation);
-        }
+        loop.Post(continuation);
     }
 
     private bool TryComplete(CRpcTaskStatus status, T? result, Exception? exception)
     {
-        Action[] continuationsToRun;
-        lock (syncRoot)
+        EnsureLoopThread();
+        if (this.status != CRpcTaskStatus.Pending)
         {
-            if (this.status != CRpcTaskStatus.Pending)
-            {
-                return false;
-            }
-
-            this.status = status;
-            this.result = result;
-            this.exception = exception;
-            continuationsToRun = continuations.ToArray();
-            continuations.Clear();
+            return false;
         }
+
+        this.status = status;
+        this.result = result;
+        this.exception = exception;
+        var continuationsToRun = continuations.ToArray();
+        continuations.Clear();
 
         foreach (var continuation in continuationsToRun)
         {
@@ -106,5 +81,13 @@ public sealed class CRpcTaskCompletionSource<T>
         }
 
         return true;
+    }
+
+    private void EnsureLoopThread()
+    {
+        if (!loop.IsInLoopThread)
+        {
+            throw new InvalidOperationException("CRpcTaskCompletionSource must be used from its CRpcLoop loop thread.");
+        }
     }
 }

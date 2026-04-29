@@ -63,9 +63,20 @@ public sealed class CRpcClient : IRpcClient
     internal void OnReceiveResponse(CRpcMessage message)
     {
         var reqSequence = message.getReqSequence();
+        if (!results.TryGetValue(reqSequence, out var pendingCall))
+        {
+            return;
+        }
+
+        pendingCall.Loop.Post(() => CompleteReceiveResponse(message));
+    }
+
+    private void CompleteReceiveResponse(CRpcMessage message)
+    {
+        var reqSequence = message.getReqSequence();
         if (results.TryRemove(reqSequence, out var pendingCall))
         {
-            pendingCall.TimeoutTimer?.Dispose();
+            pendingCall.TimeoutTimer?.Cancel();
             pendingCall.Source.TrySetResult(message);
         }
     }
@@ -90,21 +101,19 @@ public sealed class CRpcClient : IRpcClient
 
     private PendingCall __AddResultTaskAsync(long reqSeq, int timeout, CRpcLoop loop)
     {
-        var pendingCall = new PendingCall(new CRpcTaskCompletionSource<CRpcMessage>(loop));
+        var pendingCall = new PendingCall(loop, new CRpcTaskCompletionSource<CRpcMessage>(loop));
         if (timeout > 0)
         {
-            pendingCall.TimeoutTimer = new Timer(
-                _ =>
+            pendingCall.TimeoutTimer = loop.ScheduleDelay(
+                timeout,
+                () =>
                 {
                     if (results.TryRemove(reqSeq, out var removed))
                     {
                         Console.WriteLine($"*********CallAsync timeout: {timeout}");
                         removed.Source.TrySetException(new TimeoutException());
                     }
-                },
-                null,
-                timeout,
-                Timeout.Infinite);
+                });
         }
 
         results[reqSeq] = pendingCall;
@@ -119,13 +128,16 @@ public sealed class CRpcClient : IRpcClient
 
     private sealed class PendingCall
     {
-        public PendingCall(CRpcTaskCompletionSource<CRpcMessage> source)
+        public PendingCall(CRpcLoop loop, CRpcTaskCompletionSource<CRpcMessage> source)
         {
+            Loop = loop;
             Source = source;
         }
 
+        public CRpcLoop Loop { get; }
+
         public CRpcTaskCompletionSource<CRpcMessage> Source { get; }
 
-        public Timer? TimeoutTimer { get; set; }
+        public CRpcLoopTimer? TimeoutTimer { get; set; }
     }
 }
