@@ -21,7 +21,7 @@ Console.WriteLine("Hello, RPC Client!");
 //auto proxy = ::trpc::GetTrpcClient()->GetProxy<::trpc::test::helloworld::GreeterServiceProxy>(FLAGS_service_name);
 //::trpc::Status status = proxy->SayHello(client_ctx, req, &rsp);
 
-CRpcClient rpcClient = new CRpcClient();
+await using CRpcClient rpcClient = new CRpcClient();
 await rpcClient.ConnectAsync(IPAddress.Loopback, 7999);
 GreeterClient client = new GreeterClient();
 client.__client = rpcClient;

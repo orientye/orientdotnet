@@ -1,6 +1,7 @@
 using CRpc.Async;
 using CRpc.Rpc.CRpc.Client;
 using CRpc.Rpc.CRpc.Codec;
+using DotNetty.Transport.Channels.Embedded;
 
 namespace CRPC.Tests;
 
@@ -120,6 +121,41 @@ public class CRpcClientTests
         Assert.Throws<TimeoutException>(() => awaiter.GetResult());
     }
 
+    [Fact]
+    public async Task CloseAsyncClosesConnectedChannel()
+    {
+        var client = new CRpcClient();
+        var channel = new EmbeddedChannel();
+        SetClientChannel(client, channel);
+
+        await client.CloseAsync();
+
+        Assert.False(channel.Open);
+    }
+
+    [Fact]
+    public async Task DisposeAsyncClosesConnectedChannel()
+    {
+        var client = new CRpcClient();
+        var channel = new EmbeddedChannel();
+        SetClientChannel(client, channel);
+
+        await client.DisposeAsync();
+
+        Assert.False(channel.Open);
+    }
+
+    [Fact]
+    public void PendingResultsUseLoopOwnedDictionary()
+    {
+        var field = typeof(CRpcClient).GetField(
+            "results",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        Assert.NotNull(field);
+        Assert.Equal(typeof(Dictionary<,>), field!.FieldType.GetGenericTypeDefinition());
+    }
+
     private static CRpcMessage CreateResponse(long reqSequence)
     {
         var responseHeader = CRpcMessageHeader.valueOf(
@@ -129,5 +165,14 @@ public class CRpcClientTests
             module: 7,
             command: 8);
         return CRpcMessage.valueOf(responseHeader, Array.Empty<byte>());
+    }
+
+    private static void SetClientChannel(CRpcClient client, EmbeddedChannel channel)
+    {
+        var field = typeof(CRpcClient).GetField(
+            "channel",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field!.SetValue(client, channel);
     }
 }

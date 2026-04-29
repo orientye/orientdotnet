@@ -1,5 +1,4 @@
-﻿using System.Collections.Concurrent;
-using System.Net;
+﻿using System.Net;
 using CRpc.Async;
 using CRpc.Rpc.CRpc.Codec;
 using DotNetty.Handlers.Logging;
@@ -10,10 +9,12 @@ using DotNetty.Transport.Channels.Sockets;
 
 namespace CRpc.Rpc.CRpc.Client;
 
-public sealed class CRpcClient : IRpcClient
+public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 {
-    private readonly ConcurrentDictionary<long, PendingCall> results = new();
+    private readonly Dictionary<long, PendingCall> results = new();
+    private readonly IEventLoopGroup group = new MultithreadEventLoopGroup(1);
     private long reqSequence;
+    private CRpcLoop? ownerLoop;
     private IChannel? channel;
 
     private readonly Bootstrap bootstrap = new Bootstrap();
@@ -24,7 +25,7 @@ public sealed class CRpcClient : IRpcClient
             .Channel<TcpSocketChannel>()
             .Option(ChannelOption.TcpNodelay, true)
             .Option(ChannelOption.ConnectTimeout, TimeSpan.FromSeconds(10))
-            .Group(new MultithreadEventLoopGroup(1))
+            .Group(group)
             .Handler(new ActionChannelInitializer<ISocketChannel>(c =>
             {
                 var pipeline = c.Pipeline;
@@ -47,10 +48,34 @@ public sealed class CRpcClient : IRpcClient
         return channel;
     }
 
+    public async Task CloseAsync()
+    {
+        var currentChannel = channel;
+        if (currentChannel is null)
+        {
+            return;
+        }
+
+        channel = null;
+        await currentChannel.CloseAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await CloseAsync();
+        await group.ShutdownGracefullyAsync();
+    }
+
     public CRpcTask<CRpcMessage> CallAsync(short serviceId, short methodId, byte[] body, int timeout)
     {
         var loop = CRpcLoop.Current
             ?? throw new InvalidOperationException("CRpcClient.CallAsync must be called from a bound CRpcLoop thread.");
+        if (ownerLoop is not null && !ReferenceEquals(ownerLoop, loop))
+        {
+            throw new InvalidOperationException("CRpcClient is already bound to a different CRpcLoop.");
+        }
+
+        ownerLoop = loop;
 
         long reqSeq = __IncrementReqId();
         var pendingCall = __AddResultTaskAsync(reqSeq, timeout, loop);
@@ -62,19 +87,13 @@ public sealed class CRpcClient : IRpcClient
 
     internal void OnReceiveResponse(CRpcMessage message)
     {
-        var reqSequence = message.getReqSequence();
-        if (!results.TryGetValue(reqSequence, out var pendingCall))
-        {
-            return;
-        }
-
-        pendingCall.Loop.Post(() => CompleteReceiveResponse(message));
+        ownerLoop?.Post(() => CompleteReceiveResponse(message));
     }
 
     private void CompleteReceiveResponse(CRpcMessage message)
     {
         var reqSequence = message.getReqSequence();
-        if (results.TryRemove(reqSequence, out var pendingCall))
+        if (results.Remove(reqSequence, out var pendingCall))
         {
             pendingCall.TimeoutTimer?.Cancel();
             pendingCall.Source.TrySetResult(message);
@@ -108,7 +127,7 @@ public sealed class CRpcClient : IRpcClient
                 timeout,
                 () =>
                 {
-                    if (results.TryRemove(reqSeq, out var removed))
+                    if (results.Remove(reqSeq, out var removed))
                     {
                         Console.WriteLine($"*********CallAsync timeout: {timeout}");
                         removed.Source.TrySetException(new TimeoutException());

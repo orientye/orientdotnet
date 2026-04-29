@@ -1,4 +1,5 @@
-﻿using CRpc.Async;
+﻿using System.Net.Sockets;
+using CRpc.Async;
 using CRpc.Rpc.CRpc.Codec;
 using DotNetty.Transport.Channels;
 
@@ -71,7 +72,19 @@ public class CRpcServerHandler : ChannelHandlerAdapter
 
     public override void ExceptionCaught(IChannelHandlerContext context, Exception exception)
     {
+        if (IsRemoteDisconnect(exception))
+        {
+            Console.WriteLine($"CRpcServerHandler remote disconnected: {exception.Message}");
+            return;
+        }
+
         Console.WriteLine($"******************exception={exception}");
         context.FireExceptionCaught(exception);
+    }
+
+    private static bool IsRemoteDisconnect(Exception exception)
+    {
+        return exception is SocketException { SocketErrorCode: SocketError.ConnectionReset }
+            || exception.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionReset };
     }
 }
