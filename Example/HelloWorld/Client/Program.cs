@@ -25,12 +25,16 @@ CRpcClient rpcClient = new CRpcClient();
 await rpcClient.ConnectAsync(IPAddress.Loopback, 7999);
 GreeterClient client = new GreeterClient();
 client.__client = rpcClient;
-HelloRequest req = new HelloRequest();
-req.Msg = "hi, crpc, I am from client";
-var (result, helloReply) = CRpcLoopRunner.RunUntilComplete(
-    CRpcLoop.Main,
-    () => client.SayHelloAsync(req));
-Console.WriteLine($"server return: result={result}, response: {helloReply.Msg}");
+for (var i = 0; i < 5; i++)
+{
+    HelloRequest req = new HelloRequest();
+    req.Msg = $"hi, crpc, I am from client, call={i}";
+    var (result, helloReply) = CRpcLoopRunner.RunUntilComplete(
+        CRpcLoop.Main,
+        () => client.SayHelloAsync(req));
+    Console.WriteLine($"call={i}, server return: result={result}, response: {helloReply.Msg}");
+}
+
 if (!Console.IsInputRedirected)
 {
     Console.ReadKey();
