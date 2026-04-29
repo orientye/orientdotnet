@@ -1,0 +1,14 @@
+---
+description: orientdotnet project-wide engineering rules
+alwaysApply: true
+---
+
+# Basic Constraints
+
+- Do not auto-commit code. Only create a commit when the user explicitly asks.
+
+# Async And Concurrency
+
+- Use `RpcTask` for asynchronous flows in this project.
+- Do not use C# `Task` / `Task<T>` for project async APIs or implementations.
+- Do not introduce `System.Threading.Tasks.Task` unless the user explicitly approves an exception.
