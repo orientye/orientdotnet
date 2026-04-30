@@ -11,7 +11,14 @@ public static class CRpcServerLoop
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            loop.Tick();
+            try
+            {
+                loop.Tick();
+            }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine($"CRpcServerLoop: unexpected exception escaped Tick: {exception}");
+            }
 
             if (sleepMilliseconds > 0)
             {

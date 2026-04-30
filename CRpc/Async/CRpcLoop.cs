@@ -18,6 +18,13 @@ public sealed class CRpcLoop
 
     public bool IsInLoopThread => threadId != 0 && Environment.CurrentManagedThreadId == threadId;
 
+    /// <summary>
+    /// Raised on the loop thread when an action or timer callback throws.
+    /// Exceptions thrown from this handler are caught and written to <see cref="Console.Error"/>
+    /// to keep the loop alive.
+    /// </summary>
+    public event Action<Exception>? UnhandledException;
+
     public void BindToCurrentThread()
     {
         threadId = Environment.CurrentManagedThreadId;
@@ -61,7 +68,14 @@ public sealed class CRpcLoop
 
         for (var i = 0; i < maxActions && actions.TryDequeue(out var action); i++)
         {
-            action();
+            try
+            {
+                action();
+            }
+            catch (Exception exception)
+            {
+                HandleUnhandledException(exception);
+            }
         }
     }
 
@@ -71,7 +85,34 @@ public sealed class CRpcLoop
         while (timers.TryPeek(out var scheduledTimer, out var dueTimestamp) && dueTimestamp <= now)
         {
             timers.Dequeue();
-            scheduledTimer.Timer.Invoke();
+            try
+            {
+                scheduledTimer.Timer.Invoke();
+            }
+            catch (Exception exception)
+            {
+                HandleUnhandledException(exception);
+            }
+        }
+    }
+
+    private void HandleUnhandledException(Exception exception)
+    {
+        var handler = UnhandledException;
+        if (handler is null)
+        {
+            Console.Error.WriteLine($"CRpcLoop unhandled exception: {exception}");
+            return;
+        }
+
+        try
+        {
+            handler(exception);
+        }
+        catch (Exception handlerException)
+        {
+            Console.Error.WriteLine($"CRpcLoop unhandled exception handler threw: {handlerException}");
+            Console.Error.WriteLine($"original exception: {exception}");
         }
     }
 

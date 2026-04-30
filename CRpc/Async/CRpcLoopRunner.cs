@@ -44,7 +44,15 @@ public static class CRpcLoopRunner
 
         while (!completed)
         {
-            loop.Tick();
+            try
+            {
+                loop.Tick();
+            }
+            catch (Exception tickException)
+            {
+                Console.Error.WriteLine($"CRpcLoopRunner: unexpected exception escaped Tick: {tickException}");
+            }
+
             if (!completed && sleepMilliseconds > 0)
             {
                 Thread.Sleep(sleepMilliseconds);
