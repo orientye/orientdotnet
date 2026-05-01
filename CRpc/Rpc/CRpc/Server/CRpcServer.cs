@@ -1,5 +1,4 @@
-﻿using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Net;
 
 using DotNetty.Transport.Bootstrapping;
@@ -14,13 +13,26 @@ namespace CRpc.Rpc.CRpc.Server;
 public sealed class CRpcServer : IRpcServer
 {
     private const int InitialCapacity = 106;
-    private static readonly int ConcurrencyLevel = Environment.ProcessorCount * 2;
 
-    private static readonly ConcurrentDictionary<int, IRpcService> Services = new(ConcurrencyLevel, InitialCapacity);
+    private readonly Dictionary<int, IRpcService> registeredServices;
     private CancellationTokenSource? runCancellation;
     private IChannel? bootstrapChannel;
     private IEventLoopGroup? group;
     private IEventLoopGroup? workGroup;
+
+    public CRpcServer()
+        : this(CRpcLoop.Main)
+    {
+    }
+
+    public CRpcServer(CRpcLoop loop)
+    {
+        ArgumentNullException.ThrowIfNull(loop);
+        Loop = loop;
+        registeredServices = new Dictionary<int, IRpcService>(InitialCapacity);
+    }
+
+    public CRpcLoop Loop { get; }
 
     public bool IsRunning => bootstrapChannel is not null
         && runCancellation is not null
@@ -37,20 +49,40 @@ public sealed class CRpcServer : IRpcServer
 
     public void RegisterService(IRpcService service)
     {
+        EnsureLoopThread();
         var serviceId = service.GetServiceId();
-        Services[serviceId] = service;
+        registeredServices[serviceId] = service;
     }
 
     public void UnregisterService(IRpcService service)
     {
+        EnsureLoopThread();
         var serviceId = service.GetServiceId();
-        Services.TryRemove(new KeyValuePair<int, IRpcService>(serviceId, service));
+        if (registeredServices.TryGetValue(serviceId, out var registeredService)
+            && ReferenceEquals(registeredService, service))
+        {
+            registeredServices.Remove(serviceId);
+        }
     }
 
-    public static bool TryGetService(int serviceId, [MaybeNullWhen(false)] out IRpcService s)
+    public bool TryGetRegisteredService(int serviceId, [MaybeNullWhen(false)] out IRpcService service)
     {
-        var result = Services.TryGetValue(serviceId, out s);
-        return result;
+        EnsureLoopThread();
+        return registeredServices.TryGetValue(serviceId, out service);
+    }
+
+    internal void ClearRegisteredServices()
+    {
+        EnsureLoopThread();
+        registeredServices.Clear();
+    }
+
+    private void EnsureLoopThread()
+    {
+        if (!Loop.IsInLoopThread)
+        {
+            throw new InvalidOperationException("CRpcServer service registry operations must run on the server loop thread.");
+        }
     }
 
     public async Task RunAsync()
@@ -77,7 +109,7 @@ public sealed class CRpcServer : IRpcServer
                     var pipeline = channel.Pipeline;
                     pipeline.AddLast("decoder", new CRpcMessageDecoder(32768, 16));
                     //pipeline.AddLast("encoder", new CRpcMessageEncoder());
-                    pipeline.AddLast("handler", new CRpcServerHandler());
+                    pipeline.AddLast("handler", new CRpcServerHandler(this));
                     //TODO: 心跳消息
                 }));
 
@@ -99,7 +131,7 @@ public sealed class CRpcServer : IRpcServer
 
             try
             {
-                CRpcServerLoop.RunUntilCancelled(CRpcLoop.Main, cancellation.Token);
+                CRpcServerLoop.RunUntilCancelled(Loop, cancellation.Token);
             }
             finally
             {
@@ -108,6 +140,8 @@ public sealed class CRpcServer : IRpcServer
                     Console.CancelKeyPress -= cancelHandler;
                 }
             }
+
+            ClearRegisteredServices();
 
             await bootstrapChannel.CloseAsync().ConfigureAwait(false);
         }

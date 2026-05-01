@@ -12,29 +12,86 @@ public class CRpcServerTests
     [Fact]
     public void UnregisterServiceRemovesRegisteredService()
     {
+        var loop = new CRpcLoop();
         var service = new TestService(NextServiceId());
-        var server = new CRpcServer();
-        server.RegisterService(service);
+        var server = new CRpcServer(loop);
+        RegisterOnLoop(loop, server, service);
 
-        server.UnregisterService(service);
+        UnregisterOnLoop(loop, server, service);
 
-        Assert.False(CRpcServer.TryGetService(service.GetServiceId(), out _));
+        var observed = TryGetRegisteredServiceOnLoop(loop, server, service.GetServiceId());
+        Assert.False(observed.Found);
     }
 
     [Fact]
     public void UnregisterServiceDoesNotRemoveReplacementForSameServiceId()
     {
         var serviceId = NextServiceId();
+        var loop = new CRpcLoop();
         var oldService = new TestService(serviceId);
         var newService = new TestService(serviceId);
-        var server = new CRpcServer();
-        server.RegisterService(oldService);
-        server.RegisterService(newService);
+        var server = new CRpcServer(loop);
+        RegisterOnLoop(loop, server, oldService);
+        RegisterOnLoop(loop, server, newService);
 
-        server.UnregisterService(oldService);
+        UnregisterOnLoop(loop, server, oldService);
 
-        Assert.True(CRpcServer.TryGetService(serviceId, out var registeredService));
-        Assert.Same(newService, registeredService);
+        var observed = TryGetRegisteredServiceOnLoop(loop, server, serviceId);
+        Assert.True(observed.Found);
+        Assert.Same(newService, observed.Service);
+    }
+
+    [Fact]
+    public void DifferentServersCanRegisterSameServiceIdWithoutCollision()
+    {
+        var serviceId = NextServiceId();
+        var firstLoop = new CRpcLoop();
+        var secondLoop = new CRpcLoop();
+        var firstService = new TestService(serviceId);
+        var secondService = new TestService(serviceId);
+        var firstServer = new CRpcServer(firstLoop);
+        var secondServer = new CRpcServer(secondLoop);
+
+        RegisterOnLoop(firstLoop, firstServer, firstService);
+        RegisterOnLoop(secondLoop, secondServer, secondService);
+
+        var firstObserved = TryGetRegisteredServiceOnLoop(firstLoop, firstServer, serviceId);
+        Assert.True(firstObserved.Found);
+        Assert.Same(firstService, firstObserved.Service);
+        var secondObserved = TryGetRegisteredServiceOnLoop(secondLoop, secondServer, serviceId);
+        Assert.True(secondObserved.Found);
+        Assert.Same(secondService, secondObserved.Service);
+    }
+
+    [Fact]
+    public void RegistryOperationsRequireServerLoopThread()
+    {
+        var loop = new CRpcLoop();
+        var service = new TestService(NextServiceId());
+        var server = new CRpcServer(loop);
+
+        Assert.Throws<InvalidOperationException>(() => server.RegisterService(service));
+        Assert.Throws<InvalidOperationException>(() => server.UnregisterService(service));
+        Assert.Throws<InvalidOperationException>(() => server.TryGetRegisteredService(service.GetServiceId(), out _));
+    }
+
+    [Fact]
+    public void StopCleanupClearsRegisteredServicesOnLoopThread()
+    {
+        var loop = new CRpcLoop();
+        var service = new TestService(NextServiceId());
+        var server = new CRpcServer(loop);
+
+        loop.Post(() =>
+        {
+            server.RegisterService(service);
+
+            server.ClearRegisteredServices();
+
+            Assert.False(server.TryGetRegisteredService(service.GetServiceId(), out _));
+        });
+
+        loop.Tick();
     }
 
     [Fact]
@@ -68,6 +125,31 @@ public class CRpcServerTests
         }
 
         Assert.True(condition());
+    }
+
+    private static void RegisterOnLoop(CRpcLoop loop, CRpcServer server, IRpcService service)
+    {
+        loop.Post(() => server.RegisterService(service));
+        loop.Tick();
+    }
+
+    private static void UnregisterOnLoop(CRpcLoop loop, CRpcServer server, IRpcService service)
+    {
+        loop.Post(() => server.UnregisterService(service));
+        loop.Tick();
+    }
+
+    private static (bool Found, IRpcService? Service) TryGetRegisteredServiceOnLoop(CRpcLoop loop, CRpcServer server, int serviceId)
+    {
+        bool found = false;
+        IRpcService? service = null;
+        loop.Post(() =>
+        {
+            found = server.TryGetRegisteredService(serviceId, out var registeredService);
+            service = registeredService;
+        });
+        loop.Tick();
+        return (found, service);
     }
 
     private sealed class TestService : IRpcService

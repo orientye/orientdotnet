@@ -7,16 +7,27 @@ namespace CRpc.Rpc.CRpc.Server;
 
 public class CRpcServerHandler : ChannelHandlerAdapter
 {
+    private readonly CRpcServer server;
+
+    public CRpcServerHandler(CRpcServer server)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        this.server = server;
+    }
+
     public override void ChannelRead(IChannelHandlerContext ctx, object msg)
     {
         var message = (CRpcMessage)msg;
 
         var serviceId = message.getServiceId();
         var methodId = message.getMethodId();
-        if (CRpcServer.TryGetService(serviceId, out var rpcService))
+        server.Loop.Post(() =>
         {
-            CRpcLoop.Main.Post(() => ProcessMessage(rpcService, ctx, msg));
-        }
+            if (server.TryGetRegisteredService(serviceId, out var rpcService))
+            {
+                ProcessMessage(rpcService, ctx, message);
+            }
+        });
         
         Console.WriteLine($"CRpcServerHandler recv msg: serviceId={serviceId}, methodId={methodId}");
 

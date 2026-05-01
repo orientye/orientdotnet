@@ -15,49 +15,79 @@ public class CRpcServerHandlerTests
     [Fact]
     public void ChannelReadDispatchesServiceWorkToCRpcLoop()
     {
+        var loop = new CRpcLoop();
         var service = new RecordingService(NextServiceId());
-        var server = new CRpcServer();
-        server.RegisterService(service);
-        var channel = new EmbeddedChannel(new CRpcServerHandler());
+        var server = new CRpcServer(loop);
+        RegisterOnLoop(loop, server, service);
+        var channel = new EmbeddedChannel(new CRpcServerHandler(server));
 
         Assert.True(channel.WriteInbound(CreateRequest(service.GetServiceId())));
 
         Assert.Equal(0, service.CallCount);
 
-        CRpcLoop.Main.Tick();
+        loop.Tick();
 
         Assert.Equal(1, service.CallCount);
     }
 
     [Fact]
+    public void HandlerUsesServerInstanceRegistry()
+    {
+        var serviceId = NextServiceId();
+        var firstLoop = new CRpcLoop();
+        var secondLoop = new CRpcLoop();
+        var firstService = new RecordingService(serviceId);
+        var secondService = new RecordingService(serviceId);
+        var firstServer = new CRpcServer(firstLoop);
+        var secondServer = new CRpcServer(secondLoop);
+        firstLoop.Post(() => firstServer.RegisterService(firstService));
+        secondLoop.Post(() => secondServer.RegisterService(secondService));
+        firstLoop.Tick();
+        secondLoop.Tick();
+        var channel = new EmbeddedChannel(new CRpcServerHandler(firstServer));
+
+        Assert.True(channel.WriteInbound(CreateRequest(serviceId)));
+
+        Assert.Equal(0, firstService.CallCount);
+        Assert.Equal(0, secondService.CallCount);
+
+        firstLoop.Tick();
+
+        Assert.Equal(1, firstService.CallCount);
+        Assert.Equal(0, secondService.CallCount);
+    }
+
+    [Fact]
     public void ServiceLogicRunsOnCRpcLoopThread()
     {
+        var loop = new CRpcLoop();
         var service = new RecordingService(NextServiceId());
-        var server = new CRpcServer();
-        server.RegisterService(service);
-        var channel = new EmbeddedChannel(new CRpcServerHandler());
+        var server = new CRpcServer(loop);
+        RegisterOnLoop(loop, server, service);
+        var channel = new EmbeddedChannel(new CRpcServerHandler(server));
 
         Assert.True(channel.WriteInbound(CreateRequest(service.GetServiceId())));
         var loopThreadId = Environment.CurrentManagedThreadId;
 
-        CRpcLoop.Main.Tick();
+        loop.Tick();
 
         Assert.Equal(loopThreadId, service.LastThreadId);
-        Assert.Same(CRpcLoop.Main, service.LastLoop);
+        Assert.Same(loop, service.LastLoop);
     }
 
     [Fact]
     public void ChannelReadDoesNotWaitForOutboundWriteCompletion()
     {
+        var loop = new CRpcLoop();
         var service = new RecordingService(NextServiceId());
-        var server = new CRpcServer();
-        server.RegisterService(service);
+        var server = new CRpcServer(loop);
+        RegisterOnLoop(loop, server, service);
         var delayedWrite = new DelayedWriteHandler();
-        var channel = new EmbeddedChannel(delayedWrite, new CRpcServerHandler());
+        var channel = new EmbeddedChannel(delayedWrite, new CRpcServerHandler(server));
 
         Assert.True(channel.WriteInbound(CreateRequest(service.GetServiceId())));
 
-        CRpcLoop.Main.Tick();
+        loop.Tick();
 
         Assert.Equal(1, service.CallCount);
         Assert.NotNull(delayedWrite.WrittenMessage);
@@ -68,7 +98,8 @@ public class CRpcServerHandlerTests
     public void ConnectionResetByPeerIsHandledAsNormalDisconnect()
     {
         var exceptions = new ExceptionCaptureHandler();
-        var channel = new EmbeddedChannel(new CRpcServerHandler(), exceptions);
+        var server = new CRpcServer();
+        var channel = new EmbeddedChannel(new CRpcServerHandler(server), exceptions);
 
         channel.Pipeline.FireExceptionCaught(new SocketException(10054));
 
@@ -81,7 +112,8 @@ public class CRpcServerHandlerTests
         var originalOut = Console.Out;
         using var output = new StringWriter();
         var inactive = new InactiveCaptureHandler();
-        var channel = new EmbeddedChannel(new CRpcServerHandler(), inactive);
+        var server = new CRpcServer();
+        var channel = new EmbeddedChannel(new CRpcServerHandler(server), inactive);
 
         try
         {
@@ -102,7 +134,8 @@ public class CRpcServerHandlerTests
     public void UnexpectedExceptionsContinueThroughPipeline()
     {
         var exceptions = new ExceptionCaptureHandler();
-        var channel = new EmbeddedChannel(new CRpcServerHandler(), exceptions);
+        var server = new CRpcServer();
+        var channel = new EmbeddedChannel(new CRpcServerHandler(server), exceptions);
         var exception = new InvalidOperationException("boom");
 
         channel.Pipeline.FireExceptionCaught(exception);
@@ -125,6 +158,12 @@ public class CRpcServerHandlerTests
             command: 1);
         header.addState(CRpcMessageState.NONE_ENCRYPT);
         return CRpcMessage.valueOf(header, Array.Empty<byte>());
+    }
+
+    private static void RegisterOnLoop(CRpcLoop loop, CRpcServer server, IRpcService service)
+    {
+        loop.Post(() => server.RegisterService(service));
+        loop.Tick();
     }
 
     private sealed class RecordingService : IRpcService

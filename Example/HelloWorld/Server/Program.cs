@@ -5,7 +5,7 @@ using Example;
 Console.WriteLine("Hello, RPC Server!");
 
 CRpcServer server = new CRpcServer();
-server.RegisterService(new HelloworldServiceImpl());
+server.Loop.Post(() => server.RegisterService(new HelloworldServiceImpl()));
 await server.RunAsync();
 
 Console.ReadKey();
