@@ -31,7 +31,6 @@ public class CRpcServerHandler : ChannelHandlerAdapter
         
         Console.WriteLine($"CRpcServerHandler recv msg: serviceId={serviceId}, methodId={methodId}");
 
-        ctx.FireChannelRead(msg);
     }
 
     private static void ProcessMessage(IRpcService rpcService, IChannelHandlerContext ctx, object msg)
@@ -54,10 +53,8 @@ public class CRpcServerHandler : ChannelHandlerAdapter
         var resultCode = t.Item1;
         var bytes = t.Item2;
 
-        var rsp = (CRpcMessage)msg;
-        rsp.toResponse(resultCode);
-        rsp.setBody(bytes);
-
+        var request = (CRpcMessage)msg;
+        var rsp = request.createResponse(resultCode, bytes);
         rsp.encryptAndCompress(512, true, true);
         var allocator = ctx.Allocator;
         var size = rsp.getSize();

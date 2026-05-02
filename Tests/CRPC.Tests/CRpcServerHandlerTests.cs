@@ -21,7 +21,7 @@ public class CRpcServerHandlerTests
         RegisterOnLoop(loop, server, service);
         var channel = new EmbeddedChannel(new CRpcServerHandler(server));
 
-        Assert.True(channel.WriteInbound(CreateRequest(service.GetServiceId())));
+        Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
 
         Assert.Equal(0, service.CallCount);
 
@@ -46,7 +46,7 @@ public class CRpcServerHandlerTests
         secondLoop.Tick();
         var channel = new EmbeddedChannel(new CRpcServerHandler(firstServer));
 
-        Assert.True(channel.WriteInbound(CreateRequest(serviceId)));
+        Assert.False(channel.WriteInbound(CreateRequest(serviceId)));
 
         Assert.Equal(0, firstService.CallCount);
         Assert.Equal(0, secondService.CallCount);
@@ -66,7 +66,7 @@ public class CRpcServerHandlerTests
         RegisterOnLoop(loop, server, service);
         var channel = new EmbeddedChannel(new CRpcServerHandler(server));
 
-        Assert.True(channel.WriteInbound(CreateRequest(service.GetServiceId())));
+        Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
         var loopThreadId = Environment.CurrentManagedThreadId;
 
         loop.Tick();
@@ -85,13 +85,31 @@ public class CRpcServerHandlerTests
         var delayedWrite = new DelayedWriteHandler();
         var channel = new EmbeddedChannel(delayedWrite, new CRpcServerHandler(server));
 
-        Assert.True(channel.WriteInbound(CreateRequest(service.GetServiceId())));
+        Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
 
         loop.Tick();
 
         Assert.Equal(1, service.CallCount);
         Assert.NotNull(delayedWrite.WrittenMessage);
         Assert.False(delayedWrite.WriteCompletion.Task.IsCompleted);
+    }
+
+    [Fact]
+    public void ResponseWriteDoesNotMutateInboundRequest()
+    {
+        var loop = new CRpcLoop();
+        var service = new RecordingService(NextServiceId());
+        var server = new CRpcServer(loop);
+        RegisterOnLoop(loop, server, service);
+        var channel = new EmbeddedChannel(new CRpcServerHandler(server));
+        var request = CreateRequest(service.GetServiceId());
+
+        Assert.False(channel.WriteInbound(request));
+
+        loop.Tick();
+
+        Assert.False(request.getHeader().hasState(CRpcMessageState.STATE_RESPONSE));
+        Assert.Empty(request.getBody());
     }
 
     [Fact]

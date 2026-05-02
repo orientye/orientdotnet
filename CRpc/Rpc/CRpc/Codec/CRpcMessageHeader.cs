@@ -154,6 +154,27 @@ namespace CRpc.Rpc.CRpc.Codec
             this.state = nState;
         }
 
+        public CRpcMessageHeader createResponse(int resultCode)
+        {
+            short nState = CRpcMessageState.STATE_RESPONSE;
+            if (hasState(CRpcMessageState.STATE_EXT_HEADER))
+            {
+                nState |= CRpcMessageState.STATE_EXT_HEADER;
+            }
+            if (hasState(CRpcMessageState.NONE_ENCRYPT))
+            {
+                nState |= CRpcMessageState.NONE_ENCRYPT;
+            }
+
+            var response = valueOf(nState, resultCode, sn, module, command);
+            if (extHeader.Length > 0)
+            {
+                response.extHeader = (byte[])extHeader.Clone();
+            }
+
+            return response;
+        }
+
         /**
          * 移除状态
          * @param removed 被移除的状态

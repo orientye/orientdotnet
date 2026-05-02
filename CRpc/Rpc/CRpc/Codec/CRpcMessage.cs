@@ -331,6 +331,13 @@ namespace CRpc.Rpc.CRpc.Codec
             return this;
         }
 
+        public CRpcMessage createResponse(int resultCode, byte[] bytes)
+        {
+            var response = valueOf(header.createResponse(resultCode), EMPTY_BYTES);
+            response.setBody(bytes);
+            return response;
+        }
+
         ///**
         // * 复制消息 会忽略序号sn
         // * @param message
