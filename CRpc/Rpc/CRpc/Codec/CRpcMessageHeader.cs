@@ -29,9 +29,9 @@ namespace CRpc.Rpc.CRpc.Codec
         /** 序号 */
         private long sn;
         /** 模块 */
-        private short module;
+        private ushort module;
         /** 指令 */
-        private short command;
+        private ushort command;
         /** 扩展消息头(网关等内部业务逻辑gateway <=> backend server) */
         private byte[] extHeader = EmptyArrays.EmptyBytes;
         /** 压缩解压原始body长度 */
@@ -63,7 +63,7 @@ namespace CRpc.Rpc.CRpc.Codec
          * @param command 指令
          * @return
          */
-        public static CRpcMessageHeader valueOf(short state, int resultCode, long sn, short module, short command)
+        public static CRpcMessageHeader valueOf(short state, int resultCode, long sn, ushort module, ushort command)
         {
             CRpcMessageHeader header = new CRpcMessageHeader();
             header.state = state;
@@ -213,8 +213,8 @@ namespace CRpc.Rpc.CRpc.Codec
             byteBuf.WriteShort(state);      // 状态
             byteBuf.WriteInt(resultCode);   // 响应码
             byteBuf.WriteLong(sn);          // 序号
-            byteBuf.WriteShort(module);     // 模块
-            byteBuf.WriteShort(command);    // 指令码
+            byteBuf.WriteShort(unchecked((short)module));     // 模块
+            byteBuf.WriteShort(unchecked((short)command));    // 指令码
 
             // 扩展消息头
             if (hasExtHeader)
@@ -268,13 +268,13 @@ namespace CRpc.Rpc.CRpc.Codec
         }
 
         /** 模块号 */
-        public short getModule()
+        public ushort getModule()
         {
             return module;
         }
 
         /** 指令码 */
-        public short getCommand()
+        public ushort getCommand()
         {
             return command;
         }
@@ -306,8 +306,8 @@ namespace CRpc.Rpc.CRpc.Codec
             this.state = byteBuf.ReadShort();
             this.resultCode = byteBuf.ReadInt();
             this.sn = byteBuf.ReadLong();
-            this.module = byteBuf.ReadShort();
-            this.command = byteBuf.ReadShort();
+            this.module = unchecked((ushort)byteBuf.ReadShort());
+            this.command = unchecked((ushort)byteBuf.ReadShort());
         
             // 扩展头数据
             if (hasState(CRpcMessageState.STATE_EXT_HEADER)) {

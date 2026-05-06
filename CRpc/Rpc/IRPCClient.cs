@@ -5,6 +5,6 @@ namespace CRpc.Rpc
 {
     public interface IRpcClient
     {
-        public CRpcTask<CRpcMessage> CallAsync(short serviceId, short methodId, byte[] body, int timeout);
+        public CRpcTask<CRpcMessage> CallAsync(ushort serviceId, ushort methodId, byte[] body, int timeout);
     }
 }

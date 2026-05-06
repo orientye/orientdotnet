@@ -98,12 +98,12 @@ namespace CRpc.Rpc.CRpc.Codec
             return header;
         }
         
-        public short getServiceId()
+        public ushort getServiceId()
         {
             return header.getModule();
         }
         
-        public short getMethodId()
+        public ushort getMethodId()
         {
             return header.getCommand();
         }

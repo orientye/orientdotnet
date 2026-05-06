@@ -4,7 +4,7 @@ namespace CRpc.Rpc
 {
     public interface IRpcService
     {
-        public int GetServiceId();
+        public ushort GetServiceId();
         
         public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req);
     }

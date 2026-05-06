@@ -14,7 +14,7 @@ public sealed class CRpcServer : IRpcServer
 {
     private const int InitialCapacity = 106;
 
-    private readonly Dictionary<int, IRpcService> registeredServices;
+    private readonly Dictionary<ushort, IRpcService> registeredServices;
     private CancellationTokenSource? runCancellation;
     private IChannel? bootstrapChannel;
     private IEventLoopGroup? group;
@@ -29,7 +29,7 @@ public sealed class CRpcServer : IRpcServer
     {
         ArgumentNullException.ThrowIfNull(loop);
         Loop = loop;
-        registeredServices = new Dictionary<int, IRpcService>(InitialCapacity);
+        registeredServices = new Dictionary<ushort, IRpcService>(InitialCapacity);
     }
 
     public CRpcLoop Loop { get; }
@@ -65,7 +65,7 @@ public sealed class CRpcServer : IRpcServer
         }
     }
 
-    public bool TryGetRegisteredService(int serviceId, [MaybeNullWhen(false)] out IRpcService service)
+    public bool TryGetRegisteredService(ushort serviceId, [MaybeNullWhen(false)] out IRpcService service)
     {
         EnsureLoopThread();
         return registeredServices.TryGetValue(serviceId, out service);

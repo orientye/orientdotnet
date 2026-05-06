@@ -111,9 +111,9 @@ public class CRpcServerTests
         Assert.False(server.IsRunning);
     }
 
-    private static int NextServiceId()
+    private static ushort NextServiceId()
     {
-        return Interlocked.Increment(ref nextServiceId);
+        return checked((ushort)Interlocked.Increment(ref nextServiceId));
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
@@ -139,7 +139,7 @@ public class CRpcServerTests
         loop.Tick();
     }
 
-    private static (bool Found, IRpcService? Service) TryGetRegisteredServiceOnLoop(CRpcLoop loop, CRpcServer server, int serviceId)
+    private static (bool Found, IRpcService? Service) TryGetRegisteredServiceOnLoop(CRpcLoop loop, CRpcServer server, ushort serviceId)
     {
         bool found = false;
         IRpcService? service = null;
@@ -154,14 +154,14 @@ public class CRpcServerTests
 
     private sealed class TestService : IRpcService
     {
-        private readonly int serviceId;
+        private readonly ushort serviceId;
 
         public TestService(int serviceId)
         {
-            this.serviceId = serviceId;
+            this.serviceId = checked((ushort)serviceId);
         }
 
-        public int GetServiceId()
+        public ushort GetServiceId()
         {
             return serviceId;
         }

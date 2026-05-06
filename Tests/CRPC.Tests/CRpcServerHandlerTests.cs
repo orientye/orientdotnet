@@ -161,18 +161,18 @@ public class CRpcServerHandlerTests
         Assert.Same(exception, exceptions.Exception);
     }
 
-    private static int NextServiceId()
+    private static ushort NextServiceId()
     {
-        return Interlocked.Increment(ref nextServiceId);
+        return checked((ushort)Interlocked.Increment(ref nextServiceId));
     }
 
-    private static CRpcMessage CreateRequest(int serviceId)
+    private static CRpcMessage CreateRequest(ushort serviceId)
     {
         var header = CRpcMessageHeader.valueOf(
             CRpcMessageState.STATE_NONE,
             resultCode: 0,
             sn: 1,
-            module: (short)serviceId,
+            module: serviceId,
             command: 1);
         header.addState(CRpcMessageState.NONE_ENCRYPT);
         return CRpcMessage.valueOf(header, Array.Empty<byte>());
@@ -186,9 +186,9 @@ public class CRpcServerHandlerTests
 
     private sealed class RecordingService : IRpcService
     {
-        private readonly int serviceId;
+        private readonly ushort serviceId;
 
-        public RecordingService(int serviceId)
+        public RecordingService(ushort serviceId)
         {
             this.serviceId = serviceId;
         }
@@ -199,7 +199,7 @@ public class CRpcServerHandlerTests
 
         public CRpcLoop? LastLoop { get; private set; }
 
-        public int GetServiceId()
+        public ushort GetServiceId()
         {
             return serviceId;
         }

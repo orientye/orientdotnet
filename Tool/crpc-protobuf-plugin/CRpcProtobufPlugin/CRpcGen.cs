@@ -153,7 +153,7 @@ namespace CRpcProtobufPlugin
             sb.AppendLine($"public abstract class {service.Name}Base : IRpcService");
             sb.AppendLine("{");
             
-            sb.AppendLine( "    public int GetServiceId()");
+            sb.AppendLine( "    public ushort GetServiceId()");
             sb.AppendLine( "    {");
             sb.AppendLine($"        return {serviceId};");
             sb.AppendLine( "    }");

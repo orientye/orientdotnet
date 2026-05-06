@@ -12,7 +12,7 @@ namespace Example {
 
 public abstract class GreeterBase : IRpcService
 {
-    public int GetServiceId()
+    public ushort GetServiceId()
     {
         return 1000;
     }

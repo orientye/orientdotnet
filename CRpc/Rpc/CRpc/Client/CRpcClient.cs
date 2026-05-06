@@ -66,7 +66,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         await group.ShutdownGracefullyAsync();
     }
 
-    public CRpcTask<CRpcMessage> CallAsync(short serviceId, short methodId, byte[] body, int timeout)
+    public CRpcTask<CRpcMessage> CallAsync(ushort serviceId, ushort methodId, byte[] body, int timeout)
     {
         var loop = CRpcLoop.Current
             ?? throw new InvalidOperationException("CRpcClient.CallAsync must be called from a bound CRpcLoop thread.");
@@ -100,7 +100,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         }
     }
 
-    private void __Send(long reqSeq, short serviceId, short methodId, byte[] bytes)
+    private void __Send(long reqSeq, ushort serviceId, ushort methodId, byte[] bytes)
     {
         CRpcMessageHeader header = CRpcMessageHeader.valueOf(CRpcMessageState.STATE_NONE, 0, reqSeq, serviceId, methodId);
         header.addState(CRpcMessageState.NONE_ENCRYPT);
