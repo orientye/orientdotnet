@@ -723,20 +723,3 @@ public sealed class CRpcClient {
 6. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[loop|io|tp]` 来源。
 
 ---
-
-## 11. 文件索引（便于跳转）
-
-| 文件 | 作用 |
-| --- | --- |
-| `CRpc/Async/CRpcLoop.cs` | 业务 loop（mailbox + timers） |
-| `CRpc/Async/CRpcLoopRunner.cs` | 一次性驱动（同步等待一个 task） |
-| `CRpc/Async/CRpcTask.cs` / `CRpcTask.Generic.cs` | 自定义 awaitable |
-| `CRpc/Async/CRpcTaskCompletionSource.cs` | 自定义 TCS（loop-bound） |
-| `CRpc/Async/CRpcAsyncMethodBuilder*.cs` | `async CRpcTask` 状态机 builder |
-| `CRpc/Rpc/CRpc/Server/CRpcServer.cs` | 服务端 + DotNetty bootstrap |
-| `CRpc/Rpc/CRpc/Server/CRpcServerHandler.cs` | 服务端 IO handler（IO→Loop 搬运） |
-| `CRpc/Rpc/CRpc/Server/CRpcServerLoop.cs` | 服务端常驻驱动（`Tick + Sleep`） |
-| `CRpc/Rpc/CRpc/Client/CRpcClient.cs` | 客户端 + pending 表 + DotNetty bootstrap |
-| `CRpc/Rpc/CRpc/Client/CRpcClientHandler.cs` | 客户端 IO handler（IO→Loop 搬运） |
-| `Example/HelloWorld/Server/Program.cs` | 服务端入口示例 |
-| `Example/HelloWorld/Client/Program.cs` | 客户端入口示例 |
