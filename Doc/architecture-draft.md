@@ -636,16 +636,21 @@ public static class CRpcServerLoop
 
 `HelloWorld/Client/Program.cs` 里：
 
-```28:37:Example/HelloWorld/Client/Program.cs
+```28:44:Example/HelloWorld/Client/Program.cs
 var loop = new CRpcLoop();
-for (var i = 0; i < 5; i++)
+CRpcLoopRunner.RunUntilComplete(loop, RunClientAsync);
+
+async CRpcTask<int> RunClientAsync()
 {
-    HelloRequest req = new HelloRequest();
-    req.Msg = $"hi, crpc, I am from client, call={i}";
-    var (result, helloReply) = CRpcLoopRunner.RunUntilComplete(
-        loop,
-        () => client.SayHelloAsync(req));
-    Console.WriteLine($"call={i}, server return: result={result}, response: {helloReply.Msg}");
+    for (var i = 0; i < 5; i++)
+    {
+        HelloRequest req = new HelloRequest();
+        req.Msg = $"hi, crpc, I am from client, call={i}";
+        var (result, helloReply) = await client.SayHelloAsync(req);
+        Console.WriteLine($"call={i}, server return: result={result}, response: {helloReply.Msg}");
+    }
+
+    return 0;
 }
 ```
 
