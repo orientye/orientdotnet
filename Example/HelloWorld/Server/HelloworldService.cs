@@ -10,7 +10,7 @@ using CRpc.Rpc.CRpc.Server;
 
 namespace Example {
 
-public abstract class GreeterBase : IRpcService
+public abstract class GreeterBase : IRpcService, IRpcHttpJsonCodec
 {
     public ushort GetServiceId()
     {
@@ -24,6 +24,14 @@ public abstract class GreeterBase : IRpcService
         var methodId = rpcReq.getMethodId();
         if (methodId == 1) { return this.__OnMessageSayHelloAsync(rpcContext, rpcReq); }
         return CRpcTask.FromResult((-1, Array.Empty<byte>()));
+    }
+
+    public bool TryGetHttpMethodParsers(ushort methodId, out MessageParser requestParser, out MessageParser responseParser)
+    {
+        requestParser = null!;
+        responseParser = null!;
+        if (methodId == 1) { requestParser = Example.HelloRequest.Parser; responseParser = Example.HelloReply.Parser; return true; }
+        return false;
     }
 
     private async CRpcTask<(int, byte[])> __OnMessageSayHelloAsync(CRpcContext context, CRpcMessage req)

@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using CRpc.Rpc;
 
 namespace CRpc.Async;
 
@@ -21,8 +23,11 @@ public sealed class CRpcLoop
                 "A CRpcLoop must be provided explicitly or available via CRpcLoop.Current.");
     }
 
+    private const int InitialServiceCapacity = 106;
+
     private readonly ConcurrentQueue<Action> actions = new();
     private readonly PriorityQueue<ScheduledTimer, long> timers = new();
+    private readonly Dictionary<ushort, IRpcService> registeredServices = new(InitialServiceCapacity);
     private int threadId;
 
     public bool IsInLoopThread => threadId != 0 && Environment.CurrentManagedThreadId == threadId;
@@ -44,6 +49,37 @@ public sealed class CRpcLoop
     {
         ArgumentNullException.ThrowIfNull(action);
         actions.Enqueue(action);
+    }
+
+    public void RegisterService(IRpcService service)
+    {
+        EnsureLoopThread();
+        ArgumentNullException.ThrowIfNull(service);
+        registeredServices[service.GetServiceId()] = service;
+    }
+
+    public bool TryGetService(ushort serviceId, [MaybeNullWhen(false)] out IRpcService service)
+    {
+        EnsureLoopThread();
+        return registeredServices.TryGetValue(serviceId, out service);
+    }
+
+    public void UnregisterService(IRpcService service)
+    {
+        EnsureLoopThread();
+        ArgumentNullException.ThrowIfNull(service);
+        var serviceId = service.GetServiceId();
+        if (registeredServices.TryGetValue(serviceId, out var registeredService)
+            && ReferenceEquals(registeredService, service))
+        {
+            registeredServices.Remove(serviceId);
+        }
+    }
+
+    internal void ClearRegisteredServices()
+    {
+        EnsureLoopThread();
+        registeredServices.Clear();
     }
 
     internal CRpcLoopTimer ScheduleDelay(int millisecondsDelay, Action action)
@@ -134,7 +170,7 @@ public sealed class CRpcLoop
     {
         if (!IsInLoopThread)
         {
-            throw new InvalidOperationException("CRpcLoop timer operations must run on the loop thread.");
+            throw new InvalidOperationException("CRpcLoop operations must run on the loop thread.");
         }
     }
 

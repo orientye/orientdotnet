@@ -49,12 +49,9 @@ public class CRpcServerHandler : ChannelHandlerAdapter
     private static async CRpcTask ProcessMessageAsync(IRpcService rpcService, IChannelHandlerContext ctx, object msg)
     {
         var rpcContext = new CRpcContext();
-        var t = await rpcService.OnMessageAsync(rpcContext, (CRpcMessage)msg);
-        var resultCode = t.Item1;
-        var bytes = t.Item2;
-
         var request = (CRpcMessage)msg;
-        var rsp = request.createResponse(resultCode, bytes);
+        var (resultCode, bytes) = await RpcServiceInvoker.InvokeAsync(rpcService, rpcContext, request);
+        var rsp = RpcServiceInvoker.BuildCrpcResponse(request, resultCode, bytes);
         rsp.encryptAndCompress(512, true, true);
         var allocator = ctx.Allocator;
         var size = rsp.getSize();

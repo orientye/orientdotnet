@@ -150,7 +150,21 @@ namespace CRpcProtobufPlugin
                 throw new Exception("Service=" + service.Name + " ServiceId NOT FOUND");
             if (serviceId >= ushort.MaxValue) throw new Exception("Service=" + service.Name + "ServiceId too large");
 
-            sb.AppendLine($"public abstract class {service.Name}Base : IRpcService");
+            var sbMethodParsers = new StringBuilder();
+            foreach (var method in service.Method)
+            {
+                var hasMethodId = method.Options.CustomOptions.TryGetInt32(CRpcOptions.MethodId, out int methodId);
+                if (!hasMethodId || methodId <= 0)
+                    throw new Exception("Service" + service.Name + "." + method.Name + " ' MethodId NOT FOUND");
+                if (methodId >= ushort.MaxValue)
+                    throw new Exception("Service" + service.Name + "." + method.Name + " is too large");
+
+                var outType = GetTypeName(method.OutputType);
+                var inType = GetTypeName(method.InputType);
+                sbMethodParsers.AppendLine($"        if (methodId == {methodId}) {{ requestParser = {inType}.Parser; responseParser = {outType}.Parser; return true; }}");
+            }
+
+            sb.AppendLine($"public abstract class {service.Name}Base : IRpcService, IRpcHttpJsonCodec");
             sb.AppendLine("{");
             
             sb.AppendLine( "    public ushort GetServiceId()");
@@ -194,6 +208,14 @@ namespace CRpcProtobufPlugin
             sb.AppendLine("        var methodId = rpcReq.getMethodId();");
             sb.Append(sbMethodCase);
             sb.AppendLine("        return CRpcTask.FromResult((-1, Array.Empty<byte>()));");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+            sb.AppendLine("    public bool TryGetHttpMethodParsers(ushort methodId, out MessageParser requestParser, out MessageParser responseParser)");
+            sb.AppendLine("    {");
+            sb.AppendLine("        requestParser = null!;");
+            sb.AppendLine("        responseParser = null!;");
+            sb.Append(sbMethodParsers);
+            sb.AppendLine("        return false;");
             sb.AppendLine("    }");
             sb.AppendLine();
 

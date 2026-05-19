@@ -149,7 +149,7 @@ CRpcLoop A
   │   └── OrderService
   ├── CRpcServer : 7000, CRpc 二进制协议
   ├── CRpcServer : 7001, CRpc 管理端口
-  └── HttpGatewayServer : 8080, HTTP/JSON 协议
+  └── HttpServer : 8080, HTTP/JSON 协议
 ```
 
 多协议的关键是：不同端点把外部协议转换成统一的内部调用形态：
@@ -734,8 +734,8 @@ public sealed class CRpcServer {
 }
 
 // 其它协议端点同样只负责协议适配，然后投递到 loop
-public sealed class HttpGatewayServer {
-    public HttpGatewayServer(CRpcLoop loop, HttpGatewayOptions opts);
+public sealed class HttpServer {
+    public HttpServer(CRpcLoop loop, HttpServerOptions opts);
 }
 public sealed class CRpcClient {
     public CRpcClient(CRpcLoop loop, CRpcClientOptions opts); // 显式 loop

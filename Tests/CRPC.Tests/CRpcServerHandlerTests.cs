@@ -18,7 +18,7 @@ public class CRpcServerHandlerTests
         var loop = new CRpcLoop();
         var service = new RecordingService(NextServiceId());
         var server = new CRpcServer(loop);
-        RegisterOnLoop(loop, server, service);
+        RegisterOnLoop(loop, service);
         var channel = new EmbeddedChannel(new CRpcServerHandler(server));
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
@@ -40,8 +40,8 @@ public class CRpcServerHandlerTests
         var secondService = new RecordingService(serviceId);
         var firstServer = new CRpcServer(firstLoop);
         var secondServer = new CRpcServer(secondLoop);
-        firstLoop.Post(() => firstServer.RegisterService(firstService));
-        secondLoop.Post(() => secondServer.RegisterService(secondService));
+        firstLoop.Post(() => firstLoop.RegisterService(firstService));
+        secondLoop.Post(() => secondLoop.RegisterService(secondService));
         firstLoop.Tick();
         secondLoop.Tick();
         var channel = new EmbeddedChannel(new CRpcServerHandler(firstServer));
@@ -63,7 +63,7 @@ public class CRpcServerHandlerTests
         var loop = new CRpcLoop();
         var service = new RecordingService(NextServiceId());
         var server = new CRpcServer(loop);
-        RegisterOnLoop(loop, server, service);
+        RegisterOnLoop(loop, service);
         var channel = new EmbeddedChannel(new CRpcServerHandler(server));
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
@@ -81,7 +81,7 @@ public class CRpcServerHandlerTests
         var loop = new CRpcLoop();
         var service = new RecordingService(NextServiceId());
         var server = new CRpcServer(loop);
-        RegisterOnLoop(loop, server, service);
+        RegisterOnLoop(loop, service);
         var delayedWrite = new DelayedWriteHandler();
         var channel = new EmbeddedChannel(delayedWrite, new CRpcServerHandler(server));
 
@@ -100,7 +100,7 @@ public class CRpcServerHandlerTests
         var loop = new CRpcLoop();
         var service = new RecordingService(NextServiceId());
         var server = new CRpcServer(loop);
-        RegisterOnLoop(loop, server, service);
+        RegisterOnLoop(loop, service);
         var channel = new EmbeddedChannel(new CRpcServerHandler(server));
         var request = CreateRequest(service.GetServiceId());
 
@@ -178,9 +178,9 @@ public class CRpcServerHandlerTests
         return CRpcMessage.valueOf(header, Array.Empty<byte>());
     }
 
-    private static void RegisterOnLoop(CRpcLoop loop, CRpcServer server, IRpcService service)
+    private static void RegisterOnLoop(CRpcLoop loop, IRpcService service)
     {
-        loop.Post(() => server.RegisterService(service));
+        loop.Post(() => loop.RegisterService(service));
         loop.Tick();
     }
 

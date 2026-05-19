@@ -6,25 +6,24 @@ using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Sockets;
 
 using CRpc.Async;
+using CRpc.Rpc;
 using CRpc.Rpc.CRpc.Codec;
 
 namespace CRpc.Rpc.CRpc.Server;
 
 public sealed class CRpcServer : IRpcServer
 {
-    private const int InitialCapacity = 106;
-
-    private readonly Dictionary<ushort, IRpcService> registeredServices;
+    private readonly CRpcServerOptions options;
     private CancellationTokenSource? runCancellation;
     private IChannel? bootstrapChannel;
     private IEventLoopGroup? group;
     private IEventLoopGroup? workGroup;
 
-    public CRpcServer(CRpcLoop loop)
+    public CRpcServer(CRpcLoop loop, CRpcServerOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(loop);
         Loop = loop;
-        registeredServices = new Dictionary<ushort, IRpcService>(InitialCapacity);
+        this.options = options ?? new CRpcServerOptions();
     }
 
     public CRpcLoop Loop { get; }
@@ -45,31 +44,25 @@ public sealed class CRpcServer : IRpcServer
     public void RegisterService(IRpcService service)
     {
         EnsureLoopThread();
-        var serviceId = service.GetServiceId();
-        registeredServices[serviceId] = service;
+        Loop.RegisterService(service);
     }
 
     public void UnregisterService(IRpcService service)
     {
         EnsureLoopThread();
-        var serviceId = service.GetServiceId();
-        if (registeredServices.TryGetValue(serviceId, out var registeredService)
-            && ReferenceEquals(registeredService, service))
-        {
-            registeredServices.Remove(serviceId);
-        }
+        Loop.UnregisterService(service);
     }
 
     public bool TryGetRegisteredService(ushort serviceId, [MaybeNullWhen(false)] out IRpcService service)
     {
         EnsureLoopThread();
-        return registeredServices.TryGetValue(serviceId, out service);
+        return Loop.TryGetService(serviceId, out service);
     }
 
     internal void ClearRegisteredServices()
     {
         EnsureLoopThread();
-        registeredServices.Clear();
+        Loop.ClearRegisteredServices();
     }
 
     private void EnsureLoopThread()
@@ -82,84 +75,141 @@ public sealed class CRpcServer : IRpcServer
 
     public async Task RunAsync()
     {
-        await RunAsync(IPAddress.Any, 7999).ConfigureAwait(false);
+        await RunAsync(options.Address, options.Port).ConfigureAwait(false);
     }
 
     public async Task RunAsync(IPAddress address, int port, bool registerConsoleCancelHandler = true)
     {
-        var cancellation = new CancellationTokenSource();
-        runCancellation = cancellation;
+        var boundOptions = new CRpcServerOptions
+        {
+            Address = address,
+            Port = port,
+            MaxFrameLength = options.MaxFrameLength,
+            HashLength = options.HashLength,
+        };
+
+        using var runCts = new CancellationTokenSource();
+        runCancellation = runCts;
         group = new MultithreadEventLoopGroup(1);
         workGroup = new MultithreadEventLoopGroup(1);
+
+        var bootstrap = new ServerBootstrap();
+        bootstrap.Group(group, workGroup);
+        bootstrap.Channel<TcpServerSocketChannel>();
+        bootstrap
+            .Option(ChannelOption.SoBacklog, 8192)
+            .ChildHandler(new ActionChannelInitializer<IChannel>(channel =>
+            {
+                var pipeline = channel.Pipeline;
+                pipeline.AddLast("decoder", new CRpcMessageDecoder(boundOptions.MaxFrameLength, boundOptions.HashLength));
+                pipeline.AddLast("handler", new CRpcServerHandler(this));
+            }));
+
+        bootstrapChannel = await bootstrap.BindAsync(address, port).ConfigureAwait(false);
+
+        Console.WriteLine($"CRpcServer started, Listening on {bootstrapChannel.LocalAddress}");
+        Console.WriteLine("Press Ctrl+C to stop.");
+
+        ConsoleCancelEventHandler? cancelHandler = null;
+        if (registerConsoleCancelHandler)
+        {
+            cancelHandler = (_, e) =>
+            {
+                e.Cancel = true;
+                runCts.Cancel();
+            };
+            Console.CancelKeyPress += cancelHandler;
+        }
+
         try
         {
-            var bootstrap = new ServerBootstrap();
-            bootstrap.Group(group, workGroup);
-            bootstrap.Channel<TcpServerSocketChannel>();
-
-            bootstrap
-                .Option(ChannelOption.SoBacklog, 8192)
-                .ChildHandler(new ActionChannelInitializer<IChannel>(channel =>
-                {
-                    var pipeline = channel.Pipeline;
-                    pipeline.AddLast("decoder", new CRpcMessageDecoder(32768, 16));
-                    //pipeline.AddLast("encoder", new CRpcMessageEncoder());
-                    pipeline.AddLast("handler", new CRpcServerHandler(this));
-                    //TODO: 心跳消息
-                }));
-
-            bootstrapChannel = await bootstrap.BindAsync(address, port).ConfigureAwait(false);
-
-            Console.WriteLine($"CRpcServer started, Listening on {bootstrapChannel.LocalAddress}");
-            Console.WriteLine("Press Ctrl+C to stop.");
-
-            ConsoleCancelEventHandler? cancelHandler = null;
-            if (registerConsoleCancelHandler)
-            {
-                cancelHandler = (_, e) =>
-                {
-                    e.Cancel = true;
-                    Close();
-                };
-                Console.CancelKeyPress += cancelHandler;
-            }
-
-            try
-            {
-                CRpcServerLoop.RunUntilCancelled(Loop, cancellation.Token);
-            }
-            finally
-            {
-                if (cancelHandler is not null)
-                {
-                    Console.CancelKeyPress -= cancelHandler;
-                }
-            }
-
-            ClearRegisteredServices();
-
-            await bootstrapChannel.CloseAsync().ConfigureAwait(false);
+            CRpcLoopHost.RunUntilCancelled(Loop, runCts.Token);
         }
         finally
         {
-            bootstrapChannel = null;
-            cancellation.Dispose();
-            if (ReferenceEquals(runCancellation, cancellation))
+            if (cancelHandler is not null)
             {
-                runCancellation = null;
-            }
-
-            if (workGroup is not null)
-            {
-                await workGroup.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
-                workGroup = null;
-            }
-
-            if (group is not null)
-            {
-                await group.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
-                group = null;
+                Console.CancelKeyPress -= cancelHandler;
             }
         }
+
+        if (Loop.IsInLoopThread)
+        {
+            ClearRegisteredServices();
+        }
+        else
+        {
+            Loop.Post(ClearRegisteredServices);
+            Loop.Tick();
+        }
+
+        await StopInternalAsync().ConfigureAwait(false);
+    }
+
+    public async Task StartAsync(CancellationToken cancellationToken = default)
+    {
+        if (bootstrapChannel is not null)
+        {
+            throw new InvalidOperationException("CRpcServer is already started.");
+        }
+
+        runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        await StartInternalAsync().ConfigureAwait(false);
+    }
+
+    public async Task StopAsync()
+    {
+        runCancellation?.Cancel();
+        await StopInternalAsync().ConfigureAwait(false);
+    }
+
+    private async Task StartInternalAsync()
+    {
+        if (bootstrapChannel is not null)
+        {
+            return;
+        }
+
+        runCancellation ??= new CancellationTokenSource();
+        group = new MultithreadEventLoopGroup(1);
+        workGroup = new MultithreadEventLoopGroup(1);
+
+        var bootstrap = new ServerBootstrap();
+        bootstrap.Group(group, workGroup);
+        bootstrap.Channel<TcpServerSocketChannel>();
+        bootstrap
+            .Option(ChannelOption.SoBacklog, 8192)
+            .ChildHandler(new ActionChannelInitializer<IChannel>(channel =>
+            {
+                var pipeline = channel.Pipeline;
+                pipeline.AddLast("decoder", new CRpcMessageDecoder(options.MaxFrameLength, options.HashLength));
+                pipeline.AddLast("handler", new CRpcServerHandler(this));
+            }));
+
+        bootstrapChannel = await bootstrap.BindAsync(options.Address, options.Port).ConfigureAwait(false);
+    }
+
+    private async Task StopInternalAsync()
+    {
+        if (bootstrapChannel is not null)
+        {
+            await bootstrapChannel.CloseAsync().ConfigureAwait(false);
+            bootstrapChannel = null;
+        }
+
+        if (workGroup is not null)
+        {
+            await workGroup.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+            workGroup = null;
+        }
+
+        if (group is not null)
+        {
+            await group.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+            group = null;
+        }
+
+        runCancellation?.Dispose();
+        runCancellation = null;
     }
 }
