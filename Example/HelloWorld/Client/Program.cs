@@ -5,6 +5,23 @@ using CRpc.Async;
 using CRpc.Rpc.CRpc.Client;
 using Example;
 
+/*
+ReferenceConfig<GreetingsService> reference =
+    ReferenceBuilder.<GreetingsService>newBuilder()
+     .interfaceClass(GreetingsService.class)
+     .url("tri://localhost:50052")
+     .build();
+DubboBootstrap.getInstance().reference(reference).start();
+GreetingsService service = reference.get();
+String message = service.sayHi("dubbo");
+*/
+
+/*
+auto proxy = ::trpc::GetTrpcClient()->GetProxy<::trpc::test::helloworld::GreeterServiceProxy>(FLAGS_service_name);
+::trpc::Status status = proxy->SayHello(client_ctx, req, &rsp);
+*/
+
+
 Console.WriteLine("Hello, RPC Client!");
 
 await using CRpcClient rpcClient = new CRpcClient();
