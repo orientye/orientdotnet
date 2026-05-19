@@ -4,6 +4,18 @@ namespace CRpc.Async;
 
 public static class CRpcLoopRunner
 {
+    public static void RunUntilComplete(CRpcLoop loop, Func<CRpcTask> operation, int sleepMilliseconds = 1)
+    {
+        RunUntilComplete(
+            loop,
+            async () =>
+            {
+                await operation();
+                return 0;
+            },
+            sleepMilliseconds);
+    }
+
     public static T RunUntilComplete<T>(CRpcLoop loop, Func<CRpcTask<T>> operation, int sleepMilliseconds = 1)
     {
         ArgumentNullException.ThrowIfNull(loop);

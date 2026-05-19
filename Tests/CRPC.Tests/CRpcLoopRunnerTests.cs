@@ -38,6 +38,24 @@ public class CRpcLoopRunnerTests
     }
 
     [Fact]
+    public void RunUntilCompleteVoidOverloadRunsOperation()
+    {
+        var loop = new CRpcLoop();
+        var count = 0;
+
+        CRpcLoopRunner.RunUntilComplete(
+            loop,
+            async () =>
+            {
+                await CRpcTask.Delay(1, CRpcLoop.Current);
+                count++;
+            },
+            sleepMilliseconds: 0);
+
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
     public void RunUntilCompleteRethrowsOperationException()
     {
         var loop = new CRpcLoop();

@@ -1,43 +1,20 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
-using System.Net;
 using CRpc.Async;
 using CRpc.Rpc.CRpc.Client;
 using Example;
 
-/*
-ReferenceConfig<GreetingsService> reference =
-    ReferenceBuilder.<GreetingsService>newBuilder()
-     .interfaceClass(GreetingsService.class)
-     .url("tri://localhost:50052")
-     .build();
-DubboBootstrap.getInstance().reference(reference).start();
-GreetingsService service = reference.get();
-String message = service.sayHi("dubbo");
-*/
-
-/*
-auto proxy = ::trpc::GetTrpcClient()->GetProxy<::trpc::test::helloworld::GreeterServiceProxy>(FLAGS_service_name);
-::trpc::Status status = proxy->SayHello(client_ctx, req, &rsp);
-*/
-
-
 Console.WriteLine("Hello, RPC Client!");
 
-await using CRpcClient rpcClient = new CRpcClient();
-await rpcClient.ConnectAsync(IPAddress.Loopback, 7999);
-GreeterClient client = new GreeterClient();
-client.__client = rpcClient;
-
 var loop = new CRpcLoop();
-CRpcLoopRunner.RunUntilComplete(loop, RunClientAsync);
+await using var reference = await CRpcReference
+    .For<GreeterClient>()
+    .Url("crpc://127.0.0.1:7999")
+    .ConnectAsync(loop);
 
-if (!Console.IsInputRedirected)
-{
-    Console.ReadKey();
-}
+var client = reference.Proxy;
 
-async CRpcTask<int> RunClientAsync()
+CRpcLoopRunner.RunUntilComplete(loop, async () =>
 {
     for (var i = 0; i < 5; i++)
     {
@@ -46,6 +23,9 @@ async CRpcTask<int> RunClientAsync()
         var (result, helloReply) = await client.SayHelloAsync(req);
         Console.WriteLine($"call={i}, server return: result={result}, response: {helloReply.Msg}");
     }
+});
 
-    return 0;
+if (!Console.IsInputRedirected)
+{
+    Console.ReadKey();
 }

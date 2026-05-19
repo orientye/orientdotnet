@@ -636,25 +636,27 @@ public static class CRpcServerLoop
 
 `HelloWorld/Client/Program.cs` 里：
 
-```28:44:Example/HelloWorld/Client/Program.cs
+```15:28:Example/HelloWorld/Client/Program.cs
 var loop = new CRpcLoop();
-CRpcLoopRunner.RunUntilComplete(loop, RunClientAsync);
+await using var reference = await CRpcReference
+    .For<GreeterClient>()
+    .Url("crpc://127.0.0.1:7999")
+    .ConnectAsync(loop);
 
-async CRpcTask<int> RunClientAsync()
+var client = reference.Proxy;
+
+CRpcLoopRunner.RunUntilComplete(loop, async () =>
 {
     for (var i = 0; i < 5; i++)
     {
-        HelloRequest req = new HelloRequest();
-        req.Msg = $"hi, crpc, I am from client, call={i}";
         var (result, helloReply) = await client.SayHelloAsync(req);
         Console.WriteLine($"call={i}, server return: result={result}, response: {helloReply.Msg}");
     }
-
-    return 0;
-}
+});
 ```
 
-- 每次调用都重新进入"驱动直到完成"模式 —— 没问题，但暴露了"客户端端没有自己的常驻 loop runner"。
+- 已提供 `CRpcReference` 与无返回值 `RunUntilComplete` 重载；业务代码可直接 `await client.SayHelloAsync(...)`。
+- 客户端端仍缺少等价于 `CRpcServerLoop` 的常驻 loop runner。
 - `CRpcLoopRunner` 也是 `Tick + Sleep(1)` 的同款忙等。
 - 方向：客户端应有等价于 `CRpcServerLoop` 的常驻驱动；`RunUntilComplete` 只用于 main 线程同步等待场景。
 
@@ -740,7 +742,28 @@ public sealed class CRpcClient {
 }
 ```
 
-### 9.3 关键不变量（重申）
+### 9.3 Client Reference API
+
+业务代码不直接依赖 `CRpcClient.CallAsync(serviceId, methodId, body, timeout)`。推荐通过 `CRpcReference` 获取生成代理：
+
+```csharp
+var loop = new CRpcLoop();
+await using var reference = await CRpcReference
+    .For<GreeterClient>()
+    .Url("crpc://127.0.0.1:7999")
+    .ConnectAsync(loop);
+
+var greeter = reference.Proxy;
+
+CRpcLoopRunner.RunUntilComplete(loop, async () =>
+{
+    var (code, reply) = await greeter.SayHelloAsync(req);
+});
+```
+
+`CRpcReference` 是业务入口；`CRpcClient` 是底层 transport client，仍负责连接、pending call、request sequence、超时和响应分发。Service 内部调用其它进程时也使用生成代理，但不能创建或驱动新的 loop，必须复用当前 `CRpcLoop.Current`。
+
+### 9.4 关键不变量（重申）
 
 1. 业务状态 / pending 调用表 / `ServiceRegistry`，**只在所属 loop 线程访问**。
 2. `TrySetResult / TrySetException / TrySetCanceled` **只在所属 loop 线程调用**。
