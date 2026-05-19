@@ -340,9 +340,9 @@ public sealed class CRpcLoop
     [ThreadStatic]
     private static CRpcLoop? current;
 
-    public static CRpcLoop Main { get; } = new();
-
     public static CRpcLoop? Current => current;
+
+    public static CRpcLoop RequireCurrentOr(CRpcLoop? loop = null);
 
     private readonly ConcurrentQueue<Action> actions = new();
     private readonly PriorityQueue<ScheduledTimer, long> timers = new();
@@ -366,10 +366,6 @@ public sealed class CRpcServer : IRpcServer
 
     private readonly Dictionary<ushort, IRpcService> registeredServices;
     // ...
-    public CRpcServer()
-        : this(CRpcLoop.Main)
-    {
-    }
 
     public CRpcServer(CRpcLoop loop)
     {
@@ -381,7 +377,7 @@ public sealed class CRpcServer : IRpcServer
     public CRpcLoop Loop { get; }
 ```
 
-- `Loop` 在构造时绑定，**默认是全局单例 `CRpcLoop.Main`**。
+- `Loop` 在构造时**必须显式传入**，无默认全局单例。
 - `RegisterService` / `UnregisterService` / `TryGetRegisteredService` 都调 `EnsureLoopThread` —— 注册表是 loop-local 状态。
 - `RunAsync` 里：用 DotNetty 起 1+1 IO 线程组 → bind → 用 `CRpcServerLoop.RunUntilCancelled(Loop, …)` **在调用线程**驱动 loop。
 - 这是当前实现的职责混合：`CRpcServer` 同时是协议端点和 ServiceRegistry owner。目标上应把 registry 移到 `CRpcLoop`，让 `CRpcServer` 只保留监听、pipeline、连接生命周期和请求投递。
@@ -563,16 +559,13 @@ sequenceDiagram
 
 > 这一节是"现有代码不一定是好的设计"的具体落点，便于后续重构。
 
-### 8.1 全局单例 `CRpcLoop.Main` + 默认绑定
+### 8.1 全局单例 `CRpcLoop.Main` + 默认绑定（已处理）
 
-- `CRpcLoop.Main = new()` 是进程级单例。
-- `CRpcServer()`、`CRpcTaskCompletionSource(loop = null)`、`CRpcTask.FromResult/FromTask/Delay/CompletedTask` 在 `loop` / `CRpcLoop.Current` 缺失时全部 fallback 到 `Main`。
-- 后果：
-  - 多 server / 多业务模块切 loop 困难，容易"看似传了 loop，实际命中 Main"。
-  - 单元测试里很难做 loop 隔离，跨用例容易污染。
-- 方向：
-  - 取消 `CRpcLoop.Main`，强制每个调用点显式传 loop；或最少把"默认值"从全局单例换成"按上下文取 `CRpcLoop.Current`，否则抛异常"。
-  - `CRpcServer` 不要默认无参构造塞 `Main`。
+- **已移除** `CRpcLoop.Main` 及所有 `loop ?? Main` 默认绑定。
+- **已移除** `CRpcServer()` 无参构造；构造必须显式传入 `CRpcLoop`。
+- `CRpcTaskCompletionSource` 构造必须传入非空 `CRpcLoop`。
+- `CRpcTask.FromResult/FromTask/Delay/CompletedTask` 使用 `CRpcLoop.RequireCurrentOr(loop)`：显式 `loop` 或 `CRpcLoop.Current`，否则抛 `InvalidOperationException`。
+- `async CRpcTask` 状态机通过 `CRpcAsyncMethodBuilder` 同样依赖 `RequireCurrentOr()`，未绑定 loop 的线程上会明确失败。
 
 ### 8.2 Tick + Sleep(1) 忙等，没有 wakeup
 
@@ -643,13 +636,14 @@ public static class CRpcServerLoop
 
 `HelloWorld/Client/Program.cs` 里：
 
-```28:36:Example/HelloWorld/Client/Program.cs
+```28:37:Example/HelloWorld/Client/Program.cs
+var loop = new CRpcLoop();
 for (var i = 0; i < 5; i++)
 {
     HelloRequest req = new HelloRequest();
     req.Msg = $"hi, crpc, I am from client, call={i}";
     var (result, helloReply) = CRpcLoopRunner.RunUntilComplete(
-        CRpcLoop.Main,
+        loop,
         () => client.SayHelloAsync(req));
     Console.WriteLine($"call={i}, server return: result={result}, response: {helloReply.Msg}");
 }
@@ -664,29 +658,10 @@ for (var i = 0; i < 5; i++)
 - `CRpcServerHandler` / `CRpcClientHandler` / `CRpcClient.__Send` 有大量 `Console.WriteLine($"*******…");`。
 - 这是临时调试，**不是架构**。后续应该走 `Microsoft.Extensions.Logging` 之类的抽象，并能区分 IO 线程 / loop 线程的来源。
 
-### 8.8 `CRpcTaskCompletionSource` 默认 fallback `CRpcLoop.Main`
+### 8.8 `CRpcTaskCompletionSource` 默认 fallback `CRpcLoop.Main`（已处理）
 
-```11:15:CRpc/Async/CRpcTaskCompletionSource.cs
-    public CRpcTaskCompletionSource(CRpcLoop? loop = null)
-    {
-        this.loop = loop ?? CRpcLoop.Main;
-        Task = new CRpcTask<T>(this);
-    }
-```
-
-`CRpcAsyncMethodBuilder.Create` 又会在 `CRpcLoop.Current == null` 时把 `null` 传进来：
-
-```9:15:CRpc/Async/CRpcAsyncMethodBuilder.cs
-    public static CRpcAsyncMethodBuilder Create()
-    {
-        return new CRpcAsyncMethodBuilder
-        {
-            source = new CRpcTaskCompletionSource<CRpcUnit>(CRpcLoop.Current)
-        };
-    }
-```
-
-→ 在没绑定 loop 的线程上跑一个 `async CRpcTask` 方法，会**沉默地**绑到 `Main`。建议改成：`CRpcLoop.Current` 为空就抛，让"async 方法运行所在的 loop"必须显式且可被 lint。
+- 构造已改为 `CRpcTaskCompletionSource(CRpcLoop loop)`，不再接受 null，也不再 fallback 到 `Main`。
+- `CRpcAsyncMethodBuilder` 使用 `CRpcLoop.RequireCurrentOr()`；未绑定 loop 的线程上会抛异常。
 
 ---
 
@@ -773,7 +748,7 @@ public sealed class CRpcClient {
 ## 10. 现状到目标的演进步骤（建议顺序）
 
 1. **可唤醒 loop**：`CRpcLoop` 加 wakeup；`CRpcServerLoop` / `CRpcLoopRunner` 改成"按下一 timer due 决定 wait"。
-2. **去掉 `CRpcLoop.Main` 隐式 fallback**：把所有 fallback 点改成"必须显式传 loop"，编译 / 运行期发现遗漏。
+2. ~~**去掉 `CRpcLoop.Main` 隐式 fallback**~~（已完成）：`RequireCurrentOr` + 移除无参 `CRpcServer`。
 3. **`CRpcServer` / `CRpcClient` 显式 loop**：构造必须传 loop；`CRpcServer` 增加 `RouteLoop` 钩子。
 4. **IO 线程可配置 / 可复用**：`CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`。
 5. **ServiceRegistry 上移到 `CRpcLoop`**：`CRpcServer.RegisterService` 先保留为兼容入口，内部转到 `Loop.RegisterService`；最终让 Server 不再持有 registry。

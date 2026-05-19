@@ -8,9 +8,10 @@ public sealed class CRpcTaskCompletionSource<T>
     private T? result;
     private Exception? exception;
 
-    public CRpcTaskCompletionSource(CRpcLoop? loop = null)
+    public CRpcTaskCompletionSource(CRpcLoop loop)
     {
-        this.loop = loop ?? CRpcLoop.Main;
+        ArgumentNullException.ThrowIfNull(loop);
+        this.loop = loop;
         Task = new CRpcTask<T>(this);
     }
 

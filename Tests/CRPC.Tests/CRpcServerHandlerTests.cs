@@ -116,7 +116,7 @@ public class CRpcServerHandlerTests
     public void ConnectionResetByPeerIsHandledAsNormalDisconnect()
     {
         var exceptions = new ExceptionCaptureHandler();
-        var server = new CRpcServer();
+        var server = new CRpcServer(new CRpcLoop());
         var channel = new EmbeddedChannel(new CRpcServerHandler(server), exceptions);
 
         channel.Pipeline.FireExceptionCaught(new SocketException(10054));
@@ -130,7 +130,7 @@ public class CRpcServerHandlerTests
         var originalOut = Console.Out;
         using var output = new StringWriter();
         var inactive = new InactiveCaptureHandler();
-        var server = new CRpcServer();
+        var server = new CRpcServer(new CRpcLoop());
         var channel = new EmbeddedChannel(new CRpcServerHandler(server), inactive);
 
         try
@@ -152,7 +152,7 @@ public class CRpcServerHandlerTests
     public void UnexpectedExceptionsContinueThroughPipeline()
     {
         var exceptions = new ExceptionCaptureHandler();
-        var server = new CRpcServer();
+        var server = new CRpcServer(new CRpcLoop());
         var channel = new EmbeddedChannel(new CRpcServerHandler(server), exceptions);
         var exception = new InvalidOperationException("boom");
 

@@ -10,7 +10,7 @@ public struct CRpcAsyncMethodBuilder
     {
         return new CRpcAsyncMethodBuilder
         {
-            source = new CRpcTaskCompletionSource<CRpcUnit>(CRpcLoop.Current)
+            source = new CRpcTaskCompletionSource<CRpcUnit>(CRpcLoop.RequireCurrentOr())
         };
     }
 
@@ -58,7 +58,7 @@ public struct CRpcAsyncMethodBuilder
 
     private CRpcTaskCompletionSource<CRpcUnit> GetSource()
     {
-        source ??= new CRpcTaskCompletionSource<CRpcUnit>(CRpcLoop.Current);
+        source ??= new CRpcTaskCompletionSource<CRpcUnit>(CRpcLoop.RequireCurrentOr());
         return source;
     }
 }

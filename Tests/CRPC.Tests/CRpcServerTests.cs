@@ -97,7 +97,8 @@ public class CRpcServerTests
     [Fact]
     public async Task CloseStopsRunningServer()
     {
-        var server = new CRpcServer();
+        var loop = new CRpcLoop();
+        var server = new CRpcServer(loop);
         var runTask = server.RunAsync(IPAddress.Loopback, port: 0, registerConsoleCancelHandler: false);
 
         await WaitUntilAsync(() => server.IsRunning, TimeSpan.FromSeconds(2));

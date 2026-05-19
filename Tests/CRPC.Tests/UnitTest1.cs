@@ -6,6 +6,22 @@ namespace CRPC.Tests;
 public class CRpcLoopTests
 {
     [Fact]
+    public void FromResultWithoutLoopOrCurrentThrows()
+    {
+        var exception = RunOnFreshThread(() => CRpcTask.FromResult(1));
+        Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("CRpcLoop", exception!.Message);
+    }
+
+    [Fact]
+    public void RequireCurrentOrWithoutLoopOrCurrentThrows()
+    {
+        var exception = RunOnFreshThread(() => CRpcLoop.RequireCurrentOr());
+        Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("CRpcLoop", exception!.Message);
+    }
+
+    [Fact]
     public void CompletionSourceRejectsCompletionFromNonLoopThread()
     {
         var loop = new CRpcLoop();
@@ -167,5 +183,25 @@ public class CRpcLoopTests
             loop.Tick();
             Thread.Sleep(1);
         }
+    }
+
+    private static Exception? RunOnFreshThread(Action action)
+    {
+        Exception? captured = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception exception)
+            {
+                captured = exception;
+            }
+        });
+
+        thread.Start();
+        thread.Join();
+        return captured;
     }
 }

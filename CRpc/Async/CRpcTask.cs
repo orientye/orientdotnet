@@ -21,7 +21,7 @@ public readonly struct CRpcTask
     {
         ArgumentNullException.ThrowIfNull(task);
 
-        loop ??= CRpcLoop.Current ?? CRpcLoop.Main;
+        loop = CRpcLoop.RequireCurrentOr(loop);
         var source = new CRpcTaskCompletionSource<T>(loop);
         CompleteFromTask(task, source, loop);
         return source.Task;
@@ -29,7 +29,7 @@ public readonly struct CRpcTask
 
     public static CRpcTask<T> FromResult<T>(T result, CRpcLoop? loop = null)
     {
-        loop ??= CRpcLoop.Current ?? CRpcLoop.Main;
+        loop = CRpcLoop.RequireCurrentOr(loop);
         var source = new CRpcTaskCompletionSource<T>(loop);
         source.TrySetResult(result);
         return source.Task;
@@ -37,7 +37,7 @@ public readonly struct CRpcTask
 
     public static CRpcTask CompletedTask(CRpcLoop? loop = null)
     {
-        loop ??= CRpcLoop.Current ?? CRpcLoop.Main;
+        loop = CRpcLoop.RequireCurrentOr(loop);
         var source = new CRpcTaskCompletionSource<CRpcUnit>(loop);
         source.TrySetResult(CRpcUnit.Value);
         return new CRpcTask(source.Task);
@@ -47,7 +47,7 @@ public readonly struct CRpcTask
     {
         ArgumentNullException.ThrowIfNull(task);
 
-        loop ??= CRpcLoop.Current ?? CRpcLoop.Main;
+        loop = CRpcLoop.RequireCurrentOr(loop);
         var source = new CRpcTaskCompletionSource<CRpcUnit>(loop);
         CompleteFromTask(task, source, loop);
         return new CRpcTask(source.Task);
@@ -60,7 +60,7 @@ public readonly struct CRpcTask
             throw new ArgumentOutOfRangeException(nameof(millisecondsDelay));
         }
 
-        loop ??= CRpcLoop.Current ?? CRpcLoop.Main;
+        loop = CRpcLoop.RequireCurrentOr(loop);
         var source = new CRpcTaskCompletionSource<CRpcUnit>(loop);
         if (millisecondsDelay == 0)
         {

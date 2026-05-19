@@ -20,11 +20,6 @@ public sealed class CRpcServer : IRpcServer
     private IEventLoopGroup? group;
     private IEventLoopGroup? workGroup;
 
-    public CRpcServer()
-        : this(CRpcLoop.Main)
-    {
-    }
-
     public CRpcServer(CRpcLoop loop)
     {
         ArgumentNullException.ThrowIfNull(loop);

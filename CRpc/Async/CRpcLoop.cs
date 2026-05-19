@@ -8,9 +8,18 @@ public sealed class CRpcLoop
     [ThreadStatic]
     private static CRpcLoop? current;
 
-    public static CRpcLoop Main { get; } = new();
-
     public static CRpcLoop? Current => current;
+
+    /// <summary>
+    /// Returns <paramref name="loop"/> when provided; otherwise <see cref="Current"/>.
+    /// Throws if neither is available.
+    /// </summary>
+    public static CRpcLoop RequireCurrentOr(CRpcLoop? loop = null)
+    {
+        return loop ?? Current
+            ?? throw new InvalidOperationException(
+                "A CRpcLoop must be provided explicitly or available via CRpcLoop.Current.");
+    }
 
     private readonly ConcurrentQueue<Action> actions = new();
     private readonly PriorityQueue<ScheduledTimer, long> timers = new();
