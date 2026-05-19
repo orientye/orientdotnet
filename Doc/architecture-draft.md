@@ -2,9 +2,9 @@ CRpc 架构与线程模型
 
 - 进程内可以有一个或多个 `CRpcLoop`，一个 loop 绑定一个业务线程。
 - 当前实现：一个 `CRpcServer` 持有一个 `CRpcLoop`，Service 注册表和业务状态只在该 loop 线程访问。
-- 目标方向：一个进程可以有多个 `CRpcServer` / `CRpcServerHandler` / `CRpcLoop`，但跨 loop 只能通过 `CRpcLoop.Post` 投递消息。
-- 一个 `CRpcLoop` 可以承载多个 `CRpcServer`，前提是这些 Server 的状态都只在该 loop 线程访问。
-- 一个 `CRpcServer` 可以注册多个 `IRpcService`。
+- 目标方向：不引入单独的 Runtime；`CRpcLoop` 作为业务执行上下文，并持有 `ServiceRegistry`。
+- 一个 `CRpcLoop` 可以承载多个协议端点，例如多个 `CRpcServer`、HTTP Gateway、管理端口。
+- `CRpcServer` / `CRpcServerHandler` 是网络入口和协议适配层，不是 Service 的长期 owner。
 - Service 间通信按边界选择：
   - 同 loop / 同线程：直接本地接口调用。
   - 同进程 / 不同 loop：`CRpcLoop.Post` 投递到目标 loop，结果再 `Post` 回调用方 loop。
@@ -45,12 +45,12 @@ CRpc 想要的核心模型是 **单线程业务循环 + 异步状态机**：
 
 | 角色 | 类型 | 职责 |
 | --- | --- | --- |
-| 业务循环 | `CRpcLoop` | 单线程 mailbox：动作队列 + 定时器队列；`Tick()` 把到期定时器和待执行动作 drain 一遍。 |
+| 业务循环 | `CRpcLoop` | 单线程 mailbox：动作队列 + 定时器队列；`Tick()` 把到期定时器和待执行动作 drain 一遍。目标上也是 `ServiceRegistry` 的 owner。 |
 | 循环驱动（一次性） | `CRpcLoopRunner` | 给主线程 / 同步入口用：`Tick + Sleep` 直到一个 `CRpcTask` 完成。 |
 | 循环驱动（常驻） | `CRpcServerLoop` | 服务端常驻：`Tick + Sleep(1)` 直到 cancel。 |
 | RPC 异步原语 | `CRpcTask` / `CRpcTask<T>` / `CRpcTaskCompletionSource<T>` / `CRpcAsyncMethodBuilder*` | 自定义 await 状态机；continuation 通过 `loop.Post` 回到 loop 线程恢复。 |
-| 服务端 | `CRpcServer` | 持有 `Loop` + `registeredServices`；Bootstrap DotNetty 监听端口；把 IO 收到的消息派发给业务 loop。 |
-| 服务端 IO 处理器 | `CRpcServerHandler` | DotNetty `ChannelHandlerAdapter`；`ChannelRead` 时 `server.Loop.Post(...)`。 |
+| 服务端 | `CRpcServer` | 当前持有 `Loop` + `registeredServices`；目标上退化为协议端点：监听端口、配置 pipeline、把 IO 收到的消息派发给业务 loop。 |
+| 服务端 IO 处理器 | `CRpcServerHandler` | DotNetty `ChannelHandlerAdapter`；`ChannelRead` 时选择目标 loop 并 `Post`。不持有业务状态。 |
 | 客户端 | `CRpcClient` | 持有 `pending calls` 表 + DotNetty `Bootstrap`；发起 `CallAsync`，超时由 loop timer 调度。 |
 | 客户端 IO 处理器 | `CRpcClientHandler` | DotNetty `ChannelHandlerAdapter`；`ChannelRead` 把响应交给 `CRpcClient.OnReceiveResponse`，再 `Post` 回 owner loop。 |
 | 传输 | DotNetty `MultithreadEventLoopGroup` | boss/worker IO 线程；编解码 `CRpcMessageDecoder` / `CRpcMessage.toFrame`。 |
@@ -121,11 +121,56 @@ flowchart TB
 - **业务 Loop → Netty IO 线程**：调用 `IChannel.WriteAndFlushAsync(frame)`，**不 await 返回的 `Task`**（避免业务线程被 IO 写完成回调拖回线程池）。
 - **业务 Loop 内部**：`CRpcTask` await ↔ `CRpcTaskCompletionSource.OnCompleted/TrySetResult` ↔ `loop.Post(continuation)`。
 
+### 4.1 Loop / Server / Handler 的边界
+
+目标模型不引入单独的 `Runtime`。边界按"执行上下文、协议端点、IO 适配器"拆开：
+
+- `CRpcLoop` 是 **业务执行上下文**：拥有业务线程、mailbox、timer、`CRpcTask` continuation，以及目标上的 `ServiceRegistry`。
+- `IRpcService` 是 **业务能力和业务状态**：业务状态只在所属 `CRpcLoop` 线程访问。
+- `CRpcServer` 是 **协议端点**：监听端口、配置 DotNetty pipeline、管理连接生命周期，并把解码后的请求投递到目标 loop。
+- `CRpcServerHandler` 是 **IO 适配器**：运行在 DotNetty IO 线程，负责从 channel 取出消息、选择目标 loop、`Post`，以及把 loop 线程产生的响应写回 channel。
+
+也就是说：
+
+```text
+CRpcLoop 决定：业务在哪里执行，Service 注册在哪里，状态归谁所有。
+CRpcServer 决定：请求从哪个端口 / 哪种协议进入。
+CRpcServerHandler 决定：IO 线程收到一条消息后，如何搬运到业务 loop。
+```
+
+### 4.2 多端口、多协议
+
+多端口不是多份业务状态，而是多个协议端点共享同一个业务 loop：
+
+```text
+CRpcLoop A
+  ├── ServiceRegistry
+  │   ├── UserService
+  │   └── OrderService
+  ├── CRpcServer : 7000, CRpc 二进制协议
+  ├── CRpcServer : 7001, CRpc 管理端口
+  └── HttpGatewayServer : 8080, HTTP/JSON 协议
+```
+
+多协议的关键是：不同端点把外部协议转换成统一的内部调用形态：
+
+```text
+serviceId + methodId + request body + IRpcContext
+```
+
+- CRpc 二进制端点：`TCP bytes -> CRpcMessage -> loop.Post -> Service -> CRpcMessage response -> TCP frame`。
+- HTTP Gateway 端点：`HTTP/JSON -> serviceId/methodId/body -> loop.Post -> Service -> HTTP response`。
+- 管理端口：可以只暴露管理类 service，也可以复用同一个 loop 上的 registry。
+
+因此长期方向是：`ServiceRegistry` 放到 `CRpcLoop` 上；多个 `CRpcServer` / Gateway 只引用 loop，不各自持有一份 registry。这样能避免 `PublicServer.UserService` 和 `AdminServer.UserService` 状态分裂。
+
 ---
 
 ## 5. Service 间通信模型
 
-一个 `CRpcServer` 可以注册多个 `IRpcService`。Service 之间如何通信，取决于双方是否在同一个 `CRpcLoop`、同一个进程、同一个线程。
+当前实现里，一个 `CRpcServer` 可以注册多个 `IRpcService`。目标模型里，`ServiceRegistry` 应上移到 `CRpcLoop`：Service 属于业务执行上下文，Server / Gateway 只是进入这些 Service 的协议端点。
+
+Service 之间如何通信，取决于双方是否在同一个 `CRpcLoop`、同一个进程、同一个线程。
 
 总原则：
 
@@ -137,7 +182,7 @@ flowchart TB
 
 ### 5.1 同线程：直接本地接口调用
 
-如果多个 Service 注册在同一个 `CRpcServer` 上，并且归属同一个 `CRpcLoop`，它们的业务逻辑都在同一个 loop 线程执行。
+如果多个 Service 归属同一个 `CRpcLoop`，它们的业务逻辑都在同一个 loop 线程执行。当前代码通常表现为"多个 Service 注册在同一个 `CRpcServer` 上"，但线程所有权来自该 Server 持有的 `CRpcLoop`。
 
 这种情况下，Service 之间应当通过本地业务接口互相调用：
 
@@ -310,6 +355,7 @@ public sealed class CRpcLoop
 - `timers` 是 **loop 内部使用**，`ScheduleDelay` 在入口处 `EnsureLoopThread`，所以是普通 `PriorityQueue`（**不能跨线程入定时器**）。
 - `Tick(maxActions = 1024)` 先跑到期定时器，再 dequeue 最多 1024 个 action；公平性弱、批大小固定。
 - 没有 wakeup 机制；驱动方（`CRpcServerLoop` / `CRpcLoopRunner`）必须 `Sleep(1)` 反复轮询。
+- 目标上，`CRpcLoop` 还应成为 `ServiceRegistry` 的 owner：`RegisterService` / `TryGetService` / `UnregisterService` 都必须在 loop 线程执行。
 
 ### 6.2 CRpcServer + CRpcServerHandler
 
@@ -338,6 +384,7 @@ public sealed class CRpcServer : IRpcServer
 - `Loop` 在构造时绑定，**默认是全局单例 `CRpcLoop.Main`**。
 - `RegisterService` / `UnregisterService` / `TryGetRegisteredService` 都调 `EnsureLoopThread` —— 注册表是 loop-local 状态。
 - `RunAsync` 里：用 DotNetty 起 1+1 IO 线程组 → bind → 用 `CRpcServerLoop.RunUntilCancelled(Loop, …)` **在调用线程**驱动 loop。
+- 这是当前实现的职责混合：`CRpcServer` 同时是协议端点和 ServiceRegistry owner。目标上应把 registry 移到 `CRpcLoop`，让 `CRpcServer` 只保留监听、pipeline、连接生命周期和请求投递。
 
 ```18:34:CRpc/Rpc/CRpc/Server/CRpcServerHandler.cs
     public override void ChannelRead(IChannelHandlerContext ctx, object msg)
@@ -357,7 +404,7 @@ public sealed class CRpcServer : IRpcServer
     }
 ```
 
-`CRpcServerHandler` 自己几乎不持业务状态，本质是一个 IO→Loop 的搬运工。`ProcessMessage` 在 loop 线程里启动一个 `CRpcTask` 状态机，`OnCompleted` 回调里把响应直接 `WriteAndFlushAsync`：
+`CRpcServerHandler` 自己几乎不持业务状态，本质是一个 IO→Loop 的搬运工。当前它通过 `server.TryGetRegisteredService` 查 Service；目标上应改为在目标 loop 线程上通过 `loop.TryGetService` 查找。`ProcessMessage` 在 loop 线程里启动一个 `CRpcTask` 状态机，`OnCompleted` 回调里把响应直接 `WriteAndFlushAsync`：
 
 ```49:66:CRpc/Rpc/CRpc/Server/CRpcServerHandler.cs
     private static async CRpcTask ProcessMessageAsync(IRpcService rpcService, IChannelHandlerContext ctx, object msg)
@@ -673,16 +720,21 @@ flowchart LR
 ```
 
 - 多个业务 loop **互不共享状态**，靠消息传递。
+- 每个 loop 拥有自己的 `ServiceRegistry`；Service 不再长期归属于某个 Server。
 - IO 层通过路由把请求 dispatch 到合适的 loop（最常见：按连接 ID / 用户 ID hash）。
+- 多端口 / 多协议通过多个协议端点实现，这些端点可以共享同一个 loop，也可以按路由投递到不同 loop。
 - 任何 `.NET Task` interop 必须 `Post` 回某个具体的 loop。
 
 ### 9.2 推荐的 API 形态（草稿）
 
 ```csharp
-// CRpcLoop: 可唤醒队列 + dynamic wait
+// CRpcLoop: 可唤醒队列 + dynamic wait + loop-local service registry
 public sealed class CRpcLoop {
     public void Post(Action action);                 // wake
     public CRpcLoopTimer Schedule(int ms, Action a); // loop-thread only
+    public void RegisterService(IRpcService service);
+    public bool TryGetService(ushort serviceId, out IRpcService service);
+    public void UnregisterService(IRpcService service);
     public TickResult Tick();                        // returns next-due-ms or "idle"
     public bool WaitForWork(int timeoutMs);          // 由驱动方调用
 }
@@ -695,8 +747,13 @@ public static class CRpcLoopHost {
 
 // Server / Client 显式注入 loop
 public sealed class CRpcServer {
-    public CRpcServer(CRpcServerOptions opts);          // 不再默认 Main
-    public Func<CRpcMessage, CRpcLoop>? RouteLoop;      // 按消息路由
+    public CRpcServer(CRpcLoop loop, CRpcServerOptions opts); // 不再默认 Main
+    public Func<CRpcMessage, CRpcLoop>? RouteLoop;            // 可选：按消息路由到不同 loop
+}
+
+// 其它协议端点同样只负责协议适配，然后投递到 loop
+public sealed class HttpGatewayServer {
+    public HttpGatewayServer(CRpcLoop loop, HttpGatewayOptions opts);
 }
 public sealed class CRpcClient {
     public CRpcClient(CRpcLoop loop, CRpcClientOptions opts); // 显式 loop
@@ -705,9 +762,9 @@ public sealed class CRpcClient {
 
 ### 9.3 关键不变量（重申）
 
-1. 业务状态 / pending 调用表 / 注册表，**只在所属 loop 线程访问**。
+1. 业务状态 / pending 调用表 / `ServiceRegistry`，**只在所属 loop 线程访问**。
 2. `TrySetResult / TrySetException / TrySetCanceled` **只在所属 loop 线程调用**。
-3. IO 线程不调业务逻辑，只 `Post`。
+3. IO 线程不调业务逻辑，只做协议解析、路由选择和 `Post`。
 4. `WriteAndFlushAsync` 不 await 完成（除非要影响业务状态，那就 `Post` 回来）。
 5. `Task.Run` / `System.Threading.Timer` / 线程池续延 在 CRpc 实现里**禁用**；只允许显式 interop 后 `Post` 回 loop。
 
@@ -719,7 +776,9 @@ public sealed class CRpcClient {
 2. **去掉 `CRpcLoop.Main` 隐式 fallback**：把所有 fallback 点改成"必须显式传 loop"，编译 / 运行期发现遗漏。
 3. **`CRpcServer` / `CRpcClient` 显式 loop**：构造必须传 loop；`CRpcServer` 增加 `RouteLoop` 钩子。
 4. **IO 线程可配置 / 可复用**：`CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`。
-5. **多 loop 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 loop"的 demo，覆盖跨 loop 调用 / 路由 / 关闭顺序。
-6. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[loop|io|tp]` 来源。
+5. **ServiceRegistry 上移到 `CRpcLoop`**：`CRpcServer.RegisterService` 先保留为兼容入口，内部转到 `Loop.RegisterService`；最终让 Server 不再持有 registry。
+6. **多端口 / 多协议示例**：同一个 loop 上启动两个 CRpc 端口或一个 CRpc 端口 + 一个 HTTP Gateway，验证它们共享同一组 Service。
+7. **多 loop 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 loop"的 demo，覆盖跨 loop 调用 / 路由 / 关闭顺序。
+8. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[loop|io|tp]` 来源。
 
 ---
