@@ -778,7 +778,6 @@ CRpcLoopRunner.RunUntilComplete(loop, async () =>
 1. **可唤醒 loop**：`CRpcLoop` 加 wakeup；`CRpcServerLoop` / `CRpcLoopRunner` 改成"按下一 timer due 决定 wait"。
 3. **`CRpcServer` / `CRpcClient` 显式 loop**：构造必须传 loop；`CRpcServer` 增加 `RouteLoop` 钩子。
 4. **IO 线程可配置 / 可复用**：`CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`。
-5. ~~**ServiceRegistry 上移到 `CRpcLoop`**~~（已完成）：registry 在 `CRpcLoop`；`CRpcServer` 不再暴露 `RegisterService` / `TryGetRegisteredService`，handler 与 HTTP 统一 `Loop.TryGetService`。
 5. **多端口 / 多协议示例**：同一个 loop 上启动两个 CRpc 端口或一个 CRpc 端口 + 一个 HTTP Gateway，验证它们共享同一组 Service。
 6. **多 loop 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 loop"的 demo，覆盖跨 loop 调用 / 路由 / 关闭顺序。
 7. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[loop|io|tp]` 来源。
