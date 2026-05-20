@@ -3,7 +3,7 @@ CRpc 架构与线程模型
 - 进程内可以有一个或多个 `CRpcLoop`，一个 loop 绑定一个业务线程。
 - 当前实现：一个 `CRpcServer` 持有一个 `CRpcLoop`，Service 注册表和业务状态只在该 loop 线程访问。
 - 目标方向：不引入单独的 Runtime；`CRpcLoop` 作为业务执行上下文，并持有 `ServiceRegistry`。
-- 一个 `CRpcLoop` 可以承载多个协议端点，例如多个 `CRpcServer`、HTTP Gateway、管理端口。
+- 一个 `CRpcLoop` 可以承载多个协议端点，例如多个 `CRpcServer`、HTTP Server、管理端口。
 - `CRpcServer` / `CRpcServerHandler` 是网络入口和协议适配层，不是 Service 的长期 owner。
 - Service 间通信按边界选择：
   - 同 loop / 同线程：直接本地接口调用。
@@ -159,16 +159,12 @@ serviceId + methodId + request body + IRpcContext
 ```
 
 - CRpc 二进制端点：`TCP bytes -> CRpcMessage -> loop.Post -> Service -> CRpcMessage response -> TCP frame`。
-- HTTP Gateway 端点：`HTTP/JSON -> serviceId/methodId/body -> loop.Post -> Service -> HTTP response`。
+- HTTP 端点：`HTTP/JSON -> serviceId/methodId/body -> loop.Post -> Service -> HTTP response`。
 - 管理端口：可以只暴露管理类 service，也可以复用同一个 loop 上的 registry。
-
-因此长期方向是：`ServiceRegistry` 放到 `CRpcLoop` 上；多个 `CRpcServer` / Gateway 只引用 loop，不各自持有一份 registry。这样能避免 `PublicServer.UserService` 和 `AdminServer.UserService` 状态分裂。
 
 ---
 
 ## 5. Service 间通信模型
-
-当前实现里，一个 `CRpcServer` 可以注册多个 `IRpcService`。目标模型里，`ServiceRegistry` 应上移到 `CRpcLoop`：Service 属于业务执行上下文，Server / Gateway 只是进入这些 Service 的协议端点。
 
 Service 之间如何通信，取决于双方是否在同一个 `CRpcLoop`、同一个进程、同一个线程。
 
