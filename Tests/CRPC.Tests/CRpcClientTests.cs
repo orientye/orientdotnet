@@ -8,12 +8,19 @@ namespace CRPC.Tests;
 public class CRpcClientTests
 {
     [Fact]
+    public void ConstructorThrowsWhenLoopIsNull()
+    {
+        Assert.Throws<ArgumentNullException>(() => new CRpcClient(null!));
+    }
+
+    [Fact]
     public void CallAsyncThrowsWhenNoCRpcLoopIsBound()
     {
+        var loop = new CRpcLoop();
         Exception? exception = null;
         var worker = new Thread(() =>
         {
-            var client = new CRpcClient();
+            var client = new CRpcClient(loop);
             exception = Assert.Throws<InvalidOperationException>(() =>
                 client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 0));
         });
@@ -25,13 +32,27 @@ public class CRpcClientTests
     }
 
     [Fact]
+    public void CallAsyncThrowsWhenCurrentLoopDiffersFromOwner()
+    {
+        var ownerLoop = new CRpcLoop();
+        var otherLoop = new CRpcLoop();
+        otherLoop.BindToCurrentThread();
+
+        var client = new CRpcClient(ownerLoop);
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 0));
+
+        Assert.Contains("owner CRpcLoop", exception.Message);
+    }
+
+    [Fact]
     public void CallAsyncResponseContinuationRunsOnCallingLoop()
     {
         var loop = new CRpcLoop();
         loop.BindToCurrentThread();
         var loopThreadId = Environment.CurrentManagedThreadId;
 
-        var client = new CRpcClient();
+        var client = new CRpcClient(loop);
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 0);
         var awaiter = task.GetAwaiter();
 
@@ -70,7 +91,7 @@ public class CRpcClientTests
         var loop = new CRpcLoop();
         loop.BindToCurrentThread();
 
-        var client = new CRpcClient();
+        var client = new CRpcClient(loop);
         var firstTask = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 0);
         var secondTask = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 0);
         var firstAwaiter = firstTask.GetAwaiter();
@@ -107,7 +128,7 @@ public class CRpcClientTests
         var loop = new CRpcLoop();
         loop.BindToCurrentThread();
 
-        var client = new CRpcClient();
+        var client = new CRpcClient(loop);
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 1);
         var awaiter = task.GetAwaiter();
 
@@ -124,7 +145,7 @@ public class CRpcClientTests
     [Fact]
     public async Task CloseAsyncClosesConnectedChannel()
     {
-        var client = new CRpcClient();
+        var client = new CRpcClient(new CRpcLoop());
         var channel = new EmbeddedChannel();
         SetClientChannel(client, channel);
 
@@ -136,7 +157,7 @@ public class CRpcClientTests
     [Fact]
     public async Task DisposeAsyncClosesConnectedChannel()
     {
-        var client = new CRpcClient();
+        var client = new CRpcClient(new CRpcLoop());
         var channel = new EmbeddedChannel();
         SetClientChannel(client, channel);
 

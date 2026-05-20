@@ -14,13 +14,16 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     private readonly Dictionary<long, PendingCall> results = new();
     private readonly IEventLoopGroup group = new MultithreadEventLoopGroup(1);
     private long reqSequence;
-    private CRpcLoop? ownerLoop;
+    private readonly CRpcLoop ownerLoop;
     private IChannel? channel;
 
     private readonly Bootstrap bootstrap = new Bootstrap();
 
-    public CRpcClient()
+    public CRpcClient(CRpcLoop loop)
     {
+        ArgumentNullException.ThrowIfNull(loop);
+        ownerLoop = loop;
+
         bootstrap
             .Channel<TcpSocketChannel>()
             .Option(ChannelOption.TcpNodelay, true)
@@ -70,15 +73,13 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     {
         var loop = CRpcLoop.Current
             ?? throw new InvalidOperationException("CRpcClient.CallAsync must be called from a bound CRpcLoop thread.");
-        if (ownerLoop is not null && !ReferenceEquals(ownerLoop, loop))
+        if (!ReferenceEquals(ownerLoop, loop))
         {
-            throw new InvalidOperationException("CRpcClient is already bound to a different CRpcLoop.");
+            throw new InvalidOperationException("CRpcClient.CallAsync must be called on the client's owner CRpcLoop thread.");
         }
 
-        ownerLoop = loop;
-
         long reqSeq = __IncrementReqId();
-        var pendingCall = __AddResultTaskAsync(reqSeq, timeout, loop);
+        var pendingCall = __AddResultTaskAsync(reqSeq, timeout, ownerLoop);
         
         __Send(reqSeq, serviceId, methodId, body);
 
@@ -87,7 +88,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     internal void OnReceiveResponse(CRpcMessage message)
     {
-        ownerLoop?.Post(() => CompleteReceiveResponse(message));
+        ownerLoop.Post(() => CompleteReceiveResponse(message));
     }
 
     private void CompleteReceiveResponse(CRpcMessage message)

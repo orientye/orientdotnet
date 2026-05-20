@@ -415,36 +415,33 @@ public sealed class CRpcServer : IRpcServer
 
 ### 6.3 CRpcClient + CRpcClientHandler
 
-```12:24:CRpc/Rpc/CRpc/Client/CRpcClient.cs
+```12:25:CRpc/Rpc/CRpc/Client/CRpcClient.cs
 public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 {
     private readonly Dictionary<long, PendingCall> results = new();
     private readonly IEventLoopGroup group = new MultithreadEventLoopGroup(1);
     private long reqSequence;
-    private CRpcLoop? ownerLoop;
+    private readonly CRpcLoop ownerLoop;
     private IChannel? channel;
+
+    public CRpcClient(CRpcLoop loop) { ... ownerLoop = loop; }
 ```
 
 - `results` 是 pending 调用表，**只能在 `ownerLoop` 线程上访问**。
-- `ownerLoop` 在第一次 `CallAsync` 时由调用线程的 `CRpcLoop.Current` 决定 —— 隐式绑定。
+- `ownerLoop` 在构造时显式绑定；`CallAsync` 要求 `CRpcLoop.Current` 与 owner 为同一实例。
 - `reqSequence` 用 `Interlocked.Increment` —— 对外是线程安全的，但目前实际只可能从 owner loop 调用。
 
 `CallAsync` 流程：
 
-```69:86:CRpc/Rpc/CRpc/Client/CRpcClient.cs
-    public CRpcTask<CRpcMessage> CallAsync(ushort serviceId, ushort methodId, byte[] body, int timeout)
+```72:84:CRpc/Rpc/CRpc/Client/CRpcClient.cs
+    public CRpcTask<CRpcMessage> CallAsync(...)
     {
-        var loop = CRpcLoop.Current
-            ?? throw new InvalidOperationException("CRpcClient.CallAsync must be called from a bound CRpcLoop thread.");
-        if (ownerLoop is not null && !ReferenceEquals(ownerLoop, loop))
-        {
-            throw new InvalidOperationException("CRpcClient is already bound to a different CRpcLoop.");
-        }
-
-        ownerLoop = loop;
+        var loop = CRpcLoop.Current ?? throw ...;
+        if (!ReferenceEquals(ownerLoop, loop))
+            throw new InvalidOperationException("... client's owner CRpcLoop thread.");
 
         long reqSeq = __IncrementReqId();
-        var pendingCall = __AddResultTaskAsync(reqSeq, timeout, loop);
+        var pendingCall = __AddResultTaskAsync(reqSeq, timeout, ownerLoop);
         
         __Send(reqSeq, serviceId, methodId, body);
 
@@ -550,7 +547,7 @@ sequenceDiagram
 
 > 这一节是"现有代码不一定是好的设计"的具体落点，便于后续重构。
 >
-> **已解决**：全局 `CRpcLoop.Main` 与默认 fallback 已移除，显式 loop / `CRpcLoop.Current` 见 §6.1。
+> **已解决**：全局 `CRpcLoop.Main` 与默认 fallback 已移除，显式 loop / `CRpcLoop.Current` 见 §6.1；`CRpcClient` 构造时显式 owner loop 见 §6.3 / §8.4。
 
 ### 8.1 Tick + Sleep(1) 忙等，没有 wakeup
 
@@ -597,25 +594,11 @@ public static class CRpcServerLoop
 `ChannelRead` 里 `server.Loop.Post(...)` —— 一个 server 只有一个 loop。如果以后想"按连接 / 按 serviceId / 按用户 ID 路由到不同 loop"，必须改 handler。
 现在还没有路由抽象（应当在 `CRpcServer` 上加 `Func<CRpcMessage, CRpcLoop> RouteLoop` 之类）。
 
-### 8.4 `CRpcClient` 的 owner loop 隐式绑定
+### 8.4 `CRpcClient` 的 owner loop 绑定
 
-```71:79:CRpc/Rpc/CRpc/Client/CRpcClient.cs
-        var loop = CRpcLoop.Current
-            ?? throw new InvalidOperationException("CRpcClient.CallAsync must be called from a bound CRpcLoop thread.");
-        if (ownerLoop is not null && !ReferenceEquals(ownerLoop, loop))
-        {
-            throw new InvalidOperationException("CRpcClient is already bound to a different CRpcLoop.");
-        }
+> **已解决**：`CRpcClient(CRpcLoop loop)` 构造时绑定 owner；`CallAsync` 要求 `CRpcLoop.Current` 与 owner 一致；`CRpcReferenceBuilder.ConnectAsync(loop)` 创建 `new CRpcClient(loop)`。
 
-        ownerLoop = loop;
-```
-
-- 第一次 `CallAsync` 隐式决定 owner loop；之后切 loop 直接抛。
-- 没有 `CRpcClient(loop)` 显式构造，也没有 `Bind(loop)` API；行为不易预测。
-- `OnReceiveResponse` 里 `ownerLoop?.Post(...)` —— 在握手响应早于第一个 `CallAsync` 的极端时序下可能丢消息（目前是 request-driven 协议，问题不大，但属于隐患）。
-- 方向：
-  - 构造时显式传 `CRpcLoop`。
-  - `pending calls` 表存活在 loop 线程，避免任何对它做无锁假设。
+- `pending calls` 表仍在 client 实例上，访问约定为 owner loop 线程（§9.4 不变量）。
 
 ### 8.5 `CRpcLoopRunner.RunUntilComplete` 的使用方式
 
@@ -756,7 +739,7 @@ CRpcLoopRunner.RunUntilComplete(loop, async () =>
 ## 10. 现状到目标的演进步骤（建议顺序）
 
 1. **可唤醒 loop**：`CRpcLoop` 加 wakeup；`CRpcServerLoop` / `CRpcLoopRunner` 改成"按下一 timer due 决定 wait"。
-3. **`CRpcServer` / `CRpcClient` 显式 loop**：构造必须传 loop；`CRpcServer` 增加 `RouteLoop` 钩子。
+3. **显式 loop 注入**：`CRpcClient(CRpcLoop)` 已完成；`CRpcServer` 构造必传 loop + `RouteLoop` 钩子仍待做。
 4. **IO 线程可配置 / 可复用**：`CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`。
 5. **多端口 / 多协议示例**：同一个 loop 上启动两个 CRpc 端口或一个 CRpc 端口 + 一个 HTTP Gateway，验证它们共享同一组 Service。
 6. **多 loop 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 loop"的 demo，覆盖跨 loop 调用 / 路由 / 关闭顺序。

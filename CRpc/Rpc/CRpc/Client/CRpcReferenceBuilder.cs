@@ -30,7 +30,7 @@ public sealed class CRpcReferenceBuilder<TProxy>
         ArgumentNullException.ThrowIfNull(loop);
         var target = uri ?? throw new InvalidOperationException("CRpc reference URL is required.");
 
-        var client = new CRpcClient();
+        var client = new CRpcClient(loop);
         await client.ConnectAsync(target.Host, target.Port).ConfigureAwait(false);
 
         var proxy = CRpcProxyActivator.Create<TProxy>(client);
