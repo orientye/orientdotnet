@@ -546,8 +546,6 @@ sequenceDiagram
 ## 8. 现状中的设计问题（按严重程度）
 
 > 这一节是"现有代码不一定是好的设计"的具体落点，便于后续重构。
->
-> **已解决**：全局 `CRpcLoop.Main` 与默认 fallback 已移除，显式 loop / `CRpcLoop.Current` 见 §6.1；`CRpcClient` 构造时显式 owner loop 见 §6.3 / §8.4。
 
 ### 8.1 Tick + Sleep(1) 忙等，没有 wakeup
 
@@ -595,8 +593,6 @@ public static class CRpcServerLoop
 现在还没有路由抽象（应当在 `CRpcServer` 上加 `Func<CRpcMessage, CRpcLoop> RouteLoop` 之类）。
 
 ### 8.4 `CRpcClient` 的 owner loop 绑定
-
-> **已解决**：`CRpcClient(CRpcLoop loop)` 构造时绑定 owner；`CallAsync` 要求 `CRpcLoop.Current` 与 owner 一致；`CRpcReferenceBuilder.ConnectAsync(loop)` 创建 `new CRpcClient(loop)`。
 
 - `pending calls` 表仍在 client 实例上，访问约定为 owner loop 线程（§9.4 不变量）。
 
