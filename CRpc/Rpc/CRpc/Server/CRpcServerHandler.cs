@@ -23,7 +23,7 @@ public class CRpcServerHandler : ChannelHandlerAdapter
         var methodId = message.getMethodId();
         server.Loop.Post(() =>
         {
-            if (server.TryGetRegisteredService(serviceId, out var rpcService))
+            if (server.Loop.TryGetService(serviceId, out var rpcService))
             {
                 ProcessMessage(rpcService, ctx, message);
             }

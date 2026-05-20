@@ -1,5 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Net;
+﻿using System.Net;
 
 using DotNetty.Transport.Bootstrapping;
 using DotNetty.Transport.Channels;
@@ -39,38 +38,6 @@ public sealed class CRpcServer : IRpcServer
     public void Close()
     {
         runCancellation?.Cancel();
-    }
-
-    public void RegisterService(IRpcService service)
-    {
-        EnsureLoopThread();
-        Loop.RegisterService(service);
-    }
-
-    public void UnregisterService(IRpcService service)
-    {
-        EnsureLoopThread();
-        Loop.UnregisterService(service);
-    }
-
-    public bool TryGetRegisteredService(ushort serviceId, [MaybeNullWhen(false)] out IRpcService service)
-    {
-        EnsureLoopThread();
-        return Loop.TryGetService(serviceId, out service);
-    }
-
-    internal void ClearRegisteredServices()
-    {
-        EnsureLoopThread();
-        Loop.ClearRegisteredServices();
-    }
-
-    private void EnsureLoopThread()
-    {
-        if (!Loop.IsInLoopThread)
-        {
-            throw new InvalidOperationException("CRpcServer service registry operations must run on the server loop thread.");
-        }
     }
 
     public async Task RunAsync()
@@ -135,11 +102,11 @@ public sealed class CRpcServer : IRpcServer
 
         if (Loop.IsInLoopThread)
         {
-            ClearRegisteredServices();
+            Loop.ClearRegisteredServices();
         }
         else
         {
-            Loop.Post(ClearRegisteredServices);
+            Loop.Post(Loop.ClearRegisteredServices);
             Loop.Tick();
         }
 

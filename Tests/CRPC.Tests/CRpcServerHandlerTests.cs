@@ -31,7 +31,7 @@ public class CRpcServerHandlerTests
     }
 
     [Fact]
-    public void HandlerUsesServerInstanceRegistry()
+    public void HandlerUsesBoundLoopRegistry()
     {
         var serviceId = NextServiceId();
         var firstLoop = new CRpcLoop();

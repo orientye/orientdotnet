@@ -43,6 +43,65 @@ public class CRpcLoopRegistryTests
         loop.Tick();
     }
 
+    [Fact]
+    public void UnregisterServiceDoesNotRemoveReplacementForSameServiceId()
+    {
+        const ushort serviceId = 1001;
+        var loop = new CRpcLoop();
+        var oldService = new RecordingService(serviceId);
+        var newService = new RecordingService(serviceId);
+        loop.Post(() =>
+        {
+            loop.RegisterService(oldService);
+            loop.RegisterService(newService);
+            loop.UnregisterService(oldService);
+            Assert.True(loop.TryGetService(serviceId, out var found));
+            Assert.Same(newService, found);
+        });
+        loop.Tick();
+    }
+
+    [Fact]
+    public void DifferentLoopsCanRegisterSameServiceIdWithoutCollision()
+    {
+        const ushort serviceId = 1002;
+        var firstLoop = new CRpcLoop();
+        var secondLoop = new CRpcLoop();
+        var firstService = new RecordingService(serviceId);
+        var secondService = new RecordingService(serviceId);
+        firstLoop.Post(() => firstLoop.RegisterService(firstService));
+        secondLoop.Post(() => secondLoop.RegisterService(secondService));
+        firstLoop.Tick();
+        secondLoop.Tick();
+
+        firstLoop.Post(() =>
+        {
+            Assert.True(firstLoop.TryGetService(serviceId, out var found));
+            Assert.Same(firstService, found);
+        });
+        secondLoop.Post(() =>
+        {
+            Assert.True(secondLoop.TryGetService(serviceId, out var found));
+            Assert.Same(secondService, found);
+        });
+        firstLoop.Tick();
+        secondLoop.Tick();
+    }
+
+    [Fact]
+    public void ClearRegisteredServicesRemovesAllServices()
+    {
+        var loop = new CRpcLoop();
+        var service = new RecordingService(1003);
+        loop.Post(() =>
+        {
+            loop.RegisterService(service);
+            loop.ClearRegisteredServices();
+            Assert.False(loop.TryGetService(service.GetServiceId(), out _));
+        });
+        loop.Tick();
+    }
+
     private sealed class RecordingService : IRpcService
     {
         private readonly ushort serviceId;
