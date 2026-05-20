@@ -549,16 +549,10 @@ sequenceDiagram
 ## 8. 现状中的设计问题（按严重程度）
 
 > 这一节是"现有代码不一定是好的设计"的具体落点，便于后续重构。
+>
+> **已解决**：全局 `CRpcLoop.Main` 与默认 fallback 已移除，显式 loop / `CRpcLoop.Current` 见 §6.1。
 
-### 8.1 全局单例 `CRpcLoop.Main` + 默认绑定（已处理）
-
-- **已移除** `CRpcLoop.Main` 及所有 `loop ?? Main` 默认绑定。
-- **已移除** `CRpcServer()` 无参构造；构造必须显式传入 `CRpcLoop`。
-- `CRpcTaskCompletionSource` 构造必须传入非空 `CRpcLoop`。
-- `CRpcTask.FromResult/FromTask/Delay/CompletedTask` 使用 `CRpcLoop.RequireCurrentOr(loop)`：显式 `loop` 或 `CRpcLoop.Current`，否则抛 `InvalidOperationException`。
-- `async CRpcTask` 状态机通过 `CRpcAsyncMethodBuilder` 同样依赖 `RequireCurrentOr()`，未绑定 loop 的线程上会明确失败。
-
-### 8.2 Tick + Sleep(1) 忙等，没有 wakeup
+### 8.1 Tick + Sleep(1) 忙等，没有 wakeup
 
 ```7:28:CRpc/Rpc/CRpc/Server/CRpcServerLoop.cs
 public static class CRpcServerLoop
@@ -586,7 +580,7 @@ public static class CRpcServerLoop
   - `CRpcLoop` 内部加 `ManualResetEventSlim` / `SemaphoreSlim`：`Post` 后 `Set`；驱动方按"下一个 timer 到期时间"决定 `Wait(timeout)`。
   - `Tick` 应能告诉驱动方"下一次最早 due 在 X ms 后"或"完全空闲，可无限等"。
 
-### 8.3 IO 线程组与业务 loop 的拓扑写死
+### 8.2 IO 线程组与业务 loop 的拓扑写死
 
 - `CRpcServer.RunAsync` 里硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）。
 - `CRpcClient` 构造里硬编码 `MultithreadEventLoopGroup(1)`。
@@ -598,12 +592,12 @@ public static class CRpcServerLoop
   - 引入 `CRpcServerOptions` / `CRpcClientOptions`，至少能注入 `IEventLoopGroup` 与 `CRpcLoop`（或 loop 工厂）。
   - 服务端内部允许"按 `serviceId` 路由到不同 `CRpcLoop`"。
 
-### 8.4 `CRpcServerHandler` 的 owner loop 选择不灵活
+### 8.3 `CRpcServerHandler` 的 owner loop 选择不灵活
 
 `ChannelRead` 里 `server.Loop.Post(...)` —— 一个 server 只有一个 loop。如果以后想"按连接 / 按 serviceId / 按用户 ID 路由到不同 loop"，必须改 handler。
 现在还没有路由抽象（应当在 `CRpcServer` 上加 `Func<CRpcMessage, CRpcLoop> RouteLoop` 之类）。
 
-### 8.5 `CRpcClient` 的 owner loop 隐式绑定
+### 8.4 `CRpcClient` 的 owner loop 隐式绑定
 
 ```71:79:CRpc/Rpc/CRpc/Client/CRpcClient.cs
         var loop = CRpcLoop.Current
@@ -623,7 +617,7 @@ public static class CRpcServerLoop
   - 构造时显式传 `CRpcLoop`。
   - `pending calls` 表存活在 loop 线程，避免任何对它做无锁假设。
 
-### 8.6 `CRpcLoopRunner.RunUntilComplete` 的使用方式
+### 8.5 `CRpcLoopRunner.RunUntilComplete` 的使用方式
 
 `HelloWorld/Client/Program.cs` 里：
 
@@ -651,15 +645,10 @@ CRpcLoopRunner.RunUntilComplete(loop, async () =>
 - `CRpcLoopRunner` 也是 `Tick + Sleep(1)` 的同款忙等。
 - 方向：客户端应有等价于 `CRpcServerLoop` 的常驻驱动；`RunUntilComplete` 只用于 main 线程同步等待场景。
 
-### 8.7 业务回调里 `Console.WriteLine` 当作可观测性
+### 8.6 业务回调里 `Console.WriteLine` 当作可观测性
 
 - `CRpcServerHandler` / `CRpcClientHandler` / `CRpcClient.__Send` 有大量 `Console.WriteLine($"*******…");`。
 - 这是临时调试，**不是架构**。后续应该走 `Microsoft.Extensions.Logging` 之类的抽象，并能区分 IO 线程 / loop 线程的来源。
-
-### 8.8 `CRpcTaskCompletionSource` 默认 fallback `CRpcLoop.Main`（已处理）
-
-- 构造已改为 `CRpcTaskCompletionSource(CRpcLoop loop)`，不再接受 null，也不再 fallback 到 `Main`。
-- `CRpcAsyncMethodBuilder` 使用 `CRpcLoop.RequireCurrentOr()`；未绑定 loop 的线程上会抛异常。
 
 ---
 
