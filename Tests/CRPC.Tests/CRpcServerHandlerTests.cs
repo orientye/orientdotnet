@@ -8,7 +8,7 @@ using DotNetty.Transport.Channels.Embedded;
 
 namespace CRPC.Tests;
 
-public class CRpcServerHandlerTests
+public class CRpcServerHandlerTests : CrpcTestBase
 {
     private static int nextServiceId = 1000;
 
@@ -39,11 +39,16 @@ public class CRpcServerHandlerTests
         var firstService = new RecordingService(serviceId);
         var secondService = new RecordingService(serviceId);
         var firstServer = new CRpcServer(firstLoop);
-        var secondServer = new CRpcServer(secondLoop);
-        firstLoop.Post(() => firstLoop.RegisterService(firstService));
-        secondLoop.Post(() => secondLoop.RegisterService(secondService));
-        firstLoop.Tick();
-        secondLoop.Tick();
+
+        DedicatedLoopThread.Run(secondLoop, loop =>
+        {
+            loop.Post(() => loop.RegisterService(secondService));
+            loop.Tick();
+        });
+
+        using var firstDriver = new LoopTestDriver(firstLoop);
+        firstDriver.Run(() => firstLoop.Post(() => firstLoop.RegisterService(firstService)));
+
         var channel = new EmbeddedChannel(new CRpcServerHandler(firstServer));
 
         Assert.False(channel.WriteInbound(CreateRequest(serviceId)));
@@ -51,7 +56,7 @@ public class CRpcServerHandlerTests
         Assert.Equal(0, firstService.CallCount);
         Assert.Equal(0, secondService.CallCount);
 
-        firstLoop.Tick();
+        firstDriver.Run(() => firstLoop.Tick());
 
         Assert.Equal(1, firstService.CallCount);
         Assert.Equal(0, secondService.CallCount);

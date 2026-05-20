@@ -3,7 +3,7 @@ using CRpc.Rpc;
 
 namespace CRPC.Tests;
 
-public class CRpcLoopRegistryTests
+public class CRpcLoopRegistryTests : CrpcTestBase
 {
     [Fact]
     public void RegisterServiceRequiresLoopThread()
@@ -69,24 +69,54 @@ public class CRpcLoopRegistryTests
         var secondLoop = new CRpcLoop();
         var firstService = new RecordingService(serviceId);
         var secondService = new RecordingService(serviceId);
-        firstLoop.Post(() => firstLoop.RegisterService(firstService));
-        secondLoop.Post(() => secondLoop.RegisterService(secondService));
-        firstLoop.Tick();
-        secondLoop.Tick();
 
-        firstLoop.Post(() =>
+        DedicatedLoopThread.Run(firstLoop, loop =>
         {
-            Assert.True(firstLoop.TryGetService(serviceId, out var found));
+            loop.Post(() => loop.RegisterService(firstService));
+            loop.Tick();
+            Assert.True(loop.TryGetService(serviceId, out var found));
             Assert.Same(firstService, found);
         });
-        secondLoop.Post(() =>
+
+        DedicatedLoopThread.Run(secondLoop, loop =>
         {
-            Assert.True(secondLoop.TryGetService(serviceId, out var found));
+            loop.Post(() => loop.RegisterService(secondService));
+            loop.Tick();
+            Assert.True(loop.TryGetService(serviceId, out var found));
             Assert.Same(secondService, found);
         });
-        firstLoop.Tick();
-        secondLoop.Tick();
     }
+
+#if DEBUG
+    [Fact]
+    public void BindSecondLoopOnSameThreadThrowsInDebug()
+    {
+        Exception? captured = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var firstLoop = new CRpcLoop();
+                var secondLoop = new CRpcLoop();
+                firstLoop.BindToCurrentThread();
+                secondLoop.BindToCurrentThread();
+            }
+            catch (Exception ex)
+            {
+                captured = ex;
+            }
+        })
+        {
+            IsBackground = true,
+        };
+
+        thread.Start();
+        thread.Join();
+
+        var exception = Assert.IsType<InvalidOperationException>(captured);
+        Assert.Contains("already bound", exception.Message, StringComparison.Ordinal);
+    }
+#endif
 
     [Fact]
     public void ClearRegisteredServicesRemovesAllServices()

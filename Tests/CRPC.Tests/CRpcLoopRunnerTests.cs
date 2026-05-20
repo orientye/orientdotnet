@@ -2,7 +2,7 @@ using CRpc.Async;
 
 namespace CRPC.Tests;
 
-public class CRpcLoopRunnerTests
+public class CRpcLoopRunnerTests : CrpcTestBase
 {
     [Fact]
     public void RunUntilCompleteBindsLoopBeforeStartingOperation()

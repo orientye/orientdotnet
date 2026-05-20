@@ -2,7 +2,7 @@ using CRpc.Async;
 
 namespace CRPC.Tests;
 
-public class CRpcLoopExceptionIsolationTests
+public class CRpcLoopExceptionIsolationTests : CrpcTestBase
 {
     [Fact]
     public void TickContinuesProcessingActionsAfterOneThrows()

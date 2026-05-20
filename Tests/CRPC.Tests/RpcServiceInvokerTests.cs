@@ -5,7 +5,7 @@ using CRpc.Rpc.CRpc.Server;
 
 namespace CRPC.Tests;
 
-public class RpcServiceInvokerTests
+public class RpcServiceInvokerTests : CrpcTestBase
 {
     [Fact]
     public void InvokeAsyncReturnsServiceResult()

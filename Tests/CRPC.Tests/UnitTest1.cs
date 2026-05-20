@@ -3,7 +3,7 @@ using CRpc.Rpc.CRpc.Server;
 
 namespace CRPC.Tests;
 
-public class CRpcLoopTests
+public class CRpcLoopTests : CrpcTestBase
 {
     [Fact]
     public void FromResultWithoutLoopOrCurrentThrows()

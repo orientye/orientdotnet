@@ -4,7 +4,7 @@ using CRpc.Rpc.CRpc.Server;
 
 namespace CRPC.Tests;
 
-public class CRpcServerTests
+public class CRpcServerTests : CrpcTestBase
 {
     [Fact]
     public async Task CloseStopsRunningServer()

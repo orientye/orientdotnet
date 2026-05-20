@@ -5,7 +5,7 @@ using DotNetty.Transport.Channels.Embedded;
 
 namespace CRPC.Tests;
 
-public class CRpcClientTests
+public class CRpcClientTests : CrpcTestBase
 {
     [Fact]
     public void ConstructorThrowsWhenLoopIsNull()

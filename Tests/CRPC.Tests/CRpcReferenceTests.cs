@@ -5,7 +5,7 @@ using CRpc.Rpc.CRpc.Codec;
 
 namespace CRPC.Tests;
 
-public class CRpcReferenceTests
+public class CRpcReferenceTests : CrpcTestBase
 {
     [Fact]
     public void ProxyActivatorInjectsRpcClientIntoGeneratedClientField()

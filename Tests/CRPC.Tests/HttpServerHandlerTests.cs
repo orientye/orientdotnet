@@ -10,7 +10,7 @@ using Google.Protobuf.WellKnownTypes;
 
 namespace CRPC.Tests;
 
-public class HttpServerHandlerTests
+public class HttpServerHandlerTests : CrpcTestBase
 {
     [Fact]
     public void PostJsonInvokesServiceAndReturnsEnvelope()

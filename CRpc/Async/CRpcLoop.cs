@@ -10,6 +10,11 @@ public sealed class CRpcLoop
     [ThreadStatic]
     private static CRpcLoop? current;
 
+#if DEBUG
+    [ThreadStatic]
+    private static CRpcLoop? boundLoopOnThread;
+#endif
+
     public static CRpcLoop? Current => current;
 
     /// <summary>
@@ -41,9 +46,35 @@ public sealed class CRpcLoop
 
     public void BindToCurrentThread()
     {
+#if DEBUG
+        if (boundLoopOnThread is not null && !ReferenceEquals(boundLoopOnThread, this))
+        {
+            throw new InvalidOperationException(
+                "This thread is already bound to a different CRpcLoop. Use one business thread per loop.");
+        }
+
+        boundLoopOnThread = this;
+#endif
         threadId = Environment.CurrentManagedThreadId;
         current = this;
     }
+
+#if DEBUG
+    /// <summary>
+    /// Clears DEBUG thread binding state. For tests only (via <c>CRPC.Tests.CrpcTestBase</c>).
+    /// </summary>
+    internal static void ResetDebugThreadBindingForTests()
+    {
+        if (boundLoopOnThread is not null
+            && boundLoopOnThread.threadId == Environment.CurrentManagedThreadId)
+        {
+            boundLoopOnThread.threadId = 0;
+        }
+
+        boundLoopOnThread = null;
+        current = null;
+    }
+#endif
 
     public void Post(Action action)
     {
