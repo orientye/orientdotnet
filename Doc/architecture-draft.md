@@ -843,24 +843,37 @@ Tick(maxActions):
 
 ##### 9.5.4 Timer Scheduler 抽象
 
-第一版只实现 min-heap，但接口先留好，便于以后按 loop 配置 backend：
+第一版只实现 min-heap，但接口先留好，便于以后按 loop 配置 backend。**Driver / `WaitForWorkOrTimer` 只依赖一个等待 timeout 入口**，不感知 backend 是 min-heap 还是 timing wheel：
 
 ```csharp
 internal interface ICRpcLoopTimerScheduler
 {
     CRpcLoopTimer ScheduleAt(long dueTimestamp, Action callback);
     int RunDueTimers(long now, int maxTimers);
-    long? GetNextDueTimestamp();                              // 最近 deadline；无 timer 时 null
-    TimeSpan? GetDelayUntilNextWakeup(long now);              // WaitForWorkOrTimer 的 timeout 来源
+    TimeSpan? GetDelayUntilNextWakeup(long now);   // WaitForWorkOrTimer 的唯一 timeout 来源
 }
 ```
 
+**`GetDelayUntilNextWakeup(now)` 与「绝对 deadline」的区别**
+
+| 概念 | 含义 | 谁用 |
+| --- | --- | --- |
+| 绝对 deadline（`Stopwatch` ticks） | 下一个 timer **在哪个时间点** due | min-heap 堆顶、调试/指标；**不必放进通用 scheduler 接口** |
+| `GetDelayUntilNextWakeup(now)` | 从 `now` 起，driver **最多还能睡多久** | `WaitForWorkOrTimer` 唯一依赖 |
+
+二者相关但不等价：
+
+- **Min-heap**：通常 `delay = nextDueTimestamp - now`；已 due 时返回 `TimeSpan.Zero`；无 timer 时返回 `null`（无限等）。
+- **Timing wheel**：可能是下一格 tick、下一非空 slot 距 `now` 多久；**不一定**能用一个全局 `nextDueTimestamp` 表达（固定 tick 推进时更偏「下一唤醒点」而非精确堆顶 deadline）。
+
+因此 **不在 `ICRpcLoopTimerScheduler` 上暴露 `GetNextDueTimestamp()`**，避免两个 API 表达同一件事、且 timing wheel 难以统一实现。若 min-heap 实现需要堆顶 deadline，作为 `MinHeapTimerScheduler` 内部字段即可。
+
 | Backend | 状态 | 特点 | `GetDelayUntilNextWakeup` |
 | --- | --- | --- | --- |
-| `MinHeapTimerScheduler` | **第一版默认** | `PriorityQueue`，精确 deadline，类似 libuv | 堆顶 `due - now` |
+| `MinHeapTimerScheduler` | **第一版默认** | `PriorityQueue`，精确 deadline，类似 libuv | 堆顶 `due - now`；已 due → `Zero` |
 | `TimingWheelTimerScheduler` | 预留 | loop-owned timing wheel，仅在 `Tick()` 推进、无额外线程 | 下一 tick 或下一非空 slot 距 `now` 多久 |
 
-`CRpcLoopOptions` 可预留 `TimerSchedulerFactory`，默认 `() => new MinHeapTimerScheduler()`。Public API 不暴露 backend 细节，业务只调用 `ScheduleDelay` / `ScheduleAt`。**Driver 只依赖 scheduler 的 `GetDelayUntilNextWakeup`，不感知 min-heap 还是 timing wheel。**
+`CRpcLoopOptions` 可预留 `TimerSchedulerFactory`，默认 `() => new MinHeapTimerScheduler()`。Public API 不暴露 backend 细节，业务只调用 `ScheduleDelay` / `ScheduleAt`。
 
 ##### 9.5.5 换成 Timing Wheel 后
 
