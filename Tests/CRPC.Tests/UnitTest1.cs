@@ -158,7 +158,7 @@ public class CRpcLoopTests : CrpcTestBase
             cts.Cancel();
         });
 
-        CRpcServerLoop.RunUntilCancelled(loop, cts.Token, sleepMilliseconds: 0);
+        CRpcServerLoop.RunUntilCancelled(loop, cts.Token);
 
         Assert.True(pumped);
     }

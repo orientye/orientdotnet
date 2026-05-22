@@ -123,6 +123,51 @@ public class CRpcClientTests : CrpcTestBase
     }
 
     [Fact]
+    public void CallAsyncResponsePostedBeforeDueTimeoutCompletesWithResult()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+
+        var client = new CRpcClient(loop);
+        var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 1);
+        var awaiter = task.GetAwaiter();
+        CRpcMessage? result = null;
+        awaiter.OnCompleted(() => result = awaiter.GetResult());
+
+        Thread.Sleep(20);
+
+        var response = CreateResponse(reqSequence: 1);
+        client.OnReceiveResponse(response);
+
+        loop.Tick();
+
+        Assert.Same(response, result);
+        Assert.True(awaiter.IsCompleted);
+    }
+
+    [Fact]
+    public void CallAsyncLateResponseAfterTimeoutIsIgnored()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+
+        var client = new CRpcClient(loop);
+        var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 1);
+        var awaiter = task.GetAwaiter();
+
+        Thread.Sleep(20);
+        loop.Tick();
+
+        Assert.Throws<TimeoutException>(() => awaiter.GetResult());
+
+        var lateResponse = CreateResponse(reqSequence: 1);
+        client.OnReceiveResponse(lateResponse);
+        loop.Tick();
+
+        Assert.Throws<TimeoutException>(() => awaiter.GetResult());
+    }
+
+    [Fact]
     public void CallAsyncTimeoutCompletesOnlyWhenCallingLoopTicks()
     {
         var loop = new CRpcLoop();

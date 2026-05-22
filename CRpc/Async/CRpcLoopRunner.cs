@@ -4,7 +4,7 @@ namespace CRpc.Async;
 
 public static class CRpcLoopRunner
 {
-    public static void RunUntilComplete(CRpcLoop loop, Func<CRpcTask> operation, int sleepMilliseconds = 1)
+    public static void RunUntilComplete(CRpcLoop loop, Func<CRpcTask> operation)
     {
         RunUntilComplete(
             loop,
@@ -12,18 +12,13 @@ public static class CRpcLoopRunner
             {
                 await operation();
                 return 0;
-            },
-            sleepMilliseconds);
+            });
     }
 
-    public static T RunUntilComplete<T>(CRpcLoop loop, Func<CRpcTask<T>> operation, int sleepMilliseconds = 1)
+    public static T RunUntilComplete<T>(CRpcLoop loop, Func<CRpcTask<T>> operation)
     {
         ArgumentNullException.ThrowIfNull(loop);
         ArgumentNullException.ThrowIfNull(operation);
-        if (sleepMilliseconds < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(sleepMilliseconds));
-        }
 
         loop.BindToCurrentThread();
 
@@ -65,9 +60,9 @@ public static class CRpcLoopRunner
                 Console.Error.WriteLine($"CRpcLoopRunner: unexpected exception escaped Tick: {tickException}");
             }
 
-            if (!completed && sleepMilliseconds > 0)
+            if (!completed)
             {
-                Thread.Sleep(sleepMilliseconds);
+                loop.WaitForWorkOrTimer(CancellationToken.None);
             }
         }
 
@@ -77,5 +72,17 @@ public static class CRpcLoopRunner
         }
 
         return result!;
+    }
+
+    [Obsolete("Use RunUntilComplete(loop, operation). sleepMilliseconds is no longer used.")]
+    public static void RunUntilComplete(CRpcLoop loop, Func<CRpcTask> operation, int sleepMilliseconds)
+    {
+        RunUntilComplete(loop, operation);
+    }
+
+    [Obsolete("Use RunUntilComplete(loop, operation). sleepMilliseconds is no longer used.")]
+    public static T RunUntilComplete<T>(CRpcLoop loop, Func<CRpcTask<T>> operation, int sleepMilliseconds)
+    {
+        return RunUntilComplete(loop, operation);
     }
 }

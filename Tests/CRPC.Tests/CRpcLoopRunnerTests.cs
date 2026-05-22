@@ -16,8 +16,7 @@ public class CRpcLoopRunnerTests : CrpcTestBase
             {
                 capturedLoop = CRpcLoop.Current;
                 return CRpcTask.FromResult(7, CRpcLoop.Current);
-            },
-            sleepMilliseconds: 0);
+            });
 
         Assert.Same(loop, capturedLoop);
         Assert.Equal(7, result);
@@ -31,8 +30,7 @@ public class CRpcLoopRunnerTests : CrpcTestBase
 
         var continuationThreadId = CRpcLoopRunner.RunUntilComplete(
             loop,
-            GetThreadIdAfterDelayAsync,
-            sleepMilliseconds: 0);
+            GetThreadIdAfterDelayAsync);
 
         Assert.Equal(callingThreadId, continuationThreadId);
     }
@@ -49,8 +47,7 @@ public class CRpcLoopRunnerTests : CrpcTestBase
             {
                 await CRpcTask.Delay(1, CRpcLoop.Current);
                 count++;
-            },
-            sleepMilliseconds: 0);
+            });
 
         Assert.Equal(1, count);
     }
@@ -61,7 +58,7 @@ public class CRpcLoopRunnerTests : CrpcTestBase
         var loop = new CRpcLoop();
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
-            CRpcLoopRunner.RunUntilComplete(loop, ThrowAfterDelayAsync, sleepMilliseconds: 0));
+            CRpcLoopRunner.RunUntilComplete(loop, ThrowAfterDelayAsync));
 
         Assert.Equal("runner failure", exception.Message);
     }

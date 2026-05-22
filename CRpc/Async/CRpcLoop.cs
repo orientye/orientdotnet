@@ -31,9 +31,21 @@ public sealed class CRpcLoop
     private const int InitialServiceCapacity = 106;
 
     private readonly ConcurrentQueue<Action> actions = new();
-    private readonly PriorityQueue<ScheduledTimer, long> timers = new();
+    private readonly ICRpcLoopTimerScheduler timerScheduler;
     private readonly Dictionary<ushort, IRpcService> registeredServices = new(InitialServiceCapacity);
+    private readonly object wakeupGate = new();
+    private readonly ManualResetEventSlim wakeup = new(initialState: false);
     private int threadId;
+
+    public CRpcLoop()
+        : this(null)
+    {
+    }
+
+    public CRpcLoop(CRpcLoopOptions? options)
+    {
+        timerScheduler = (options ?? new CRpcLoopOptions()).CreateTimerScheduler();
+    }
 
     public bool IsInLoopThread => threadId != 0 && Environment.CurrentManagedThreadId == threadId;
 
@@ -79,7 +91,11 @@ public sealed class CRpcLoop
     public void Post(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        actions.Enqueue(action);
+        lock (wakeupGate)
+        {
+            actions.Enqueue(action);
+            wakeup.Set();
+        }
     }
 
     public void RegisterService(IRpcService service)
@@ -122,11 +138,15 @@ public sealed class CRpcLoop
         }
 
         EnsureLoopThread();
-        var timer = new CRpcLoopTimer(action);
-        timers.Enqueue(
-            new ScheduledTimer(timer),
-            Stopwatch.GetTimestamp() + MillisecondsToStopwatchTicks(millisecondsDelay));
-        return timer;
+        var dueTimestamp = Stopwatch.GetTimestamp() + MillisecondsToStopwatchTicks(millisecondsDelay);
+        return ScheduleAt(dueTimestamp, action);
+    }
+
+    internal CRpcLoopTimer ScheduleAt(long dueTimestamp, Action action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        EnsureLoopThread();
+        return timerScheduler.ScheduleAt(dueTimestamp, action);
     }
 
     public void Tick(int maxActions = 1024)
@@ -140,8 +160,58 @@ public sealed class CRpcLoop
             current = this;
         }
 
-        RunExpiredTimers();
+        DrainActions(maxActions);
+        RunExpiredTimers(maxActions);
+        DrainActions(maxActions);
+    }
 
+    public void WaitForWorkOrTimer(CancellationToken cancellationToken)
+    {
+        EnsureLoopThread();
+
+        lock (wakeupGate)
+        {
+            wakeup.Reset();
+            if (!actions.IsEmpty || HasDueTimers())
+            {
+                return;
+            }
+
+            var delay = timerScheduler.GetDelayUntilNextWakeup(Stopwatch.GetTimestamp());
+            if (delay == TimeSpan.Zero)
+            {
+                return;
+            }
+
+            if (delay is null)
+            {
+                Monitor.Exit(wakeupGate);
+                try
+                {
+                    wakeup.Wait(cancellationToken);
+                }
+                finally
+                {
+                    Monitor.Enter(wakeupGate);
+                }
+
+                return;
+            }
+
+            Monitor.Exit(wakeupGate);
+            try
+            {
+                wakeup.Wait(delay.Value, cancellationToken);
+            }
+            finally
+            {
+                Monitor.Enter(wakeupGate);
+            }
+        }
+    }
+
+    private void DrainActions(int maxActions)
+    {
         for (var i = 0; i < maxActions && actions.TryDequeue(out var action); i++)
         {
             try
@@ -155,21 +225,33 @@ public sealed class CRpcLoop
         }
     }
 
-    private void RunExpiredTimers()
+    private void RunExpiredTimers(int maxTimers)
     {
         var now = Stopwatch.GetTimestamp();
-        while (timers.TryPeek(out var scheduledTimer, out var dueTimestamp) && dueTimestamp <= now)
+        for (var i = 0; i < maxTimers; i++)
         {
-            timers.Dequeue();
+            if (timerScheduler.GetDelayUntilNextWakeup(now) != TimeSpan.Zero)
+            {
+                break;
+            }
+
             try
             {
-                scheduledTimer.Timer.Invoke();
+                if (timerScheduler.RunDueTimers(now, maxTimers: 1) == 0)
+                {
+                    break;
+                }
             }
             catch (Exception exception)
             {
                 HandleUnhandledException(exception);
             }
         }
+    }
+
+    private bool HasDueTimers()
+    {
+        return timerScheduler.GetDelayUntilNextWakeup(Stopwatch.GetTimestamp()) == TimeSpan.Zero;
     }
 
     private void HandleUnhandledException(Exception exception)
@@ -202,33 +284,6 @@ public sealed class CRpcLoop
         if (!IsInLoopThread)
         {
             throw new InvalidOperationException("CRpcLoop operations must run on the loop thread.");
-        }
-    }
-
-    private readonly record struct ScheduledTimer(CRpcLoopTimer Timer);
-}
-
-internal sealed class CRpcLoopTimer
-{
-    private readonly Action action;
-
-    public CRpcLoopTimer(Action action)
-    {
-        this.action = action;
-    }
-
-    public bool IsCanceled { get; private set; }
-
-    public void Cancel()
-    {
-        IsCanceled = true;
-    }
-
-    public void Invoke()
-    {
-        if (!IsCanceled)
-        {
-            action();
         }
     }
 }

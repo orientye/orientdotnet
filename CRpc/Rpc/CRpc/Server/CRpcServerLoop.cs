@@ -4,7 +4,7 @@ namespace CRpc.Rpc.CRpc.Server;
 
 public static class CRpcServerLoop
 {
-    public static void RunUntilCancelled(CRpcLoop loop, CancellationToken cancellationToken, int sleepMilliseconds = 1)
+    public static void RunUntilCancelled(CRpcLoop loop, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(loop);
         loop.BindToCurrentThread();
@@ -20,10 +20,24 @@ public static class CRpcServerLoop
                 Console.Error.WriteLine($"CRpcServerLoop: unexpected exception escaped Tick: {exception}");
             }
 
-            if (sleepMilliseconds > 0)
+            if (cancellationToken.IsCancellationRequested)
             {
-                Thread.Sleep(sleepMilliseconds);
+                break;
+            }
+
+            try
+            {
+                loop.WaitForWorkOrTimer(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
             }
         }
+    }
+
+    [Obsolete("Use RunUntilCancelled(loop, cancellationToken). sleepMilliseconds is no longer used.")]
+    public static void RunUntilCancelled(CRpcLoop loop, CancellationToken cancellationToken, int sleepMilliseconds)
+    {
+        RunUntilCancelled(loop, cancellationToken);
     }
 }
