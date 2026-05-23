@@ -34,7 +34,6 @@ public sealed class CRpcLoop
     private readonly ICRpcLoopTimerScheduler timerScheduler;
     private readonly Dictionary<ushort, IRpcService> registeredServices = new(InitialServiceCapacity);
     private readonly ManualResetEventSlim wakeup = new(initialState: false);
-    private int pendingWakeup;
     private int threadId;
 
     public CRpcLoop()
@@ -92,7 +91,6 @@ public sealed class CRpcLoop
     {
         ArgumentNullException.ThrowIfNull(action);
         actions.Enqueue(action);
-        Interlocked.Exchange(ref pendingWakeup, 1);
         wakeup.Set();
     }
 
@@ -167,9 +165,7 @@ public sealed class CRpcLoop
     {
         EnsureLoopThread();
 
-        // Post: enqueue -> pendingWakeup=1 -> Set (only on 0->1)
-        // Wait: pendingWakeup=0 -> Reset -> check queue/timer -> check pendingWakeup -> Wait
-        Volatile.Write(ref pendingWakeup, 0);
+        // Reset clears a prior Set so Wait can block; re-check queue/timer after Reset.
         wakeup.Reset();
 
         if (!actions.IsEmpty || HasDueTimers())
@@ -179,11 +175,6 @@ public sealed class CRpcLoop
 
         var delay = timerScheduler.GetDelayUntilNextWakeup(Stopwatch.GetTimestamp());
         if (delay == TimeSpan.Zero)
-        {
-            return;
-        }
-
-        if (Volatile.Read(ref pendingWakeup) != 0 || !actions.IsEmpty)
         {
             return;
         }
