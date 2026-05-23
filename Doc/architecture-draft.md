@@ -13,9 +13,9 @@
 | 数量 | 进程内可有一个或多个 `CRpcLoop` |
 | 线程 | 一个 loop 绑定一个业务线程；业务状态、注册表、pending 调用、定时器、`CRpcTask` 完成**只在该线程访问** |
 | 角色 | **业务执行上下文**；不另设 Runtime 层 |
-| 注册表 | **已落地**：`CRpcLoop.RegisterService` / `TryGetService`（内联 `Dictionary`，非独立 `ServiceRegistry` 类型） |
+| 注册表 | `CRpcLoop.RegisterService` / `TryGetService`（内联 `Dictionary`，非独立 `ServiceRegistry` 类型） |
 | 端点 | **部分落地**：同一 loop 可挂 `CRpcServer` + `HttpServer` 等（见 `Example/HelloWorld/Server/Program.cs`）；多 loop 路由仍缺 |
-| 调度 | **已落地**：MPSC mailbox + loop-owned timer + `WaitForWorkOrTimer`；见 [§9.5](#95-crpcloop-调度timer-与-rpc-timeout) |
+| 调度 | MPSC mailbox + loop-owned timer + `WaitForWorkOrTimer`；见 [§9.5](#95-crpcloop-调度timer-与-rpc-timeout) |
 
 ### 现状 vs 目标
 
@@ -55,7 +55,7 @@
 
 ## 第一部分 · 原则与模型
 
-### 1. 设计目标与不变量
+### 1. 设计目标
 
 CRpc 想要的核心模型是 **单线程业务循环 + 异步状态机**：
 
@@ -103,7 +103,7 @@ CRpc 想要的核心模型是 **单线程业务循环 + 异步状态机**：
 进程里同时存在的线程类别（按用途分）：
 
 1. **业务 loop 线程**
-   - 由谁创建：服务端来自 `CRpcLoopHost.RunUntilCancelled` 调用线程（推荐，见 `Example/HelloWorld/Server/Program.cs`）；旧模式为 `CRpcServer.RunAsync` 内嵌驱动；客户端来自 `CRpcLoopRunner.RunUntilComplete` 的调用线程。
+   - 由谁创建：服务端来自 `CRpcLoopHost.RunUntilCancelled` 调用线程（推荐，见 `Example/HelloWorld/Server/Program.cs`）；客户端来自 `CRpcLoopRunner.RunUntilComplete` 的调用线程。
    - 谁绑定：`CRpcLoop.BindToCurrentThread()`，写入 `threadId` 与 `[ThreadStatic] current`。
    - 跑什么：`CRpcLoop.Tick()`，即注册服务、`OnMessageAsync`、`CallAsync`、超时回调、`CRpcTask` 的 continuation。
 

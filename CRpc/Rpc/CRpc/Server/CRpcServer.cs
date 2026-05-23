@@ -39,12 +39,6 @@ public sealed class CRpcServer : IRpcServer
     {
         runCancellation?.Cancel();
     }
-
-    public async Task RunAsync()
-    {
-        await RunAsync(options.Address, options.Port).ConfigureAwait(false);
-    }
-
     public async Task RunAsync(IPAddress address, int port, bool registerConsoleCancelHandler = true)
     {
         var boundOptions = new CRpcServerOptions

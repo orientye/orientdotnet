@@ -45,12 +45,6 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         return channel;
     }
     
-    public async Task<IChannel> ConnectAsync(IPAddress inetHost, int inetPort)
-    {
-        channel = await bootstrap.ConnectAsync(inetHost, inetPort);
-        return channel;
-    }
-
     public async Task CloseAsync()
     {
         var currentChannel = channel;
