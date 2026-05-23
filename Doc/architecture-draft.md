@@ -418,7 +418,7 @@ public sealed class CRpcServer : IRpcServer
 - `Loop` 在构造时**必须显式传入**；`CRpcServer` **不**持有 service 注册表。
 - **推荐启动形态**（HelloWorld）：`loop.RegisterService` → `crpcServer.StartAsync` + `httpServer.StartAsync` → `CRpcLoopHost.RunUntilCancelled` → `StopAsync`。
 - **遗留路径**：`RunAsync` 内嵌 `CRpcLoopHost.RunUntilCancelled`，结束时会对 loop 调用 `ClearRegisteredServices`；新代码应避免依赖该行为。
-- DotNetty 仍硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）；见 [§8.2](#82-io-线程组与业务-loop-的拓扑写死)。
+- DotNetty 仍硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）；见 [§8.1](#81-io-线程组与业务-loop-的拓扑写死)。
 
 ```18:30:CRpc/Rpc/CRpc/Server/CRpcServerHandler.cs
     public override void ChannelRead(IChannelHandlerContext ctx, object msg)
@@ -595,29 +595,7 @@ sequenceDiagram
 
 > 这一节是"现有代码不一定是好的设计"的具体落点，便于后续重构。
 
-#### 8.1 ~~Tick + Sleep(1) 忙等，没有 wakeup~~（已解决）
-
-> 早期 driver 用 `Tick + Sleep(1)` 轮询，存在 ~1ms 调度延迟、空闲烧 CPU、timeout 精度差等问题。现已改为 `Tick + WaitForWorkOrTimer`。
-
-```7:35:CRpc/Rpc/CRpc/Server/CRpcServerLoop.cs
-public static class CRpcServerLoop
-{
-    public static void RunUntilCancelled(CRpcLoop loop, CancellationToken cancellationToken)
-    {
-        // ...
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            loop.Tick();
-            // ...
-            loop.WaitForWorkOrTimer(cancellationToken);
-        }
-    }
-}
-```
-
-- 设计细节见 [§9.5 CRpcLoop 调度、Timer 与 RPC Timeout](#95-crpcloop-调度timer-与-rpc-timeout)。
-
-#### 8.2 IO 线程组与业务 loop 的拓扑写死
+#### 8.1 IO 线程组与业务 loop 的拓扑写死
 
 - `CRpcServer` / `HttpServer` 的 `StartAsync` 里仍硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）；`CRpcServer.RunAsync` 同理。
 - `CRpcClient` 构造里硬编码 `MultithreadEventLoopGroup(1)`。
@@ -629,15 +607,15 @@ public static class CRpcServerLoop
   - `CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`（options 类型已存在，注入仍待做）。
   - 服务端 handler 增加 `RouteLoop` 抽象，按 `serviceId` / channel 路由到不同 `CRpcLoop`。
 
-#### 8.3 `CRpcServerHandler` 的 owner loop 选择不灵活
+#### 8.2 `CRpcServerHandler` 的 owner loop 选择不灵活
 
 `ChannelRead` 里固定 `server.Loop.Post(...)` —— 一个 `CRpcServer` 实例只绑一个 loop。若需"按连接 / 按 serviceId / 按用户 ID 路由到不同 loop"，须改 handler 或增加路由抽象（例如在 `CRpcServer` 上加 `Func<CRpcMessage, CRpcLoop>? RouteLoop`）。`HttpServerHandler` 同样固定单 loop。
 
-#### 8.4 `CRpcClient` 的 owner loop 绑定
+#### 8.3 `CRpcClient` 的 owner loop 绑定
 
 - `pending calls` 表仍在 client 实例上，访问约定为 owner loop 线程（见 [§9.4 关键不变量](#94-关键不变量重申)）。
 
-#### 8.5 `CRpcLoopRunner.RunUntilComplete` 的使用方式
+#### 8.4 `CRpcLoopRunner.RunUntilComplete` 的使用方式
 
 `HelloWorld/Client/Program.cs` 里：
 
@@ -664,7 +642,7 @@ CRpcLoopRunner.RunUntilComplete(loop, async () =>
 - 客户端端仍缺少等价于 `CRpcServerLoop` 的常驻 loop runner。
 - 方向：客户端应有等价于 `CRpcServerLoop` 的常驻驱动；`RunUntilComplete` 只用于 main 线程同步等待场景。
 
-#### 8.6 业务回调里 `Console.WriteLine` 当作可观测性
+#### 8.5 业务回调里 `Console.WriteLine` 当作可观测性
 
 - `CRpcServerHandler` / `CRpcClientHandler` / `CRpcClient.__Send` 有大量 `Console.WriteLine($"*******…");`。
 - 这是临时调试，**不是架构**。后续应该走 `Microsoft.Extensions.Logging` 之类的抽象，并能区分 IO 线程 / loop 线程的来源。
@@ -780,7 +758,7 @@ CRpcLoopRunner.RunUntilComplete(loop, async () =>
 
 #### 9.5 CRpcLoop 调度、Timer 与 RPC Timeout
 
-> 本节是 §8.1 的目标设计落点，同时覆盖通用 timer 与 `CRpcClient` RPC timeout 的一致性语义。
+> 本节覆盖 CRpcLoop 调度、通用 timer 与 `CRpcClient` RPC timeout 的一致性语义。
 
 ##### 9.5.1 设计原则
 
