@@ -24,7 +24,7 @@
 | Service 归属 | `CRpcServer` 持有 `CRpcLoop` + `registeredServices` | `CRpcLoop` 持有 `ServiceRegistry`；Server 只做端点 |
 | 端点与 loop | 常见为「一 Server 一 Loop」 | 多 Server / 多协议共享一 Loop |
 | Runtime | — | 不引入单独 Runtime；Loop 即上下文 |
-| Loop 驱动 | `Tick + Sleep(1)` 忙等 | `Tick + WaitForWorkOrTimer`；**完全去掉固定 Sleep**；按 scheduler 返回的下一次唤醒时间阻塞 |
+| Loop 驱动 | — | `Tick + WaitForWorkOrTimer`（**已落地**） |
 
 ### 网络层：入口与适配，非 Service Owner
 
@@ -85,8 +85,8 @@ CRpc 想要的核心模型是 **单线程业务循环 + 异步状态机**：
 | 角色 | 类型 | 职责 |
 | --- | --- | --- |
 | 业务循环 | `CRpcLoop` | 单线程 **MPSC mailbox** + **loop-owned timer**；`Tick()` drain 动作与到期 timer；`WaitForWorkOrTimer` 阻塞等待（见 [§9.5](#95-crpcloop-调度timer-与-rpc-timeout)）。 |
-| 循环驱动（一次性） | `CRpcLoopRunner` | 给主线程 / 同步入口用：目标为 `Tick + WaitForWorkOrTimer` 直到一个 `CRpcTask` 完成（现状 `Tick + Sleep(1)`）。 |
-| 循环驱动（常驻） | `CRpcServerLoop` | 服务端常驻：目标为 `Tick + WaitForWorkOrTimer` 直到 cancel（现状 `Tick + Sleep(1)`）。 |
+| 循环驱动（一次性） | `CRpcLoopRunner` | 给主线程 / 同步入口用：`Tick + WaitForWorkOrTimer` 直到一个 `CRpcTask` 完成。 |
+| 循环驱动（常驻） | `CRpcServerLoop` | 服务端常驻：`Tick + WaitForWorkOrTimer` 直到 cancel。 |
 | RPC 异步原语 | `CRpcTask` / `CRpcTask<T>` / `CRpcTaskCompletionSource<T>` / `CRpcAsyncMethodBuilder*` | 自定义 await 状态机；continuation 通过 `loop.Post` 回到 loop 线程恢复。 |
 | 服务端 | `CRpcServer` | 当前持有 `Loop` + `registeredServices`；目标上退化为协议端点：监听端口、配置 pipeline、把 IO 收到的消息派发给业务 loop。 |
 | 服务端 IO 处理器 | `CRpcServerHandler` | DotNetty `ChannelHandlerAdapter`；`ChannelRead` 时选择目标 loop 并 `Post`。不持有业务状态。 |
@@ -595,32 +595,27 @@ sequenceDiagram
 
 > 这一节是"现有代码不一定是好的设计"的具体落点，便于后续重构。
 
-#### 8.1 Tick + Sleep(1) 忙等，没有 wakeup
+#### 8.1 ~~Tick + Sleep(1) 忙等，没有 wakeup~~（已解决）
 
-```7:28:CRpc/Rpc/CRpc/Server/CRpcServerLoop.cs
+> 早期 driver 用 `Tick + Sleep(1)` 轮询，存在 ~1ms 调度延迟、空闲烧 CPU、timeout 精度差等问题。现已改为 `Tick + WaitForWorkOrTimer`。
+
+```7:35:CRpc/Rpc/CRpc/Server/CRpcServerLoop.cs
 public static class CRpcServerLoop
 {
-    public static void RunUntilCancelled(CRpcLoop loop, CancellationToken cancellationToken, int sleepMilliseconds = 1)
+    public static void RunUntilCancelled(CRpcLoop loop, CancellationToken cancellationToken)
     {
         // ...
         while (!cancellationToken.IsCancellationRequested)
         {
-            // ...
             loop.Tick();
             // ...
-            if (sleepMilliseconds > 0)
-            {
-                Thread.Sleep(sleepMilliseconds);
-            }
+            loop.WaitForWorkOrTimer(cancellationToken);
         }
     }
 }
 ```
 
-- 即使刚 `Post`，最坏也要等 1ms 才被消费 → **单 loop 固定 ~1ms 调度延迟**。
-- 多 loop 时每个 loop 都常驻烧一个核（即使没活）。
-- RPC timeout 也依赖 loop timer；忙等不仅浪费 CPU，还会让 timeout 精度受 `Sleep(1)` 粒度影响。
-- **目标方向**：见 [§9.5 CRpcLoop 调度、Timer 与 RPC Timeout](#95-crpcloop-调度timer-与-rpc-timeout)。核心是把 wakeup、timer 调度、RPC timeout 统一收进 `CRpcLoop`，**完全去掉 `Sleep(1)`**，driver 只负责 `Tick + WaitForWorkOrTimer`。
+- 设计细节见 [§9.5 CRpcLoop 调度、Timer 与 RPC Timeout](#95-crpcloop-调度timer-与-rpc-timeout)。
 
 #### 8.2 IO 线程组与业务 loop 的拓扑写死
 
@@ -668,7 +663,6 @@ CRpcLoopRunner.RunUntilComplete(loop, async () =>
 
 - 已提供 `CRpcReference` 与无返回值 `RunUntilComplete` 重载；业务代码可直接 `await client.SayHelloAsync(...)`。
 - 客户端端仍缺少等价于 `CRpcServerLoop` 的常驻 loop runner。
-- `CRpcLoopRunner` 也是 `Tick + Sleep(1)` 的同款忙等。
 - 方向：客户端应有等价于 `CRpcServerLoop` 的常驻驱动；`RunUntilComplete` 只用于 main 线程同步等待场景。
 
 #### 8.6 业务回调里 `Console.WriteLine` 当作可观测性
@@ -796,7 +790,7 @@ CRpcLoopRunner.RunUntilComplete(loop, async () =>
 | MPSC mailbox | `Post` 多 producer、单 consumer；现用 `ConcurrentQueue`，语义是 MPSC，不是 MPMC 并发 drain |
 | Loop-owned | Timer 无论底层用 min-heap 还是 timing wheel，**永远归属当前 `CRpcLoop`**，只在 `Tick()` 里推进，不另开全局 timer 线程 |
 | Absolute deadline | 内部统一按 **absolute due timestamp**（`Stopwatch.GetTimestamp()`）排序；`ScheduleDelay(ms)` 只是便捷封装 |
-| Driver 薄 | `CRpcServerLoop` / `CRpcLoopRunner` **完全去掉 `Sleep(1)`**；空闲时由 `WaitForWorkOrTimer` 阻塞，有 `Post` 或 timer 到期时唤醒 |
+| Driver 薄 | `CRpcServerLoop` / `CRpcLoopRunner` 使用 `Tick + WaitForWorkOrTimer`；空闲时阻塞，有 `Post` 或 timer 到期时唤醒 |
 | 与 libuv 对齐 | 类似 libuv：`uv_async_send` 唤醒 + 用户队列；min-heap 存 timer、poll 前算 next timeout |
 
 ##### 9.5.2 Mailbox：MPSC 语义
@@ -834,9 +828,9 @@ internal interface ICRpcLoopMailbox
 
 默认 `ConcurrentQueueMailbox`；热点场景换 `MpscActionMailbox`。
 
-##### 9.5.3 Wakeup 机制：去掉 Sleep(1)
+##### 9.5.3 Wakeup 机制
 
-现状 `Tick + Sleep(1)` 的问题不只是 CPU 浪费，还有固定 ~1ms 调度延迟和 timeout 精度受轮询粒度影响。**目标是在 driver hot loop 里完全去掉固定 `Sleep(1)`**，改为"有事立刻醒、没事按下一次 timer 阻塞等待"。
+Driver hot loop 为 **有事立刻醒、没事按下一次 timer 阻塞等待**（不再使用固定 `Sleep(1)` 轮询）。
 
 推荐 `ManualResetEventSlim`（不用 `SemaphoreSlim` 计数：`Tick` 是 batch drain；`Post` hot path 无锁，只有 `Enqueue + Set`）。
 
@@ -855,7 +849,7 @@ WaitForWorkOrTimer(ct):
 
 **防丢唤醒**：`Reset` 后必须重新检查 mailbox/timer；`Post` 在 `Reset` 之后要么被 queue 检查发现，要么通过 `Set()` 唤醒 `Wait`。driver 不得自行 `Reset/Wait`。
 
-**与 `Sleep(1)` 的区别**
+**相对旧 `Sleep(1)` 轮询的改进**
 
 | | `Sleep(1)` 轮询 | `WaitForWorkOrTimer` |
 | --- | --- | --- |
@@ -864,7 +858,7 @@ WaitForWorkOrTimer(ct):
 | timeout 精度 | 受 1ms 轮询撞运气 | 由 scheduler 最近 deadline 决定 |
 | Windows | 受系统 timer resolution 影响，未必真 1ms | `Wait(timeout)` 按实际 deadline 等待 |
 
-正常路径不保留 `Sleep(1)` 作为 fallback。仅可在 scheduler 返回非法值等异常防护场景做极小兜底，避免 driver 死循环。
+正常路径不使用 `Sleep(1)` fallback。
 
 ##### 9.5.4 Tick 顺序
 
@@ -913,7 +907,7 @@ internal interface ICRpcLoopTimerScheduler
 
 ##### 9.5.6 换成 Timing Wheel 后
 
-换 backend **不会把 `Sleep(1)` 带回来**。Driver 主循环仍是 `Tick + WaitForWorkOrTimer`，只是 scheduler 内部从 min-heap 换成 timing wheel：
+换 backend **不改变** driver 主循环形态，仍是 `Tick + WaitForWorkOrTimer`，只是 scheduler 内部从 min-heap 换成 timing wheel：
 
 ```text
 Tick:
@@ -975,18 +969,17 @@ while (!cancellationToken.IsCancellationRequested)
 }
 ```
 
-`CRpcLoopRunner.RunUntilComplete` 同理：等到目标 `CRpcTask` 完成前，用同一套 `Tick + WaitForWorkOrTimer` 替代 `Sleep(1)`。**`sleepMilliseconds` 参数在目标 API 中移除**（或标记 obsolete），不再作为 driver 行为的一部分。
+`CRpcLoopRunner.RunUntilComplete` 同理：`Tick + WaitForWorkOrTimer` 直到目标 `CRpcTask` 完成。`sleepMilliseconds` overload 已 `[Obsolete]`。
 
 ---
 
 ### 10. 现状到目标的演进步骤（建议顺序）
 
-1. **可唤醒 loop + loop-owned timer（去掉 Sleep）**：
-   - `CRpcLoop` 加 `ManualResetEventSlim` 与 `WaitForWorkOrTimer`；
-   - 引入 `ICRpcLoopTimerScheduler` + `MinHeapTimerScheduler`（接口预留 timing wheel + `GetDelayUntilNextWakeup`）；
-   - `Tick` 改为 actions → due timers → actions；
-   - `CRpcServerLoop` / `CRpcLoopRunner` 改用 `Tick + WaitForWorkOrTimer`，**移除 `sleepMilliseconds` 参数**；
-   - `CRpcClient` RPC timeout 沿用 loop timer，按 §9.5.7 语义实现/测试 response vs timeout 竞争。
+1. ~~**可唤醒 loop + loop-owned timer**~~（**已完成**）：
+   - `CRpcLoop`：`ManualResetEventSlim`、`WaitForWorkOrTimer`、`ICRpcLoopTimerScheduler` + `MinHeapTimerScheduler`；
+   - `Tick`：actions → due timers → actions；
+   - `CRpcServerLoop` / `CRpcLoopRunner`：`Tick + WaitForWorkOrTimer`；`sleepMilliseconds` 已 obsolete；
+   - RPC timeout 按 §9.5.7 语义实现/测试。
 2. **Registry 上收至 Loop**：`RegisterService` / `TryGetService` 从 `CRpcServer` 迁到 `CRpcLoop`；Server 只投递请求。
 3. **显式 loop 注入**：`CRpcClient(CRpcLoop)` 已完成；`CRpcServer` 构造必传 loop + `RouteLoop` 钩子仍待做。
 4. **IO 线程可配置 / 可复用**：`CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`。
