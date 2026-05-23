@@ -942,21 +942,11 @@ while (!cancellationToken.IsCancellationRequested)
 
 ### 10. 现状到目标的演进步骤（建议顺序）
 
-1. ~~**可唤醒 loop + loop-owned timer**~~（**已完成**）：
-   - `CRpcLoop`：`ManualResetEventSlim`、`WaitForWorkOrTimer`、`ICRpcLoopTimerScheduler` + `MinHeapTimerScheduler`；
-   - `Tick`：actions → due timers → actions；
-   - `CRpcLoopHost` / `CRpcServerLoop` / `CRpcLoopRunner`：`Tick + WaitForWorkOrTimer`；
-   - RPC timeout 按 §9.5.7 语义实现/测试。
-2. ~~**Registry 上收至 Loop**~~（**已完成**）：
-   - `RegisterService` / `TryGetService` 在 `CRpcLoop`；`CRpcServer` / `HttpServer` 只投递请求；
-   - `RpcServiceInvoker` 统一 CRpc/HTTP 入站 dispatch。
-3. **显式 loop 注入**：`CRpcClient(CRpcLoop)` 已完成；`CRpcServer` / `HttpServer` 构造必传 loop 已完成；`RouteLoop` 钩子仍待做。
-4. **IO 线程可配置 / 可复用**：`CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`。
-5. ~~**多端口 / 多协议示例**~~（**部分完成**）：
-   - HelloWorld 已演示同一 loop 上 CRpc 7999 + HTTP 8080；
-   - 仍缺第二个 CRpc 端口、管理端口等变体示例。
-6. **多 loop 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 loop"的 demo，覆盖跨 loop 调用 / 路由 / 关闭顺序。
-7. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[loop|io|tp]` 来源。
-8. **清理遗留生命周期**：`CRpcServer.RunAsync` 结束时不应隐式 `ClearRegisteredServices`；推广 `StartAsync` + `CRpcLoopHost` + `StopAsync` 模式。
+1. **`RouteLoop` 钩子**：`CRpcServer` / `HttpServer` 增加 `Func<..., CRpcLoop>? RouteLoop`，支持按消息路由到不同 loop（见 §9.2）。
+2. **IO 线程可配置 / 可复用**：`CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`。
+3. **多端口 / 多协议示例变体**：HelloWorld 已演示同一 loop 上 CRpc 7999 + HTTP 8080；补充第二个 CRpc 端口、管理端口等变体示例。
+4. **多 loop 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 loop"的 demo，覆盖跨 loop 调用 / 路由 / 关闭顺序。
+5. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[loop|io|tp]` 来源。
+6. **清理遗留生命周期**：`CRpcServer.RunAsync` 结束时不应隐式 `ClearRegisteredServices`；推广 `StartAsync` + `CRpcLoopHost` + `StopAsync` 模式。
 
 ---
