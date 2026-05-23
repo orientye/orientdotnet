@@ -23,7 +23,7 @@
 | --- | --- | --- |
 | Service 归属 | `CRpcLoop` 持有注册表；`CRpcServer` / `HttpServer` 只持 `Loop`，经 `RpcServiceInvoker` 查 service | 独立 `ServiceRegistry` 类型；端点停止时不隐式清空 loop 注册表 |
 | 端点与 loop | 多端点共享一 loop 已可用（CRpc 7999 + HTTP 8080）；`CRpcLoopHost` 统一驱动 | 按 serviceId / channel 路由到多个 loop；IO 线程组可注入（现仍硬编码 1+1） |
-| Loop 驱动 | `Tick + WaitForWorkOrTimer`（`CRpcLoopHost` → `CRpcServerLoop`） | — |
+| Loop 驱动 | `Tick + WaitForWorkOrTimer`（服务端 `CRpcLoopHost` → `CRpcServerLoop`；客户端 `CRpcClientLoopHost` → `CRpcClientLoop`；一次性场景 `CRpcLoopRunner.RunUntilComplete`） | — |
 | Runtime | — | 不引入单独 Runtime；Loop 即上下文 |
 
 ### 网络层：入口与适配，非 Service Owner
@@ -470,23 +470,35 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 ```
 
 - `results` 是 pending 调用表，**只能在 `ownerLoop` 线程上访问**。
-- `ownerLoop` 在构造时显式绑定；`CallAsync` 要求 `CRpcLoop.Current` 与 owner 为同一实例。
+- `channel` 同样是 **loop-owned 连接状态**：`ConnectAsync` / `CloseAsync` 在 owner loop 线程赋值或清空；DotNetty connect/close 的 `.NET Task` 经 `ownerLoop.Post` / `CRpcTask.FromTask` 回到 loop 后再完成 CRpc 侧状态变更。
+- `ownerLoop` 在构造时显式绑定；`ConnectAsync` / `CloseAsync` / `CallAsync` 均要求 `CRpcLoop.Current` 与 owner 为同一实例。
 - `reqSequence` 用 `Interlocked.Increment` —— 对外是线程安全的，但目前实际只可能从 owner loop 调用。
 
-`CallAsync` 流程：
+连接与调用流程：
 
-```72:84:CRpc/Rpc/CRpc/Client/CRpcClient.cs
+```41:80:CRpc/Rpc/CRpc/Client/CRpcClient.cs
+    public CRpcTask<IChannel> ConnectAsync(string host, int port)
+    {
+        EnsureOwnerLoopThread();
+        // bootstrap.ConnectAsync → ownerLoop.Post(CompleteConnect) → channel = connected
+        return source.Task;
+    }
+
+    public CRpcTask CloseAsync()
+    {
+        EnsureOwnerLoopThread();
+        channel = null;  // loop 线程清空
+        return CRpcTask.FromTask(currentChannel.CloseAsync(), ownerLoop);
+    }
+```
+
+```118:130:CRpc/Rpc/CRpc/Client/CRpcClient.cs
     public CRpcTask<CRpcMessage> CallAsync(...)
     {
-        var loop = CRpcLoop.Current ?? throw ...;
-        if (!ReferenceEquals(ownerLoop, loop))
-            throw new InvalidOperationException("... client's owner CRpcLoop thread.");
-
-        long reqSeq = __IncrementReqId();
-        var pendingCall = __AddResultTaskAsync(reqSeq, timeout, ownerLoop);
-        
-        __Send(reqSeq, serviceId, methodId, body);
-
+        EnsureOwnerLoopThread();
+        var currentChannel = channel ?? throw ...("not connected.");
+        // ...
+        __Send(currentChannel, ...);
         return pendingCall.Source.Task;
     }
 ```
@@ -508,7 +520,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 ```88:101:CRpc/Rpc/CRpc/Client/CRpcClient.cs
     internal void OnReceiveResponse(CRpcMessage message)
     {
-        ownerLoop?.Post(() => CompleteReceiveResponse(message));
+        ownerLoop.Post(() => CompleteReceiveResponse(message));
     }
 
     private void CompleteReceiveResponse(CRpcMessage message)
@@ -522,11 +534,12 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     }
 ```
 
-#### 6.4 CRpcLoopHost / CRpcServerLoop / CRpcLoopRunner
+#### 6.4 CRpcLoopHost / CRpcServerLoop / CRpcClientLoop / CRpcLoopRunner
 
 - **现状**：`Tick + WaitForWorkOrTimer`。
 - `CRpcLoopHost.RunUntilCancelled(loop, ct)`：服务端推荐常驻驱动入口（内部转发 `CRpcServerLoop`）。
-- `CRpcLoopRunner.RunUntilComplete(loop, op)`：在调用线程 binding loop，跑到指定 `CRpcTask` 完成。
+- `CRpcClientLoopHost.RunUntilCancelled(loop, ct)`：客户端推荐常驻驱动入口（内部转发 `CRpcClientLoop`）。
+- `CRpcLoopRunner.RunUntilComplete(loop, op)`：在调用线程 binding loop，跑到指定 `CRpcTask` 完成；适合 main 线程一次性脚本（如 HelloWorld Client）。
 
 ---
 
@@ -613,34 +626,40 @@ sequenceDiagram
 
 #### 8.3 `CRpcClient` 的 owner loop 绑定
 
-- `pending calls` 表仍在 client 实例上，访问约定为 owner loop 线程（见 [§9.4 关键不变量](#94-关键不变量重申)）。
+- `pending calls` 表与 `channel` 连接状态均在 client 实例上，访问约定为 **owner loop 线程**（见 [§9.4 关键不变量](#94-关键不变量重申)）。
+- 生命周期 API（`ConnectAsync` / `CloseAsync` / `ShutdownIoAsync`）已统一为 `CRpcTask`；DotNetty `.NET Task` 仅作 IO interop，completion 必须回到 owner loop。
+- 推荐 teardown：`await reference.CloseAsync()` → `await reference.ShutdownIoAsync()`；`IAsyncDisposable.DisposeAsync` 保留兼容，但不适合在 loop 内 `await using` 等待异步 close。
 
 #### 8.4 `CRpcLoopRunner.RunUntilComplete` 的使用方式
 
-`HelloWorld/Client/Program.cs` 里：
+`HelloWorld/Client/Program.cs` 里（connect / call / close 均在 loop 内）：
 
-```15:28:Example/HelloWorld/Client/Program.cs
-var loop = new CRpcLoop();
-await using var reference = await CRpcReference
-    .For<GreeterClient>()
-    .Url("crpc://127.0.0.1:7999")
-    .ConnectAsync(loop);
-
-var client = reference.Proxy;
-
+```11:34:Example/HelloWorld/Client/Program.cs
 CRpcLoopRunner.RunUntilComplete(loop, async () =>
 {
-    for (var i = 0; i < 5; i++)
+    var reference = await CRpcReference
+        .For<GreeterClient>()
+        .Url("crpc://127.0.0.1:7999")
+        .ConnectAsync(loop);
+
+    try
     {
-        var (result, helloReply) = await client.SayHelloAsync(req);
-        Console.WriteLine($"call={i}, server return: result={result}, response: {helloReply.Msg}");
+        var client = reference.Proxy;
+        for (var i = 0; i < 5; i++)
+        {
+            var (result, helloReply) = await client.SayHelloAsync(req);
+            Console.WriteLine($"call={i}, server return: result={result}, response: {helloReply.Msg}");
+        }
+    }
+    finally
+    {
+        await reference.CloseAsync();
+        await reference.ShutdownIoAsync();
     }
 });
 ```
 
-- 已提供 `CRpcReference` 与无返回值 `RunUntilComplete` 重载；业务代码可直接 `await client.SayHelloAsync(...)`。
-- 客户端端仍缺少等价于 `CRpcServerLoop` 的常驻 loop runner。
-- 方向：客户端应有等价于 `CRpcServerLoop` 的常驻驱动；`RunUntilComplete` 只用于 main 线程同步等待场景。
+- 已提供 `CRpcReference` 与 `CRpcClientLoopHost`；`RunUntilComplete` 适合 main 线程一次性脚本，常驻客户端用 `CRpcClientLoopHost.RunUntilCancelled`。
 
 #### 8.5 业务回调里 `Console.WriteLine` 当作可观测性
 
@@ -732,29 +751,42 @@ public sealed class CRpcClient {
 
 ```csharp
 var loop = new CRpcLoop();
-await using var reference = await CRpcReference
-    .For<GreeterClient>()
-    .Url("crpc://127.0.0.1:7999")
-    .ConnectAsync(loop);
 
-var greeter = reference.Proxy;
-
+// 一次性脚本：RunUntilComplete
 CRpcLoopRunner.RunUntilComplete(loop, async () =>
 {
-    var (code, reply) = await greeter.SayHelloAsync(req);
+    var reference = await CRpcReference
+        .For<GreeterClient>()
+        .Url("crpc://127.0.0.1:7999")
+        .ConnectAsync(loop);
+
+    try
+    {
+        var greeter = reference.Proxy;
+        var (code, reply) = await greeter.SayHelloAsync(req);
+    }
+    finally
+    {
+        await reference.CloseAsync();
+        await reference.ShutdownIoAsync();
+    }
 });
+
+// 常驻客户端：专用 loop 线程
+CRpcClientLoopHost.RunUntilCancelled(loop, cancellationToken);
 ```
 
 `CRpcReference` 是业务入口；`CRpcClient` 是底层 transport client，仍负责连接、pending call、request sequence、超时和响应分发。Service 内部调用其它进程时也使用生成代理，但不能创建或驱动新的 loop，必须复用当前 `CRpcLoop.Current`。
 
 #### 9.4 关键不变量（重申）
 
-1. 业务状态 / pending 调用表 / service 注册表，**只在所属 loop 线程访问**。
+1. 业务状态 / pending 调用表 / service 注册表 / **client `channel` 连接状态**，**只在所属 loop 线程访问**。
 2. `TrySetResult / TrySetException / TrySetCanceled` **只在所属 loop 线程调用**。
 3. IO 线程不调业务逻辑，只做协议解析、路由选择和 `Post`。
 4. `WriteAndFlushAsync` 不 await 完成（除非要影响业务状态，那就 `Post` 回来）。
 5. `Task.Run` / `System.Threading.Timer` / 线程池续延 在 CRpc 实现里**禁用**；只允许显式 interop 后 `Post` 回 loop。
 6. **Timer 永远是 loop-owned**：`ScheduleDelay` / `ScheduleAt` 只能在 owner loop 线程调用；timer callback 只在 owner loop 线程执行；不做全局 timer 线程直接完成 RPC timeout。外部线程若要安排延迟逻辑，先 `loop.Post(...)` 进入 owner loop 再注册 timer。
+7. **Client 生命周期 CRpc 化**：`ConnectAsync` / `CloseAsync` / `ShutdownIoAsync` 返回 `CRpcTask`；DotNetty `.NET Task` 只做 IO interop，状态变更 completion 回到 owner loop。
 
 #### 9.5 CRpcLoop 调度、Timer 与 RPC Timeout
 
@@ -767,7 +799,7 @@ CRpcLoopRunner.RunUntilComplete(loop, async () =>
 | MPSC mailbox | `Post` 多 producer、单 consumer；现用 `ConcurrentQueue`，语义是 MPSC，不是 MPMC 并发 drain |
 | Loop-owned | Timer 无论底层用 min-heap 还是 timing wheel，**永远归属当前 `CRpcLoop`**，只在 `Tick()` 里推进，不另开全局 timer 线程 |
 | Absolute deadline | 内部统一按 **absolute due timestamp**（`Stopwatch.GetTimestamp()`）排序；`ScheduleDelay(ms)` 只是便捷封装 |
-| Driver 薄 | `CRpcLoopHost` / `CRpcServerLoop` / `CRpcLoopRunner` 使用 `Tick + WaitForWorkOrTimer`；空闲时阻塞，有 `Post` 或 timer 到期时唤醒 |
+| Driver 薄 | `CRpcLoopHost` / `CRpcServerLoop` / `CRpcClientLoopHost` / `CRpcClientLoop` / `CRpcLoopRunner` 使用 `Tick + WaitForWorkOrTimer`；空闲时阻塞，有 `Post` 或 timer 到期时唤醒 |
 
 ##### 9.5.2 Mailbox：MPSC 语义
 

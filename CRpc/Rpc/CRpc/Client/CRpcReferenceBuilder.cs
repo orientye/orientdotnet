@@ -25,6 +25,10 @@ public sealed class CRpcReferenceBuilder<TProxy>
         return this;
     }
 
+    /// <summary>
+    /// Connects via <see cref="CRpcClient.ConnectAsync(string, int)"/> and returns a typed proxy.
+    /// Must be called on the bound owner loop thread while the loop is driven.
+    /// </summary>
     public CRpcTask<CRpcReference<TProxy>> ConnectAsync(CRpcLoop loop)
     {
         ArgumentNullException.ThrowIfNull(loop);

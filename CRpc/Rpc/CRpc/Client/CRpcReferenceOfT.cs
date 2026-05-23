@@ -15,9 +15,12 @@ public sealed class CRpcReference<TProxy> : IAsyncDisposable
 
     public TProxy Proxy { get; }
 
+    /// <inheritdoc cref="CRpcClient.CloseAsync"/>
     public CRpcTask CloseAsync() => client.CloseAsync();
 
+    /// <inheritdoc cref="CRpcClient.ShutdownIoAsync"/>
     public CRpcTask ShutdownIoAsync() => client.ShutdownIoAsync();
 
+    /// <inheritdoc cref="CRpcClient.DisposeAsync"/>
     public ValueTask DisposeAsync() => client.DisposeAsync();
 }

@@ -250,6 +250,23 @@ public class CRpcClientTests : CrpcTestBase
     }
 
     [Fact]
+    public void ClientLoopHostRunsUntilCancelled()
+    {
+        var loop = new CRpcLoop();
+        using var cts = new CancellationTokenSource();
+
+        var runner = new Thread(() => CRpcClientLoopHost.RunUntilCancelled(loop, cts.Token));
+        runner.Start();
+
+        var posted = new ManualResetEventSlim(false);
+        loop.Post(() => posted.Set());
+
+        Assert.True(posted.Wait(TimeSpan.FromSeconds(5)));
+        cts.Cancel();
+        runner.Join(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
     public void PendingResultsUseLoopOwnedDictionary()
     {
         var field = typeof(CRpcClient).GetField(

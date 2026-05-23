@@ -38,6 +38,11 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
             }));
     }
 
+    /// <summary>
+    /// Connects to the remote host. DotNetty connect runs on IO threads; the connected
+    /// <see cref="IChannel"/> is assigned on the owner loop thread before this task completes.
+    /// Must be called on the owner's bound <see cref="CRpcLoop"/> thread while the loop is driven.
+    /// </summary>
     public CRpcTask<IChannel> ConnectAsync(string host, int port)
     {
         EnsureOwnerLoopThread();
@@ -65,6 +70,10 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         return source.Task;
     }
 
+    /// <summary>
+    /// Clears the loop-owned channel on the owner loop thread, then closes the underlying
+    /// DotNetty channel via <see cref="CRpcTask.FromTask(System.Threading.Tasks.Task, CRpcLoop?)"/>.
+    /// </summary>
     public CRpcTask CloseAsync()
     {
         EnsureOwnerLoopThread();
@@ -79,12 +88,21 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         return CRpcTask.FromTask(currentChannel.CloseAsync(), ownerLoop);
     }
 
+    /// <summary>
+    /// Shuts down the DotNetty event loop group after the client channel is closed.
+    /// </summary>
     public CRpcTask ShutdownIoAsync()
     {
         EnsureOwnerLoopThread();
         return CRpcTask.FromTask(group.ShutdownGracefullyAsync(), ownerLoop);
     }
 
+    /// <summary>
+    /// Closes the client and shuts down IO. Prefer awaiting <see cref="CloseAsync"/> and
+    /// <see cref="ShutdownIoAsync"/> from CRpc async code while driving the loop.
+    /// <see cref="IAsyncDisposable"/> is kept for compatibility; it requires close to complete
+    /// synchronously on the owner loop thread.
+    /// </summary>
     public ValueTask DisposeAsync()
     {
         EnsureOwnerLoopThread();
