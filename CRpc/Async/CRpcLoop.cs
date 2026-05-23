@@ -33,8 +33,8 @@ public sealed class CRpcLoop
     private readonly ConcurrentQueue<Action> actions = new();
     private readonly ICRpcLoopTimerScheduler timerScheduler;
     private readonly Dictionary<ushort, IRpcService> registeredServices = new(InitialServiceCapacity);
-    private readonly object wakeupGate = new();
     private readonly ManualResetEventSlim wakeup = new(initialState: false);
+    private int pendingWakeup;
     private int threadId;
 
     public CRpcLoop()
@@ -91,11 +91,9 @@ public sealed class CRpcLoop
     public void Post(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        lock (wakeupGate)
-        {
-            actions.Enqueue(action);
-            wakeup.Set();
-        }
+        actions.Enqueue(action);
+        Interlocked.Exchange(ref pendingWakeup, 1);
+        wakeup.Set();
     }
 
     public void RegisterService(IRpcService service)
@@ -169,44 +167,34 @@ public sealed class CRpcLoop
     {
         EnsureLoopThread();
 
-        lock (wakeupGate)
+        // Post: enqueue -> pendingWakeup=1 -> Set (only on 0->1)
+        // Wait: pendingWakeup=0 -> Reset -> check queue/timer -> check pendingWakeup -> Wait
+        Volatile.Write(ref pendingWakeup, 0);
+        wakeup.Reset();
+
+        if (!actions.IsEmpty || HasDueTimers())
         {
-            wakeup.Reset();
-            if (!actions.IsEmpty || HasDueTimers())
-            {
-                return;
-            }
+            return;
+        }
 
-            var delay = timerScheduler.GetDelayUntilNextWakeup(Stopwatch.GetTimestamp());
-            if (delay == TimeSpan.Zero)
-            {
-                return;
-            }
+        var delay = timerScheduler.GetDelayUntilNextWakeup(Stopwatch.GetTimestamp());
+        if (delay == TimeSpan.Zero)
+        {
+            return;
+        }
 
-            if (delay is null)
-            {
-                Monitor.Exit(wakeupGate);
-                try
-                {
-                    wakeup.Wait(cancellationToken);
-                }
-                finally
-                {
-                    Monitor.Enter(wakeupGate);
-                }
+        if (Volatile.Read(ref pendingWakeup) != 0 || !actions.IsEmpty)
+        {
+            return;
+        }
 
-                return;
-            }
-
-            Monitor.Exit(wakeupGate);
-            try
-            {
-                wakeup.Wait(delay.Value, cancellationToken);
-            }
-            finally
-            {
-                Monitor.Enter(wakeupGate);
-            }
+        if (delay is null)
+        {
+            wakeup.Wait(cancellationToken);
+        }
+        else
+        {
+            wakeup.Wait(delay.Value, cancellationToken);
         }
     }
 

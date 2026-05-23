@@ -55,8 +55,14 @@ public class CRpcLoopWakeupTests : CrpcTestBase
         {
             loop.BindToCurrentThread();
             loop.ScheduleDelay(50, () => ran = true);
-            loop.WaitForWorkOrTimer(CancellationToken.None);
-            loop.Tick();
+            while (!ran)
+            {
+                loop.Tick();
+                if (!ran)
+                {
+                    loop.WaitForWorkOrTimer(CancellationToken.None);
+                }
+            }
         })
         {
             IsBackground = true,
@@ -65,5 +71,60 @@ public class CRpcLoopWakeupTests : CrpcTestBase
         driver.Join(TimeSpan.FromSeconds(2));
 
         Assert.True(ran);
+    }
+
+    [Fact]
+    public void MultiplePostsCoalesceIntoSingleWakeup()
+    {
+        var loop = new CRpcLoop();
+        using var driverReady = new ManualResetEventSlim(false);
+        using var waitReturned = new ManualResetEventSlim(false);
+
+        var driver = new Thread(() =>
+        {
+            loop.BindToCurrentThread();
+            driverReady.Set();
+            loop.WaitForWorkOrTimer(CancellationToken.None);
+            waitReturned.Set();
+        })
+        {
+            IsBackground = true,
+        };
+        driver.Start();
+
+        Assert.True(driverReady.Wait(TimeSpan.FromSeconds(2)));
+
+        for (var i = 0; i < 100; i++)
+        {
+            loop.Post(() => { });
+        }
+
+        Assert.True(waitReturned.Wait(TimeSpan.FromSeconds(2)));
+        driver.Join(TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public void PostAfterResetIsObservedBeforeWait()
+    {
+        var loop = new CRpcLoop();
+        using var driverReady = new ManualResetEventSlim(false);
+        using var waitReturned = new ManualResetEventSlim(false);
+
+        var driver = new Thread(() =>
+        {
+            loop.BindToCurrentThread();
+            driverReady.Set();
+            loop.WaitForWorkOrTimer(CancellationToken.None);
+            waitReturned.Set();
+        })
+        {
+            IsBackground = true,
+        };
+        driver.Start();
+
+        Assert.True(driverReady.Wait(TimeSpan.FromSeconds(2)));
+        loop.Post(() => { });
+        Assert.True(waitReturned.Wait(TimeSpan.FromSeconds(2)));
+        driver.Join(TimeSpan.FromSeconds(2));
     }
 }

@@ -802,22 +802,26 @@ CRpcLoopRunner.RunUntilComplete(loop, async () =>
 
 现状 `Tick + Sleep(1)` 的问题不只是 CPU 浪费，还有固定 ~1ms 调度延迟和 timeout 精度受轮询粒度影响。**目标是在 driver hot loop 里完全去掉固定 `Sleep(1)`**，改为"有事立刻醒、没事按下一次 timer 阻塞等待"。
 
-推荐 `ManualResetEventSlim`（不用 `SemaphoreSlim` 计数：`Tick` 是 batch drain，多个 `Post` 合并成一次唤醒即可）。
+推荐 `ManualResetEventSlim` + `Interlocked pendingWakeup`（不用 `SemaphoreSlim` 计数：`Tick` 是 batch drain，多个 `Post` 合并成一次唤醒即可；`Post` hot path 无锁）。
 
 ```text
 Post(action):
   actions.Enqueue(action)
-  wakeup.Set()
+  pendingWakeup = 1          // Interlocked.Exchange
+  wakeup.Set()               // 每次 Post 都 Set；Reset 后由 pendingWakeup / queue 再检查
 
 WaitForWorkOrTimer(ct):
+  pendingWakeup = 0
   wakeup.Reset()
   if actions 非空 || scheduler 已有 due timer:
-    return                    // 不睡，立刻继续 Tick
-  timeout = scheduler.GetDelayUntilNextWakeup(now)  // 无 timer 时无限等
-  wakeup.Wait(timeout, ct)    // 阻塞，不是 Sleep(1) 轮询
+    return
+  if pendingWakeup != 0 || actions 非空:   // 覆盖 Reset 与 Wait 之间的 Post
+    return
+  timeout = scheduler.GetDelayUntilNextWakeup(now)
+  wakeup.Wait(timeout, ct)
 ```
 
-**防丢唤醒**：`Reset → 检查 mailbox/timer → Wait` 必须在 `CRpcLoop` 内部原子完成；driver 不得自行 `Reset/Wait`，否则 `Post` 发生在 `Reset` 之后、`Wait` 之前时会睡过去。
+**防丢唤醒**：`pendingWakeup` 表示“Reset 之后是否又有 Post”；`Post` 无锁，不依赖 `Exchange` 返回值决定是否 `Set`（每次 `Post` 都 `Set`，避免 coalesce 丢信号）。driver 不得自行 `Reset/Wait`。
 
 **与 `Sleep(1)` 的区别**
 
