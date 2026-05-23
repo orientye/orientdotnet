@@ -768,7 +768,6 @@ CRpcLoopRunner.RunUntilComplete(loop, async () =>
 | Loop-owned | Timer 无论底层用 min-heap 还是 timing wheel，**永远归属当前 `CRpcLoop`**，只在 `Tick()` 里推进，不另开全局 timer 线程 |
 | Absolute deadline | 内部统一按 **absolute due timestamp**（`Stopwatch.GetTimestamp()`）排序；`ScheduleDelay(ms)` 只是便捷封装 |
 | Driver 薄 | `CRpcLoopHost` / `CRpcServerLoop` / `CRpcLoopRunner` 使用 `Tick + WaitForWorkOrTimer`；空闲时阻塞，有 `Post` 或 timer 到期时唤醒 |
-| 与 libuv 对齐 | 类似 libuv：`uv_async_send` 唤醒 + 用户队列；min-heap 存 timer、poll 前算 next timeout |
 
 ##### 9.5.2 Mailbox：MPSC 语义
 
@@ -807,7 +806,7 @@ internal interface ICRpcLoopMailbox
 
 ##### 9.5.3 Wakeup 机制
 
-Driver hot loop 为 **有事立刻醒、没事按下一次 timer 阻塞等待**（不再使用固定 `Sleep(1)` 轮询）。
+Driver hot loop 为 **有事立刻醒、没事按下一次 timer 阻塞等待**。
 
 推荐 `ManualResetEventSlim`（不用 `SemaphoreSlim` 计数：`Tick` 是 batch drain；`Post` hot path 无锁，只有 `Enqueue + Set`）。
 
@@ -826,16 +825,7 @@ WaitForWorkOrTimer(ct):
 
 **防丢唤醒**：`Reset` 后必须重新检查 mailbox/timer；`Post` 在 `Reset` 之后要么被 queue 检查发现，要么通过 `Set()` 唤醒 `Wait`。driver 不得自行 `Reset/Wait`。
 
-**相对旧 `Sleep(1)` 轮询的改进**
 
-| | `Sleep(1)` 轮询 | `WaitForWorkOrTimer` |
-| --- | --- | --- |
-| 空闲时 | 每 1ms 醒一次，烧 CPU | 阻塞到 `Post` 或 timer 到期 |
-| `Post` 后 | 最坏等 1ms | 立刻 `Set` 唤醒 |
-| timeout 精度 | 受 1ms 轮询撞运气 | 由 scheduler 最近 deadline 决定 |
-| Windows | 受系统 timer resolution 影响，未必真 1ms | `Wait(timeout)` 按实际 deadline 等待 |
-
-正常路径不使用 `Sleep(1)` fallback。
 
 ##### 9.5.4 Tick 顺序
 
