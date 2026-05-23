@@ -25,13 +25,18 @@ public sealed class CRpcReferenceBuilder<TProxy>
         return this;
     }
 
-    public async Task<CRpcReference<TProxy>> ConnectAsync(CRpcLoop loop)
+    public CRpcTask<CRpcReference<TProxy>> ConnectAsync(CRpcLoop loop)
     {
         ArgumentNullException.ThrowIfNull(loop);
         var target = uri ?? throw new InvalidOperationException("CRpc reference URL is required.");
 
+        return ConnectAsyncCore(loop, target);
+    }
+
+    private async CRpcTask<CRpcReference<TProxy>> ConnectAsyncCore(CRpcLoop loop, Uri target)
+    {
         var client = new CRpcClient(loop);
-        await client.ConnectAsync(target.Host, target.Port).ConfigureAwait(false);
+        await client.ConnectAsync(target.Host, target.Port);
 
         var proxy = CRpcProxyActivator.Create<TProxy>(client);
         return new CRpcReference<TProxy>(proxy, client);

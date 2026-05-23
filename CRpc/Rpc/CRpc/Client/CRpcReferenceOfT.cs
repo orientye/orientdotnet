@@ -1,3 +1,5 @@
+using CRpc.Async;
+
 namespace CRpc.Rpc.CRpc.Client;
 
 public sealed class CRpcReference<TProxy> : IAsyncDisposable
@@ -13,8 +15,9 @@ public sealed class CRpcReference<TProxy> : IAsyncDisposable
 
     public TProxy Proxy { get; }
 
-    public async ValueTask DisposeAsync()
-    {
-        await client.DisposeAsync();
-    }
+    public CRpcTask CloseAsync() => client.CloseAsync();
+
+    public CRpcTask ShutdownIoAsync() => client.ShutdownIoAsync();
+
+    public ValueTask DisposeAsync() => client.DisposeAsync();
 }

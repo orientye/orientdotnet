@@ -1,5 +1,4 @@
-﻿using System.Net;
-using CRpc.Async;
+﻿using CRpc.Async;
 using CRpc.Rpc.CRpc.Codec;
 using DotNetty.Handlers.Logging;
 using DotNetty.Handlers.Timeout;
@@ -39,43 +38,94 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
             }));
     }
 
-    public async Task<IChannel> ConnectAsync(string host, int port)
+    public CRpcTask<IChannel> ConnectAsync(string host, int port)
     {
-        channel = await bootstrap.ConnectAsync(host, port);
-        return channel;
+        EnsureOwnerLoopThread();
+
+        if (channel is not null)
+        {
+            throw new InvalidOperationException("CRpcClient is already connected.");
+        }
+
+        var source = new CRpcTaskCompletionSource<IChannel>(ownerLoop);
+        var dotnetTask = bootstrap.ConnectAsync(host, port);
+        if (dotnetTask.IsCompleted)
+        {
+            CompleteConnect(dotnetTask, source);
+        }
+        else
+        {
+            dotnetTask.ContinueWith(
+                completedTask => ownerLoop.Post(() => CompleteConnect(completedTask, source)),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        return source.Task;
     }
-    
-    public async Task CloseAsync()
+
+    public CRpcTask CloseAsync()
     {
+        EnsureOwnerLoopThread();
+
         var currentChannel = channel;
         if (currentChannel is null)
         {
-            return;
+            return CRpcTask.CompletedTask(ownerLoop);
         }
 
         channel = null;
-        await currentChannel.CloseAsync();
+        return CRpcTask.FromTask(currentChannel.CloseAsync(), ownerLoop);
     }
 
-    public async ValueTask DisposeAsync()
+    public CRpcTask ShutdownIoAsync()
     {
-        await CloseAsync();
-        await group.ShutdownGracefullyAsync();
+        EnsureOwnerLoopThread();
+        return CRpcTask.FromTask(group.ShutdownGracefullyAsync(), ownerLoop);
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        EnsureOwnerLoopThread();
+
+        var closeTask = CloseAsync();
+        var closeAwaiter = closeTask.GetAwaiter();
+        if (!closeAwaiter.IsCompleted)
+        {
+            throw new InvalidOperationException(
+                "CRpcClient.DisposeAsync requires CloseAsync to complete synchronously on the owner loop thread. " +
+                "Await CloseAsync() while driving the loop, then call ShutdownIoAsync().");
+        }
+
+        closeAwaiter.GetResult();
+
+        var shutdownTask = ShutdownIoAsync();
+        var shutdownAwaiter = shutdownTask.GetAwaiter();
+        while (!shutdownAwaiter.IsCompleted)
+        {
+            ownerLoop.Tick();
+            if (!shutdownAwaiter.IsCompleted)
+            {
+                ownerLoop.WaitForWorkOrTimer(CancellationToken.None);
+            }
+        }
+
+        shutdownAwaiter.GetResult();
+        return ValueTask.CompletedTask;
     }
 
     public CRpcTask<CRpcMessage> CallAsync(ushort serviceId, ushort methodId, byte[] body, int timeout)
     {
-        var loop = CRpcLoop.Current
-            ?? throw new InvalidOperationException("CRpcClient.CallAsync must be called from a bound CRpcLoop thread.");
-        if (!ReferenceEquals(ownerLoop, loop))
-        {
-            throw new InvalidOperationException("CRpcClient.CallAsync must be called on the client's owner CRpcLoop thread.");
-        }
+        EnsureOwnerLoopThread();
+
+        var currentChannel = channel
+            ?? throw new InvalidOperationException("CRpcClient is not connected.");
 
         long reqSeq = __IncrementReqId();
         var pendingCall = __AddResultTaskAsync(reqSeq, timeout, ownerLoop);
-        
-        __Send(reqSeq, serviceId, methodId, body);
+
+        __Send(currentChannel, reqSeq, serviceId, methodId, body);
 
         return pendingCall.Source.Task;
     }
@@ -95,22 +145,50 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         }
     }
 
-    private void __Send(long reqSeq, ushort serviceId, ushort methodId, byte[] bytes)
+    private void CompleteConnect(Task<IChannel> task, CRpcTaskCompletionSource<IChannel> source)
+    {
+        if (task.IsCanceled)
+        {
+            source.TrySetCanceled();
+            return;
+        }
+
+        if (task.IsFaulted)
+        {
+            Exception exception;
+            if (task.Exception?.InnerException is not null)
+            {
+                exception = task.Exception.InnerException;
+            }
+            else if (task.Exception is not null)
+            {
+                exception = task.Exception;
+            }
+            else
+            {
+                exception = new InvalidOperationException("Connect failed.");
+            }
+
+            source.TrySetException(exception);
+            return;
+        }
+
+        channel = task.Result;
+        source.TrySetResult(task.Result);
+    }
+
+    private void __Send(IChannel currentChannel, long reqSeq, ushort serviceId, ushort methodId, byte[] bytes)
     {
         CRpcMessageHeader header = CRpcMessageHeader.valueOf(CRpcMessageState.STATE_NONE, 0, reqSeq, serviceId, methodId);
         header.addState(CRpcMessageState.NONE_ENCRYPT);
         CRpcMessage req = CRpcMessage.valueOf(header, bytes);
         req.encryptAndCompress(512, true, true);
-        var allocator = channel?.Allocator;
         var size = req.getSize();
         Console.WriteLine($"*******************rsp size: {size}");
-        var frame = allocator?.DirectBuffer(size);
-        if (frame != null)
-        {
-            Console.WriteLine($"*********CallAsync send");
-            req.toFrame(frame, 16);
-            channel?.WriteAndFlushAsync(frame);
-        }
+        var frame = currentChannel.Allocator.DirectBuffer(size);
+        Console.WriteLine($"*********CallAsync send");
+        req.toFrame(frame, 16);
+        _ = currentChannel.WriteAndFlushAsync(frame);
     }
 
     private PendingCall __AddResultTaskAsync(long reqSeq, int timeout, CRpcLoop loop)
@@ -133,7 +211,17 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         results[reqSeq] = pendingCall;
         return pendingCall;
     }
-    
+
+    private void EnsureOwnerLoopThread()
+    {
+        var loop = CRpcLoop.Current
+            ?? throw new InvalidOperationException("CRpcClient operations must be called from a bound CRpcLoop thread.");
+        if (!ReferenceEquals(ownerLoop, loop))
+        {
+            throw new InvalidOperationException("CRpcClient operations must be called on the client's owner CRpcLoop thread.");
+        }
+    }
+
     private long __IncrementReqId()
     {
         var id = Interlocked.Increment(ref this.reqSequence);

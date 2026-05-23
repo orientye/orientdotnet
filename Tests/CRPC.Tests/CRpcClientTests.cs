@@ -14,6 +14,19 @@ public class CRpcClientTests : CrpcTestBase
     }
 
     [Fact]
+    public void CallAsyncThrowsWhenNotConnected()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+
+        var client = new CRpcClient(loop);
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 0));
+
+        Assert.Contains("not connected", exception.Message);
+    }
+
+    [Fact]
     public void CallAsyncThrowsWhenNoCRpcLoopIsBound()
     {
         var loop = new CRpcLoop();
@@ -46,6 +59,18 @@ public class CRpcClientTests : CrpcTestBase
     }
 
     [Fact]
+    public void ConnectAsyncThrowsWhenNotOnOwnerLoop()
+    {
+        var loop = new CRpcLoop();
+        var client = new CRpcClient(loop);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            client.ConnectAsync("127.0.0.1", 7999));
+
+        Assert.Contains("CRpcLoop", exception.Message);
+    }
+
+    [Fact]
     public void CallAsyncResponseContinuationRunsOnCallingLoop()
     {
         var loop = new CRpcLoop();
@@ -53,6 +78,7 @@ public class CRpcClientTests : CrpcTestBase
         var loopThreadId = Environment.CurrentManagedThreadId;
 
         var client = new CRpcClient(loop);
+        SetClientChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 0);
         var awaiter = task.GetAwaiter();
 
@@ -92,6 +118,7 @@ public class CRpcClientTests : CrpcTestBase
         loop.BindToCurrentThread();
 
         var client = new CRpcClient(loop);
+        SetClientChannel(client, new EmbeddedChannel());
         var firstTask = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 0);
         var secondTask = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 0);
         var firstAwaiter = firstTask.GetAwaiter();
@@ -129,6 +156,7 @@ public class CRpcClientTests : CrpcTestBase
         loop.BindToCurrentThread();
 
         var client = new CRpcClient(loop);
+        SetClientChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 1);
         var awaiter = task.GetAwaiter();
         CRpcMessage? result = null;
@@ -152,6 +180,7 @@ public class CRpcClientTests : CrpcTestBase
         loop.BindToCurrentThread();
 
         var client = new CRpcClient(loop);
+        SetClientChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 1);
         var awaiter = task.GetAwaiter();
 
@@ -174,6 +203,7 @@ public class CRpcClientTests : CrpcTestBase
         loop.BindToCurrentThread();
 
         var client = new CRpcClient(loop);
+        SetClientChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 1);
         var awaiter = task.GetAwaiter();
 
@@ -188,25 +218,33 @@ public class CRpcClientTests : CrpcTestBase
     }
 
     [Fact]
-    public async Task CloseAsyncClosesConnectedChannel()
+    public void CloseAsyncClosesConnectedChannel()
     {
-        var client = new CRpcClient(new CRpcLoop());
+        var loop = new CRpcLoop();
+        var client = new CRpcClient(loop);
         var channel = new EmbeddedChannel();
-        SetClientChannel(client, channel);
 
-        await client.CloseAsync();
+        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            SetClientChannel(client, channel);
+            await client.CloseAsync();
+        });
 
         Assert.False(channel.Open);
     }
 
     [Fact]
-    public async Task DisposeAsyncClosesConnectedChannel()
+    public void DisposeAsyncClosesConnectedChannel()
     {
-        var client = new CRpcClient(new CRpcLoop());
+        var loop = new CRpcLoop();
+        var client = new CRpcClient(loop);
         var channel = new EmbeddedChannel();
-        SetClientChannel(client, channel);
 
-        await client.DisposeAsync();
+        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            SetClientChannel(client, channel);
+            await client.DisposeAsync();
+        });
 
         Assert.False(channel.Open);
     }
