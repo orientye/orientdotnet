@@ -181,7 +181,7 @@ flowchart TB
 ```text
 CRpcLoop 决定：业务在哪里执行，Service 注册在哪里，状态归谁所有。
 CRpcServer 决定：请求从哪个端口 / 哪种协议进入。
-CRpcServerHandler 决定：IO 线程收到一条消息后，如何搬运到业务 loop。
+CRpcServerHandler 决定：IO 线程收到一条消息后，如何传递给业务 loop。
 ```
 
 #### 4.2 多端口、多协议
@@ -194,7 +194,6 @@ CRpcLoop A
   │   ├── UserService
   │   └── OrderService
   ├── CRpcServer : 7000, CRpc 二进制协议
-  ├── CRpcServer : 7001, CRpc 管理端口
   └── HttpServer : 8080, HTTP/JSON 协议
 ```
 
@@ -205,8 +204,7 @@ serviceId + methodId + request body + IRpcContext
 ```
 
 - CRpc 二进制端点：`TCP bytes -> CRpcMessage -> loop.Post -> RpcServiceInvoker -> CRpcMessage response -> TCP frame`。
-- HTTP 端点：`HTTP/JSON -> serviceId/methodId/body -> loop.Post -> RpcServiceInvoker -> HTTP response`（**已落地**，见 `HttpServerHandler`）。
-- 管理端口：可以只暴露管理类 service，也可以复用同一个 loop 上的 registry。
+- HTTP 端点：`HTTP/JSON -> serviceId/methodId/body -> loop.Post -> RpcServiceInvoker -> HTTP response`（参考 `HttpServerHandler`）。
 
 ---
 
