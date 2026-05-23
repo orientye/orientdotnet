@@ -87,6 +87,16 @@ public class CRpcLoopRegistryTests : CrpcTestBase
         });
     }
 
+    [Fact]
+    public void TickOnWrongThreadThrowsAfterBind()
+    {
+        var loop = new CRpcLoop();
+        DedicatedLoopThread.Run(loop, _ => { });
+
+        var exception = Assert.Throws<InvalidOperationException>(() => loop.Tick());
+        Assert.Contains("loop thread", exception.Message, StringComparison.Ordinal);
+    }
+
 #if DEBUG
     [Fact]
     public void BindSecondLoopOnSameThreadThrowsInDebug()

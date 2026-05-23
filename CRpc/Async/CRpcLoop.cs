@@ -153,7 +153,7 @@ public sealed class CRpcLoop
         }
         else
         {
-            current = this;
+            EnsureLoopThread();
         }
 
         DrainActions(maxActions);
