@@ -1,4 +1,4 @@
-# CRpc 架构与线程模型
+# CRpc 架构
 
 > **范围**：线程、`CRpcLoop`、`CRpcServer` / `CRpcServerHandler`、`CRpcClient` / `CRpcClientHandler` 及其关系。既写现状，也标目标方向；**现有代码 ≠ 推荐设计**。
 
@@ -13,18 +13,18 @@
 | 数量 | 进程内可有一个或多个 `CRpcLoop` |
 | 线程 | 一个 loop 绑定一个业务线程；业务状态、注册表、pending 调用、定时器、`CRpcTask` 完成**只在该线程访问** |
 | 角色 | **业务执行上下文**；不另设 Runtime 层 |
-| 注册表 | **目标**：`CRpcLoop` 持有 `ServiceRegistry` |
-| 端点 | **目标**：同一 loop 可挂多个协议入口（多个 `CRpcServer`、HTTP、管理端口等） |
-| 调度 | **目标**：MPSC mailbox + loop-owned timer（min-heap 默认，timing wheel 可配置）；见 [§9.5](#95-crpcloop-调度timer-与-rpc-timeout) |
+| 注册表 | **已落地**：`CRpcLoop.RegisterService` / `TryGetService`（内联 `Dictionary`，非独立 `ServiceRegistry` 类型） |
+| 端点 | **部分落地**：同一 loop 可挂 `CRpcServer` + `HttpServer` 等（见 `Example/HelloWorld/Server/Program.cs`）；多 loop 路由仍缺 |
+| 调度 | **已落地**：MPSC mailbox + loop-owned timer + `WaitForWorkOrTimer`；见 [§9.5](#95-crpcloop-调度timer-与-rpc-timeout) |
 
 ### 现状 vs 目标
 
-| | 现状 | 目标 |
+| 维度 | 现状（代码） | 仍为方向 |
 | --- | --- | --- |
-| Service 归属 | `CRpcServer` 持有 `CRpcLoop` + `registeredServices` | `CRpcLoop` 持有 `ServiceRegistry`；Server 只做端点 |
-| 端点与 loop | 常见为「一 Server 一 Loop」 | 多 Server / 多协议共享一 Loop |
+| Service 归属 | `CRpcLoop` 持有注册表；`CRpcServer` / `HttpServer` 只持 `Loop`，经 `RpcServiceInvoker` 查 service | 独立 `ServiceRegistry` 类型；端点停止时不隐式清空 loop 注册表 |
+| 端点与 loop | 多端点共享一 loop 已可用（CRpc 7999 + HTTP 8080）；`CRpcLoopHost` 统一驱动 | 按 serviceId / channel 路由到多个 loop；IO 线程组可注入（现仍硬编码 1+1） |
+| Loop 驱动 | `Tick + WaitForWorkOrTimer`（`CRpcLoopHost` → `CRpcServerLoop`） | — |
 | Runtime | — | 不引入单独 Runtime；Loop 即上下文 |
-| Loop 驱动 | — | `Tick + WaitForWorkOrTimer`（**已落地**） |
 
 ### 网络层：入口与适配，非 Service Owner
 
