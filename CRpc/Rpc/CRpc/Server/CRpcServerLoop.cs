@@ -34,10 +34,4 @@ public static class CRpcServerLoop
             }
         }
     }
-
-    [Obsolete("Use RunUntilCancelled(loop, cancellationToken). sleepMilliseconds is no longer used.")]
-    public static void RunUntilCancelled(CRpcLoop loop, CancellationToken cancellationToken, int sleepMilliseconds)
-    {
-        RunUntilCancelled(loop, cancellationToken);
-    }
 }

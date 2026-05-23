@@ -73,16 +73,4 @@ public static class CRpcLoopRunner
 
         return result!;
     }
-
-    [Obsolete("Use RunUntilComplete(loop, operation). sleepMilliseconds is no longer used.")]
-    public static void RunUntilComplete(CRpcLoop loop, Func<CRpcTask> operation, int sleepMilliseconds)
-    {
-        RunUntilComplete(loop, operation);
-    }
-
-    [Obsolete("Use RunUntilComplete(loop, operation). sleepMilliseconds is no longer used.")]
-    public static T RunUntilComplete<T>(CRpcLoop loop, Func<CRpcTask<T>> operation, int sleepMilliseconds)
-    {
-        return RunUntilComplete(loop, operation);
-    }
 }

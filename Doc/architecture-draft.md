@@ -524,7 +524,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
 #### 6.4 CRpcLoopHost / CRpcServerLoop / CRpcLoopRunner
 
-- **现状**：`Tick + WaitForWorkOrTimer`；`sleepMilliseconds` overload 已 `[Obsolete]`。
+- **现状**：`Tick + WaitForWorkOrTimer`。
 - `CRpcLoopHost.RunUntilCancelled(loop, ct)`：服务端推荐常驻驱动入口（内部转发 `CRpcServerLoop`）。
 - `CRpcLoopRunner.RunUntilComplete(loop, op)`：在调用线程 binding loop，跑到指定 `CRpcTask` 完成。
 
@@ -946,7 +946,7 @@ while (!cancellationToken.IsCancellationRequested)
 }
 ```
 
-`CRpcLoopRunner.RunUntilComplete` 同理：`Tick + WaitForWorkOrTimer` 直到目标 `CRpcTask` 完成。`sleepMilliseconds` overload 已 `[Obsolete]`。
+`CRpcLoopRunner.RunUntilComplete` 同理：`Tick + WaitForWorkOrTimer` 直到目标 `CRpcTask` 完成。
 
 ---
 
@@ -955,7 +955,7 @@ while (!cancellationToken.IsCancellationRequested)
 1. ~~**可唤醒 loop + loop-owned timer**~~（**已完成**）：
    - `CRpcLoop`：`ManualResetEventSlim`、`WaitForWorkOrTimer`、`ICRpcLoopTimerScheduler` + `MinHeapTimerScheduler`；
    - `Tick`：actions → due timers → actions；
-   - `CRpcLoopHost` / `CRpcServerLoop` / `CRpcLoopRunner`：`Tick + WaitForWorkOrTimer`；`sleepMilliseconds` 已 obsolete；
+   - `CRpcLoopHost` / `CRpcServerLoop` / `CRpcLoopRunner`：`Tick + WaitForWorkOrTimer`；
    - RPC timeout 按 §9.5.7 语义实现/测试。
 2. ~~**Registry 上收至 Loop**~~（**已完成**）：
    - `RegisterService` / `TryGetService` 在 `CRpcLoop`；`CRpcServer` / `HttpServer` 只投递请求；
