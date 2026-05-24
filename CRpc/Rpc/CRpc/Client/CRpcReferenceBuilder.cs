@@ -6,6 +6,7 @@ public sealed class CRpcReferenceBuilder<TProxy>
     where TProxy : class, new()
 {
     private Uri? uri;
+    private CRpcClientOptions? clientOptions;
 
     public CRpcReferenceBuilder<TProxy> Url(string url)
     {
@@ -25,6 +26,13 @@ public sealed class CRpcReferenceBuilder<TProxy>
         return this;
     }
 
+    public CRpcReferenceBuilder<TProxy> ClientOptions(CRpcClientOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        clientOptions = options;
+        return this;
+    }
+
     /// <summary>
     /// Connects via <see cref="CRpcClient.ConnectAsync(string, int)"/> and returns a typed proxy.
     /// Must be called on the bound owner loop thread while the loop is driven.
@@ -39,7 +47,7 @@ public sealed class CRpcReferenceBuilder<TProxy>
 
     private async CRpcTask<CRpcReference<TProxy>> ConnectAsyncCore(CRpcLoop loop, Uri target)
     {
-        var client = new CRpcClient(loop);
+        var client = new CRpcClient(loop, clientOptions);
         await client.ConnectAsync(target.Host, target.Port);
 
         var proxy = CRpcProxyActivator.Create<TProxy>(client);

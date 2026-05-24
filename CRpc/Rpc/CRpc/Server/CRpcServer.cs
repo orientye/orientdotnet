@@ -28,6 +28,8 @@ public sealed class CRpcServer : IRpcServer
 
     public CRpcLoop Loop { get; }
 
+    public CRpcServerOptions Options => options;
+
     public bool IsRunning => Volatile.Read(ref isRunning) == 1;
 
     public void Open()
@@ -48,6 +50,10 @@ public sealed class CRpcServer : IRpcServer
             Port = port,
             MaxFrameLength = options.MaxFrameLength,
             HashLength = options.HashLength,
+            CompressThreshold = options.CompressThreshold,
+            BossThreadCount = options.BossThreadCount,
+            WorkerThreadCount = options.WorkerThreadCount,
+            SoBacklog = options.SoBacklog,
         };
 
         return RunInternalAsync(boundOptions, registerConsoleCancelHandler);
@@ -116,18 +122,20 @@ public sealed class CRpcServer : IRpcServer
         cancellationToken.ThrowIfCancellationRequested();
 
         runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        group = new MultithreadEventLoopGroup(1);
-        workGroup = new MultithreadEventLoopGroup(1);
+        group = new MultithreadEventLoopGroup(startOptions.BossThreadCount);
+        workGroup = new MultithreadEventLoopGroup(startOptions.WorkerThreadCount);
 
         var bootstrap = new ServerBootstrap();
         bootstrap.Group(group, workGroup);
         bootstrap.Channel<TcpServerSocketChannel>();
         bootstrap
-            .Option(ChannelOption.SoBacklog, 8192)
+            .Option(ChannelOption.SoBacklog, startOptions.SoBacklog)
             .ChildHandler(new ActionChannelInitializer<IChannel>(channel =>
             {
                 var pipeline = channel.Pipeline;
-                pipeline.AddLast("decoder", new CRpcMessageDecoder(options.MaxFrameLength, options.HashLength));
+                pipeline.AddLast(
+                    "decoder",
+                    new CRpcMessageDecoder(startOptions.MaxFrameLength, startOptions.HashLength));
                 pipeline.AddLast("handler", new CRpcServerHandler(this));
             }));
 

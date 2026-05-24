@@ -11,32 +11,41 @@ namespace CRpc.Rpc.CRpc.Client;
 public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 {
     private readonly Dictionary<long, PendingCall> results = new();
-    private readonly IEventLoopGroup group = new MultithreadEventLoopGroup(1);
+    private readonly CRpcClientOptions options;
+    private readonly IEventLoopGroup group;
     private long reqSequence;
     private readonly CRpcLoop ownerLoop;
     private IChannel? channel;
 
     private readonly Bootstrap bootstrap = new Bootstrap();
 
-    public CRpcClient(CRpcLoop loop)
+    public CRpcClient(CRpcLoop loop, CRpcClientOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(loop);
         ownerLoop = loop;
+        this.options = options ?? new CRpcClientOptions();
+        group = new MultithreadEventLoopGroup(this.options.IoThreadCount);
 
         bootstrap
             .Channel<TcpSocketChannel>()
             .Option(ChannelOption.TcpNodelay, true)
-            .Option(ChannelOption.ConnectTimeout, TimeSpan.FromSeconds(10))
+            .Option(ChannelOption.ConnectTimeout, TimeSpan.FromSeconds(this.options.ConnectTimeoutSeconds))
             .Group(group)
             .Handler(new ActionChannelInitializer<ISocketChannel>(c =>
             {
                 var pipeline = c.Pipeline;
                 pipeline.AddLast(new LoggingHandler("crpc-client"));
-                pipeline.AddLast("timeout", new IdleStateHandler(0, 0, 60));
-                pipeline.AddLast("decoder", new CRpcMessageDecoder(32768, 16));
+                pipeline.AddLast(
+                    "timeout",
+                    new IdleStateHandler(0, 0, this.options.HeartbeatIdleSeconds));
+                pipeline.AddLast(
+                    "decoder",
+                    new CRpcMessageDecoder(this.options.MaxFrameLength, this.options.HashLength));
                 pipeline.AddLast("handler", new CRpcClientHandler(this));
             }));
     }
+
+    public CRpcClientOptions Options => options;
 
     /// <summary>
     /// Connects to the remote host. DotNetty connect runs on IO threads; the connected
@@ -187,11 +196,14 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         CRpcMessageHeader header = CRpcMessageHeader.valueOf(CRpcMessageState.STATE_NONE, 0, reqSeq, serviceId, methodId);
         header.addState(CRpcMessageState.NONE_ENCRYPT);
         CRpcMessage req = CRpcMessage.valueOf(header, bytes);
-        req.encryptAndCompress(512, true, true);
+        req.encryptAndCompress(options.CompressThreshold, true, true);
         var size = req.getSize();
         Console.WriteLine($"*******************rsp size: {size}");
         Console.WriteLine($"*********CallAsync send");
-        ChannelWriteUtil.WriteEncodedFrameFireAndForget(currentChannel, size, frame => req.toFrame(frame, 16));
+        ChannelWriteUtil.WriteEncodedFrameFireAndForget(
+            currentChannel,
+            size,
+            frame => req.toFrame(frame, options.HashLength));
     }
 
     private PendingCall __AddResultTaskAsync(long reqSeq, int timeout, CRpcLoop loop)

@@ -49,13 +49,13 @@ public sealed class HttpServer
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        group = new MultithreadEventLoopGroup(1);
-        workGroup = new MultithreadEventLoopGroup(1);
+        group = new MultithreadEventLoopGroup(options.BossThreadCount);
+        workGroup = new MultithreadEventLoopGroup(options.WorkerThreadCount);
 
         var bootstrap = new ServerBootstrap();
         bootstrap.Group(group, workGroup);
         bootstrap.Channel<TcpServerSocketChannel>();
-        bootstrap.Option(ChannelOption.SoBacklog, 8192);
+        bootstrap.Option(ChannelOption.SoBacklog, options.SoBacklog);
         bootstrap.ChildHandler(new ActionChannelInitializer<IChannel>(channel =>
         {
             var pipeline = channel.Pipeline;

@@ -33,9 +33,9 @@ public class CRpcServerHandler : ChannelHandlerAdapter
 
     }
 
-    private static void ProcessMessage(IRpcService rpcService, IChannelHandlerContext ctx, object msg)
+    private void ProcessMessage(IRpcService rpcService, IChannelHandlerContext ctx, object msg)
     {
-        var task = ProcessMessageAsync(rpcService, ctx, msg);
+        var task = ProcessMessageAsync(rpcService, ctx, msg, server.Options);
         var awaiter = task.GetAwaiter();
         if (awaiter.IsCompleted)
         {
@@ -46,17 +46,24 @@ public class CRpcServerHandler : ChannelHandlerAdapter
         awaiter.OnCompleted(() => CompleteProcessMessage(awaiter));
     }
 
-    private static async CRpcTask ProcessMessageAsync(IRpcService rpcService, IChannelHandlerContext ctx, object msg)
+    private static async CRpcTask ProcessMessageAsync(
+        IRpcService rpcService,
+        IChannelHandlerContext ctx,
+        object msg,
+        CRpcServerOptions options)
     {
         var rpcContext = new CRpcContext();
         var request = (CRpcMessage)msg;
         var (resultCode, bytes) = await RpcServiceInvoker.InvokeAsync(rpcService, rpcContext, request);
         var rsp = RpcServiceInvoker.BuildCrpcResponse(request, resultCode, bytes);
-        rsp.encryptAndCompress(512, true, true);
+        rsp.encryptAndCompress(options.CompressThreshold, true, true);
         var size = rsp.getSize();
         Console.WriteLine($"*******************rsp size: {size}");
         Console.WriteLine($"*******************channel: {ctx.Channel}");
-        ChannelWriteUtil.WriteEncodedFrameFireAndForget(ctx, size, frame => rsp.toFrame(frame, 16));
+        ChannelWriteUtil.WriteEncodedFrameFireAndForget(
+            ctx,
+            size,
+            frame => rsp.toFrame(frame, options.HashLength));
     }
 
     private static void CompleteProcessMessage(CRpcTask.Awaiter awaiter)
