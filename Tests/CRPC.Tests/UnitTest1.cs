@@ -128,6 +128,26 @@ public class CRpcLoopTests : CrpcTestBase
     }
 
     [Fact]
+    public void DelayThrowsWhenExplicitLoopFromNonLoopThread()
+    {
+        var loop = new CRpcLoop();
+        var exception = RunOnFreshThread(() => CRpcTask.Delay(1, loop));
+
+        Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("loop thread", exception!.Message);
+    }
+
+    [Fact]
+    public void DelayZeroThrowsWhenExplicitLoopFromNonLoopThread()
+    {
+        var loop = new CRpcLoop();
+        var exception = RunOnFreshThread(() => CRpcTask.Delay(0, loop));
+
+        Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("loop thread", exception!.Message);
+    }
+
+    [Fact]
     public void DelayDoesNotCompleteUntilLoopTicksExpiredTimer()
     {
         var loop = new CRpcLoop();

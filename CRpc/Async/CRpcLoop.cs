@@ -258,11 +258,13 @@ public sealed class CRpcLoop
         return millisecondsDelay * Stopwatch.Frequency / 1000;
     }
 
-    private void EnsureLoopThread()
+    internal void EnsureInLoopThread()
     {
         if (!IsInLoopThread)
         {
             throw new InvalidOperationException("CRpcLoop operations must run on the loop thread.");
         }
     }
+
+    private void EnsureLoopThread() => EnsureInLoopThread();
 }

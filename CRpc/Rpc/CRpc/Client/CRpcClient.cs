@@ -125,6 +125,11 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         return ValueTask.CompletedTask;
     }
 
+    /// <summary>
+    /// Sends an RPC request and returns a task that completes when the response arrives or the call times out.
+    /// When <paramref name="timeout"/> is greater than zero, a timer is registered on the owner loop.
+    /// Must be called on the bound owner <see cref="CRpcLoop"/> thread while the loop is driven.
+    /// </summary>
     public CRpcTask<CRpcMessage> CallAsync(ushort serviceId, ushort methodId, byte[] body, int timeout)
     {
         EnsureOwnerLoopThread();

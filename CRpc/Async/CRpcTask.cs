@@ -53,6 +53,11 @@ public readonly struct CRpcTask
         return new CRpcTask(source.Task);
     }
 
+    /// <summary>
+    /// Returns a task that completes after the delay on the target loop's timer scheduler.
+    /// Must be called on the bound <see cref="CRpcLoop"/> thread while the loop is driven.
+    /// To schedule a delay from another thread, use <see cref="CRpcLoop.Post"/> first.
+    /// </summary>
     public static CRpcTask Delay(int millisecondsDelay, CRpcLoop? loop = null)
     {
         if (millisecondsDelay < -1)
@@ -61,6 +66,7 @@ public readonly struct CRpcTask
         }
 
         loop = CRpcLoop.RequireCurrentOr(loop);
+        loop.EnsureInLoopThread();
         var source = new CRpcTaskCompletionSource<CRpcUnit>(loop);
         if (millisecondsDelay == 0)
         {
