@@ -210,7 +210,7 @@ public sealed class HttpServerHandler : SimpleChannelInboundHandler<IFullHttpReq
             response.Headers.Set(HttpHeaderNames.Connection, HttpHeaderValues.KeepAlive);
         }
 
-        _ = ctx.WriteAndFlushAsync(response);
+        ChannelWriteUtil.WriteAndFlushFireAndForget(ctx, response);
         if (!keepAlive)
         {
             _ = ctx.CloseAsync();

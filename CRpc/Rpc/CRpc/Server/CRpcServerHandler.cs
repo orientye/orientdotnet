@@ -53,13 +53,10 @@ public class CRpcServerHandler : ChannelHandlerAdapter
         var (resultCode, bytes) = await RpcServiceInvoker.InvokeAsync(rpcService, rpcContext, request);
         var rsp = RpcServiceInvoker.BuildCrpcResponse(request, resultCode, bytes);
         rsp.encryptAndCompress(512, true, true);
-        var allocator = ctx.Allocator;
         var size = rsp.getSize();
         Console.WriteLine($"*******************rsp size: {size}");
         Console.WriteLine($"*******************channel: {ctx.Channel}");
-        var frame = allocator.DirectBuffer(rsp.getSize());
-        rsp.toFrame(frame, 16);
-        _ = ctx.WriteAndFlushAsync(frame);
+        ChannelWriteUtil.WriteEncodedFrameFireAndForget(ctx, size, frame => rsp.toFrame(frame, 16));
     }
 
     private static void CompleteProcessMessage(CRpcTask.Awaiter awaiter)

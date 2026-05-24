@@ -163,10 +163,8 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         req.encryptAndCompress(512, true, true);
         var size = req.getSize();
         Console.WriteLine($"*******************rsp size: {size}");
-        var frame = currentChannel.Allocator.DirectBuffer(size);
         Console.WriteLine($"*********CallAsync send");
-        req.toFrame(frame, 16);
-        _ = currentChannel.WriteAndFlushAsync(frame);
+        ChannelWriteUtil.WriteEncodedFrameFireAndForget(currentChannel, size, frame => req.toFrame(frame, 16));
     }
 
     private PendingCall __AddResultTaskAsync(long reqSeq, int timeout, CRpcLoop loop)
