@@ -52,22 +52,14 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
             throw new InvalidOperationException("CRpcClient is already connected.");
         }
 
-        var source = new CRpcTaskCompletionSource<IChannel>(ownerLoop);
-        var dotnetTask = bootstrap.ConnectAsync(host, port);
-        if (dotnetTask.IsCompleted)
-        {
-            CompleteConnect(dotnetTask, source);
-        }
-        else
-        {
-            dotnetTask.ContinueWith(
-                completedTask => ownerLoop.Post(() => CompleteConnect(completedTask, source)),
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
-        }
+        return ConnectInternalAsync(host, port);
+    }
 
-        return source.Task;
+    private async CRpcTask<IChannel> ConnectInternalAsync(string host, int port)
+    {
+        var connectedChannel = await CRpcTask.FromTask(bootstrap.ConnectAsync(host, port), ownerLoop);
+        channel = connectedChannel;
+        return connectedChannel;
     }
 
     /// <summary>
@@ -161,38 +153,6 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
             pendingCall.TimeoutTimer?.Cancel();
             pendingCall.Source.TrySetResult(message);
         }
-    }
-
-    private void CompleteConnect(Task<IChannel> task, CRpcTaskCompletionSource<IChannel> source)
-    {
-        if (task.IsCanceled)
-        {
-            source.TrySetCanceled();
-            return;
-        }
-
-        if (task.IsFaulted)
-        {
-            Exception exception;
-            if (task.Exception?.InnerException is not null)
-            {
-                exception = task.Exception.InnerException;
-            }
-            else if (task.Exception is not null)
-            {
-                exception = task.Exception;
-            }
-            else
-            {
-                exception = new InvalidOperationException("Connect failed.");
-            }
-
-            source.TrySetException(exception);
-            return;
-        }
-
-        channel = task.Result;
-        source.TrySetResult(task.Result);
     }
 
     private void __Send(IChannel currentChannel, long reqSeq, ushort serviceId, ushort methodId, byte[] bytes)

@@ -220,6 +220,6 @@ public sealed class HttpServerHandler : SimpleChannelInboundHandler<IFullHttpReq
     public override void ExceptionCaught(IChannelHandlerContext context, Exception exception)
     {
         Console.Error.WriteLine($"HttpServerHandler exception: {exception}");
-        context.CloseAsync();
+        _ = context.CloseAsync();
     }
 }

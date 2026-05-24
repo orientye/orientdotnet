@@ -30,11 +30,5 @@ public class NacosTest
             });
 
         #endregion
-
-        #region test
-
-        await CRPC.Test.DoTest();
-
-        #endregion
     }
 }

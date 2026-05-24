@@ -38,14 +38,14 @@ namespace CRpc.Rpc.CRpc.Codec
             catch (Exception e)
             {
                 Console.WriteLine("{0}解码异常, 断开连接: {1}", channel, e.Message);
-                context.CloseAsync();
+                _ = context.CloseAsync();
                 return null;
             }
             
             int identity = frame.GetInt(frame.ReaderIndex);
             if (identity != CRpcMessage.MAGIC_NUM) {
                 Console.WriteLine("{0}无效的数据包标识[{1}], 断开连接...", channel, identity);
-                context.CloseAsync();
+                _ = context.CloseAsync();
                 ReferenceCountUtil.Release(frame);
                 return null;
             }
@@ -58,7 +58,7 @@ namespace CRpc.Rpc.CRpc.Codec
             catch (Exception e)
             {
                 Console.WriteLine("{0}解码异常{1}, 断开连接...", channel, e);
-                context.CloseAsync();
+                _ = context.CloseAsync();
                 return null;
             }
             finally
@@ -79,7 +79,7 @@ namespace CRpc.Rpc.CRpc.Codec
                 if (checksum != hashsum)
                 {
                     Console.WriteLine("{0}消息校验码{1}与实际{2}不符, 断开连接...", ctx.Channel, checksum, hashsum);
-                    ctx.CloseAsync();
+                    _ = ctx.CloseAsync();
                     throw new Exception("decodeMessage checksum failed");
                 }
             }
