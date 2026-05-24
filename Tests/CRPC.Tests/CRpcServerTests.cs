@@ -7,31 +7,70 @@ namespace CRPC.Tests;
 public class CRpcServerTests : CrpcTestBase
 {
     [Fact]
-    public async Task CloseStopsRunningServer()
+    public void StartAsyncThrowsWhenNoCRpcLoopIsBound()
     {
         var loop = new CRpcLoop();
         var server = new CRpcServer(loop);
-        var runTask = server.RunAsync(IPAddress.Loopback, port: 0, registerConsoleCancelHandler: false);
 
-        await WaitUntilAsync(() => server.IsRunning, TimeSpan.FromSeconds(2));
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+        {
+            CRpcTask _ = server.StartAsync();
+        });
 
-        server.Close();
-
-        var completedTask = await Task.WhenAny(runTask, Task.Delay(TimeSpan.FromSeconds(2)));
-
-        Assert.Same(runTask, completedTask);
-        await runTask;
-        Assert.False(server.IsRunning);
+        Assert.Contains("CRpcLoop", exception.Message);
     }
 
-    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    [Fact]
+    public void HttpStartAsyncThrowsWhenNoCRpcLoopIsBound()
     {
-        var deadline = DateTime.UtcNow + timeout;
-        while (!condition() && DateTime.UtcNow < deadline)
-        {
-            await Task.Delay(10);
-        }
+        var loop = new CRpcLoop();
+        var server = new HttpServer(loop);
 
-        Assert.True(condition());
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+        {
+            CRpcTask _ = server.StartAsync();
+        });
+
+        Assert.Contains("CRpcLoop", exception.Message);
+    }
+
+    [Fact]
+    public void StartStopRunsOnOwnerLoop()
+    {
+        var loop = new CRpcLoop();
+        var server = new CRpcServer(loop, new CRpcServerOptions
+        {
+            Address = IPAddress.Loopback,
+            Port = 0
+        });
+
+        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            await server.StartAsync();
+            Assert.True(server.IsRunning);
+
+            await server.StopAsync();
+            Assert.False(server.IsRunning);
+        });
+    }
+
+    [Fact]
+    public void HttpStartStopRunsOnOwnerLoop()
+    {
+        var loop = new CRpcLoop();
+        var server = new HttpServer(loop, new HttpServerOptions
+        {
+            Address = IPAddress.Loopback,
+            Port = 0
+        });
+
+        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            await server.StartAsync();
+            Assert.True(server.IsRunning);
+
+            await server.StopAsync();
+            Assert.False(server.IsRunning);
+        });
     }
 }

@@ -13,14 +13,15 @@ Console.CancelKeyPress += (_, e) =>
     cts.Cancel();
 };
 
-loop.Post(() => loop.RegisterService(new HelloworldServiceImpl()));
-loop.Tick();
-
 var crpcServer = new CRpcServer(loop, new CRpcServerOptions { Port = 7999 });
 var httpServer = new HttpServer(loop, new HttpServerOptions { Port = 8080 });
 
-await crpcServer.StartAsync(cts.Token);
-await httpServer.StartAsync(cts.Token);
+CRpcLoopRunner.RunUntilComplete(loop, async () =>
+{
+    loop.RegisterService(new HelloworldServiceImpl());
+    await crpcServer.StartAsync(cts.Token);
+    await httpServer.StartAsync(cts.Token);
+});
 
 Console.WriteLine("CRpc listening on 7999, HTTP JSON on 8080");
 Console.WriteLine("POST http://127.0.0.1:8080/1000/1 with application/json body");
@@ -31,6 +32,9 @@ try
 }
 finally
 {
-    await httpServer.StopAsync();
-    await crpcServer.StopAsync();
+    CRpcLoopRunner.RunUntilComplete(loop, async () =>
+    {
+        await httpServer.StopAsync();
+        await crpcServer.StopAsync();
+    });
 }

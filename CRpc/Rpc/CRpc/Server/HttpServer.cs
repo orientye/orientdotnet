@@ -16,6 +16,7 @@ public sealed class HttpServer
     private IChannel? bootstrapChannel;
     private IEventLoopGroup? group;
     private IEventLoopGroup? workGroup;
+    private int isRunning;
 
     public HttpServer(CRpcLoop loop, HttpServerOptions? options = null)
     {
@@ -26,9 +27,21 @@ public sealed class HttpServer
 
     public CRpcLoop Loop => loop;
 
-    public bool IsRunning => bootstrapChannel is not null;
+    public bool IsRunning => Volatile.Read(ref isRunning) == 1;
 
-    public async Task StartAsync(CancellationToken cancellationToken = default)
+    public CRpcTask StartAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureOwnerLoopThread();
+        return StartInternalAsync(cancellationToken);
+    }
+
+    public CRpcTask StopAsync()
+    {
+        EnsureOwnerLoopThread();
+        return StopInternalAsync();
+    }
+
+    private async CRpcTask StartInternalAsync(CancellationToken cancellationToken)
     {
         if (bootstrapChannel is not null)
         {
@@ -51,27 +64,58 @@ public sealed class HttpServer
             pipeline.AddLast(new HttpServerHandler(loop));
         }));
 
-        bootstrapChannel = await bootstrap.BindAsync(options.Address, options.Port).ConfigureAwait(false);
+        try
+        {
+            bootstrapChannel = await CRpcTask.FromTask(
+                bootstrap.BindAsync(options.Address, options.Port),
+                loop);
+            Volatile.Write(ref isRunning, 1);
+        }
+        catch
+        {
+            await StopInternalAsync();
+            throw;
+        }
     }
 
-    public async Task StopAsync()
+    private async CRpcTask StopInternalAsync()
     {
-        if (bootstrapChannel is not null)
+        var currentBootstrapChannel = bootstrapChannel;
+        var currentWorkGroup = workGroup;
+        var currentGroup = group;
+
+        bootstrapChannel = null;
+        workGroup = null;
+        group = null;
+        Volatile.Write(ref isRunning, 0);
+
+        if (currentBootstrapChannel is not null)
         {
-            await bootstrapChannel.CloseAsync().ConfigureAwait(false);
-            bootstrapChannel = null;
+            await CRpcTask.FromTask(currentBootstrapChannel.CloseAsync(), loop);
         }
 
-        if (workGroup is not null)
+        if (currentWorkGroup is not null)
         {
-            await workGroup.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
-            workGroup = null;
+            await CRpcTask.FromTask(
+                currentWorkGroup.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)),
+                loop);
         }
 
-        if (group is not null)
+        if (currentGroup is not null)
         {
-            await group.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)).ConfigureAwait(false);
-            group = null;
+            await CRpcTask.FromTask(
+                currentGroup.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)),
+                loop);
+        }
+    }
+
+    private void EnsureOwnerLoopThread()
+    {
+        var currentLoop = CRpcLoop.Current
+            ?? throw new InvalidOperationException("HttpServer lifecycle operations must be called from a bound CRpcLoop thread.");
+        if (!ReferenceEquals(loop, currentLoop))
+        {
+            throw new InvalidOperationException("HttpServer lifecycle operations must be called on the server's owner CRpcLoop thread.");
         }
     }
 }

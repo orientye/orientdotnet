@@ -88,8 +88,8 @@ CRpc 想要的核心模型是 **单线程业务循环 + 异步状态机**：
 | 循环驱动（一次性） | `CRpcLoopRunner` | 给主线程 / 同步入口用：`Tick + WaitForWorkOrTimer` 直到一个 `CRpcTask` 完成。 |
 | 循环驱动（常驻） | `CRpcLoopHost` / `CRpcServerLoop` | 服务端常驻：`Tick + WaitForWorkOrTimer` 直到 cancel；推荐入口为 `CRpcLoopHost.RunUntilCancelled`。 |
 | RPC 异步原语 | `CRpcTask` / `CRpcTask<T>` / `CRpcTaskCompletionSource<T>` / `CRpcAsyncMethodBuilder*` | 自定义 await 状态机；continuation 通过 `loop.Post` 回到 loop 线程恢复。 |
-| 服务端 | `CRpcServer` | 协议端点：持有 `Loop` 引用；`StartAsync`/`StopAsync` 管理 DotNetty 监听；不持有 service 注册表。 |
-| HTTP 端点 | `HttpServer` | 与 `CRpcServer` 相同模式：持 `Loop`，HTTP/JSON 入站后 `Post` 到 loop，经 `RpcServiceInvoker` 调 service。 |
+| 服务端 | `CRpcServer` | 协议端点：持有 `Loop` 引用；`StartAsync`/`StopAsync` 返回 `CRpcTask`，在 owner loop 上管理 DotNetty 监听；不持有 service 注册表。 |
+| HTTP 端点 | `HttpServer` | 与 `CRpcServer` 相同模式：生命周期在 owner loop 上，HTTP/JSON 入站后 `Post` 到 loop，经 `RpcServiceInvoker` 调 service。 |
 | 入站 dispatch | `RpcServiceInvoker` | loop 线程上统一 CRpc/HTTP 的 `OnMessageAsync` 调用与响应构造。 |
 | 服务端 IO 处理器 | `CRpcServerHandler` | DotNetty `ChannelHandlerAdapter`；`ChannelRead` → `server.Loop.Post` → `TryGetService`。不持有业务状态。 |
 | 客户端 | `CRpcClient` | 持有 `pending calls` 表 + DotNetty `Bootstrap`；发起 `CallAsync`，`timeout > 0` 时在 **owner loop timer** 上注册；response/timeout 竞争语义见 [§9.5.7](#957-rpc-timeout-语义)。 |
@@ -416,8 +416,9 @@ public sealed class CRpcServer : IRpcServer
 ```
 
 - `Loop` 在构造时**必须显式传入**；`CRpcServer` **不**持有 service 注册表。
-- **推荐启动形态**（HelloWorld）：`loop.RegisterService` → `crpcServer.StartAsync` + `httpServer.StartAsync` → `CRpcLoopHost.RunUntilCancelled` → `StopAsync`。
-- **遗留路径**：`RunAsync` 内嵌 `CRpcLoopHost.RunUntilCancelled`，结束时会对 loop 调用 `ClearRegisteredServices`；新代码应避免依赖该行为。
+- **推荐启动形态**（HelloWorld）：在 `CRpcLoopRunner.RunUntilComplete` 中 `loop.RegisterService` → `await crpcServer.StartAsync` + `await httpServer.StartAsync`，再 `CRpcLoopHost.RunUntilCancelled` 常驻驱动，退出时回到 loop 内 `await StopAsync`。
+- `StartAsync` / `StopAsync` 返回 `CRpcTask`，必须在 owner loop 线程调用；DotNetty `BindAsync` / `CloseAsync` / `ShutdownGracefullyAsync` 经 `CRpcTask.FromTask(..., Loop)` 回到 loop 后再修改端点状态。
+- `RunAsync` 也返回 `CRpcTask`，内部完成启动后嵌入 `CRpcLoopHost.RunUntilCancelled`；它保留“退出时 `ClearRegisteredServices`”的 host-helper 语义。
 - DotNetty 仍硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）；见 [§8.1](#81-io-线程组与业务-loop-的拓扑写死)。
 
 ```18:30:CRpc/Rpc/CRpc/Server/CRpcServerHandler.cs
@@ -630,7 +631,13 @@ sequenceDiagram
 - 生命周期 API（`ConnectAsync` / `CloseAsync` / `ShutdownIoAsync`）已统一为 `CRpcTask`；DotNetty `.NET Task` 仅作 IO interop，completion 必须回到 owner loop。
 - 推荐 teardown：`await reference.CloseAsync()` → `await reference.ShutdownIoAsync()`；`IAsyncDisposable.DisposeAsync` 保留兼容，但不适合在 loop 内 `await using` 等待异步 close。
 
-#### 8.4 `CRpcLoopRunner.RunUntilComplete` 的使用方式
+#### 8.4 Server / HTTP endpoint 生命周期绑定
+
+- `CRpcServer.StartAsync` / `StopAsync` 与 `HttpServer.StartAsync` / `StopAsync` 已统一为 `CRpcTask`，必须在 owner loop 线程调用。
+- `bootstrapChannel`、IO groups、运行状态的写入收束到 owner loop；对外 `IsRunning` 是 `Volatile` 快照。
+- `CRpcServer.RunAsync` 仅作为 host helper 保留；更明确的组合仍是 `StartAsync` + `CRpcLoopHost.RunUntilCancelled` + `StopAsync`。
+
+#### 8.5 `CRpcLoopRunner.RunUntilComplete` 的使用方式
 
 `HelloWorld/Client/Program.cs` 里（connect / call / close 均在 loop 内）：
 
@@ -661,7 +668,7 @@ CRpcLoopRunner.RunUntilComplete(loop, async () =>
 
 - 已提供 `CRpcReference` 与 `CRpcClientLoopHost`；`RunUntilComplete` 适合 main 线程一次性脚本，常驻客户端用 `CRpcClientLoopHost.RunUntilCancelled`。
 
-#### 8.5 业务回调里 `Console.WriteLine` 当作可观测性
+#### 8.6 业务回调里 `Console.WriteLine` 当作可观测性
 
 - `CRpcServerHandler` / `CRpcClientHandler` / `CRpcClient.__Send` 有大量 `Console.WriteLine($"*******…");`。
 - 这是临时调试，**不是架构**。后续应该走 `Microsoft.Extensions.Logging` 之类的抽象，并能区分 IO 线程 / loop 线程的来源。
@@ -733,12 +740,17 @@ public static class CRpcLoopHost {
 // Server / Client 显式注入 loop
 public sealed class CRpcServer {
     public CRpcServer(CRpcLoop loop, CRpcServerOptions opts); // 不再默认 Main
+    public CRpcTask StartAsync(CancellationToken ct = default);
+    public CRpcTask StopAsync();
+    public CRpcTask RunAsync(IPAddress address, int port, bool registerConsoleCancelHandler = true);
     public Func<CRpcMessage, CRpcLoop>? RouteLoop;            // 可选：按消息路由到不同 loop
 }
 
 // 其它协议端点同样只负责协议适配，然后投递到 loop
 public sealed class HttpServer {
     public HttpServer(CRpcLoop loop, HttpServerOptions opts);
+    public CRpcTask StartAsync(CancellationToken ct = default);
+    public CRpcTask StopAsync();
 }
 public sealed class CRpcClient {
     public CRpcClient(CRpcLoop loop, CRpcClientOptions opts); // 显式 loop
@@ -780,13 +792,13 @@ CRpcClientLoopHost.RunUntilCancelled(loop, cancellationToken);
 
 #### 9.4 关键不变量（重申）
 
-1. 业务状态 / pending 调用表 / service 注册表 / **client `channel` 连接状态**，**只在所属 loop 线程访问**。
+1. 业务状态 / pending 调用表 / service 注册表 / **client `channel` 连接状态** / endpoint 生命周期状态，**只在所属 loop 线程访问**。
 2. `TrySetResult / TrySetException / TrySetCanceled` **只在所属 loop 线程调用**。
 3. IO 线程不调业务逻辑，只做协议解析、路由选择和 `Post`。
 4. `WriteAndFlushAsync` 不 await 完成（除非要影响业务状态，那就 `Post` 回来）。
 5. `Task.Run` / `System.Threading.Timer` / 线程池续延 在 CRpc 实现里**禁用**；只允许显式 interop 后 `Post` 回 loop。
 6. **Timer 永远是 loop-owned**：`ScheduleDelay` / `ScheduleAt` 只能在 owner loop 线程调用；timer callback 只在 owner loop 线程执行；不做全局 timer 线程直接完成 RPC timeout。外部线程若要安排延迟逻辑，先 `loop.Post(...)` 进入 owner loop 再注册 timer。
-7. **Client 生命周期 CRpc 化**：`ConnectAsync` / `CloseAsync` / `ShutdownIoAsync` 返回 `CRpcTask`；DotNetty `.NET Task` 只做 IO interop，状态变更 completion 回到 owner loop。
+7. **Endpoint 生命周期 CRpc 化**：`CRpcServer` / `HttpServer` 的 `StartAsync` / `StopAsync`，以及 `CRpcClient` 的 `ConnectAsync` / `CloseAsync` / `ShutdownIoAsync` 返回 `CRpcTask`；DotNetty `.NET Task` 只做 IO interop，状态变更 completion 回到 owner loop。
 
 #### 9.5 CRpcLoop 调度、Timer 与 RPC Timeout
 
@@ -979,6 +991,6 @@ while (!cancellationToken.IsCancellationRequested)
 3. **多端口 / 多协议示例变体**：HelloWorld 已演示同一 loop 上 CRpc 7999 + HTTP 8080；补充第二个 CRpc 端口、管理端口等变体示例。
 4. **多 loop 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 loop"的 demo，覆盖跨 loop 调用 / 路由 / 关闭顺序。
 5. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[loop|io|tp]` 来源。
-6. **清理遗留生命周期**：`CRpcServer.RunAsync` 结束时不应隐式 `ClearRegisteredServices`；推广 `StartAsync` + `CRpcLoopHost` + `StopAsync` 模式。
+6. **清理 host helper 语义**：评估是否保留 `CRpcServer.RunAsync` 的“结束时隐式 `ClearRegisteredServices`”；常规端点生命周期使用 `CRpcTask StartAsync` + `CRpcLoopHost` + `CRpcTask StopAsync` 模式。
 
 ---
