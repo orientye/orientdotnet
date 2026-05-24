@@ -3,6 +3,7 @@ namespace CRpc.Async;
 internal sealed class CRpcLoopTimer
 {
     private readonly Action action;
+    private Action? removeFromScheduler;
 
     public CRpcLoopTimer(Action action)
     {
@@ -11,9 +12,28 @@ internal sealed class CRpcLoopTimer
 
     public bool IsCanceled { get; private set; }
 
+    internal int HeapIndex { get; set; } = -1;
+
+    internal void BindToScheduler(Action removeFromScheduler)
+    {
+        this.removeFromScheduler = removeFromScheduler;
+    }
+
+    internal void UnbindFromScheduler()
+    {
+        removeFromScheduler = null;
+    }
+
     public void Cancel()
     {
+        if (IsCanceled)
+        {
+            return;
+        }
+
         IsCanceled = true;
+        removeFromScheduler?.Invoke();
+        removeFromScheduler = null;
     }
 
     public void Invoke()

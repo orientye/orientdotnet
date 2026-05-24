@@ -4,13 +4,20 @@ namespace CRpc.Async;
 
 internal sealed class MinHeapTimerScheduler : ICRpcLoopTimerScheduler
 {
-    private readonly PriorityQueue<ScheduledTimer, long> timers = new();
+    private readonly List<HeapEntry> heap = new();
+
+    internal int TimerCount => heap.Count;
 
     public CRpcLoopTimer ScheduleAt(long dueTimestamp, Action callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
         var timer = new CRpcLoopTimer(callback);
-        timers.Enqueue(new ScheduledTimer(timer), dueTimestamp);
+        timer.BindToScheduler(() => RemoveTimer(timer));
+
+        var index = heap.Count;
+        timer.HeapIndex = index;
+        heap.Add(new HeapEntry(timer, dueTimestamp));
+        SiftUp(index);
         return timer;
     }
 
@@ -18,12 +25,12 @@ internal sealed class MinHeapTimerScheduler : ICRpcLoopTimerScheduler
     {
         var ran = 0;
         while (ran < maxTimers
-               && timers.TryPeek(out var scheduledTimer, out var dueTimestamp)
-               && dueTimestamp <= now)
+               && heap.Count > 0
+               && heap[0].DueTimestamp <= now)
         {
-            timers.Dequeue();
+            var entry = PopMin();
             ran++;
-            scheduledTimer.Timer.Invoke();
+            entry.Timer.Invoke();
         }
 
         return ran;
@@ -31,11 +38,12 @@ internal sealed class MinHeapTimerScheduler : ICRpcLoopTimerScheduler
 
     public TimeSpan? GetDelayUntilNextWakeup(long now)
     {
-        if (!timers.TryPeek(out _, out var dueTimestamp))
+        if (heap.Count == 0)
         {
             return null;
         }
 
+        var dueTimestamp = heap[0].DueTimestamp;
         if (dueTimestamp <= now)
         {
             return TimeSpan.Zero;
@@ -45,5 +53,112 @@ internal sealed class MinHeapTimerScheduler : ICRpcLoopTimerScheduler
         return TimeSpan.FromSeconds((double)ticks / Stopwatch.Frequency);
     }
 
-    private readonly record struct ScheduledTimer(CRpcLoopTimer Timer);
+    private HeapEntry PopMin()
+    {
+        var entry = heap[0];
+        RemoveAtIndex(0);
+        return entry;
+    }
+
+    private void RemoveTimer(CRpcLoopTimer timer)
+    {
+        var index = timer.HeapIndex;
+        if (index < 0)
+        {
+            return;
+        }
+
+        RemoveAtIndex(index);
+    }
+
+    private void RemoveAtIndex(int index)
+    {
+        var timer = heap[index].Timer;
+        var lastIndex = heap.Count - 1;
+        if (index != lastIndex)
+        {
+            heap[index] = heap[lastIndex];
+            heap[index].Timer.HeapIndex = index;
+        }
+
+        heap.RemoveAt(lastIndex);
+        timer.HeapIndex = -1;
+        timer.UnbindFromScheduler();
+
+        if (index < heap.Count)
+        {
+            var parent = (index - 1) / 2;
+            if (index > 0 && heap[index].DueTimestamp < heap[parent].DueTimestamp)
+            {
+                SiftUp(index);
+            }
+            else
+            {
+                SiftDown(index);
+            }
+        }
+    }
+
+    private void SiftUp(int index)
+    {
+        while (index > 0)
+        {
+            var parent = (index - 1) / 2;
+            if (heap[index].DueTimestamp >= heap[parent].DueTimestamp)
+            {
+                break;
+            }
+
+            Swap(index, parent);
+            index = parent;
+        }
+    }
+
+    private void SiftDown(int index)
+    {
+        while (true)
+        {
+            var left = index * 2 + 1;
+            var right = left + 1;
+            var smallest = index;
+
+            if (left < heap.Count && heap[left].DueTimestamp < heap[smallest].DueTimestamp)
+            {
+                smallest = left;
+            }
+
+            if (right < heap.Count && heap[right].DueTimestamp < heap[smallest].DueTimestamp)
+            {
+                smallest = right;
+            }
+
+            if (smallest == index)
+            {
+                break;
+            }
+
+            Swap(index, smallest);
+            index = smallest;
+        }
+    }
+
+    private void Swap(int a, int b)
+    {
+        (heap[a], heap[b]) = (heap[b], heap[a]);
+        heap[a].Timer.HeapIndex = a;
+        heap[b].Timer.HeapIndex = b;
+    }
+
+    private sealed class HeapEntry
+    {
+        public HeapEntry(CRpcLoopTimer timer, long dueTimestamp)
+        {
+            Timer = timer;
+            DueTimestamp = dueTimestamp;
+        }
+
+        public CRpcLoopTimer Timer { get; }
+
+        public long DueTimestamp { get; }
+    }
 }
