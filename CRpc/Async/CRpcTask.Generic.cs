@@ -26,6 +26,10 @@ public readonly struct CRpcTask<T>
             this.source = source;
         }
 
+        /// <summary>
+        /// True when the task completed and the current thread is the task's owner <see cref="CRpcLoop"/> thread.
+        /// On other threads this is always false, even if the task has already completed.
+        /// </summary>
         public bool IsCompleted => source is not null && source.IsCompletedOnCurrentThread;
 
         public void OnCompleted(Action continuation)

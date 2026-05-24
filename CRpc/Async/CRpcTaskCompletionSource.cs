@@ -19,6 +19,10 @@ public sealed class CRpcTaskCompletionSource<T>
 
     internal CRpcTaskStatus Status => status;
 
+    /// <summary>
+    /// True when the task has completed and the current thread is the owner <see cref="CRpcLoop"/> thread.
+    /// On other threads this is always false, even if the task has already completed.
+    /// </summary>
     internal bool IsCompletedOnCurrentThread => Status != CRpcTaskStatus.Pending && loop.IsInLoopThread;
 
     public bool TrySetResult(T result)
@@ -51,7 +55,7 @@ public sealed class CRpcTaskCompletionSource<T>
     internal void OnCompleted(Action continuation)
     {
         ArgumentNullException.ThrowIfNull(continuation);
-        EnsureLoopThread();
+        EnsureAwaitOnLoopThread();
 
         if (status == CRpcTaskStatus.Pending)
         {
@@ -89,6 +93,14 @@ public sealed class CRpcTaskCompletionSource<T>
         if (!loop.IsInLoopThread)
         {
             throw new InvalidOperationException("CRpcTaskCompletionSource must be used from its CRpcLoop loop thread.");
+        }
+    }
+
+    private void EnsureAwaitOnLoopThread()
+    {
+        if (!loop.IsInLoopThread)
+        {
+            throw new InvalidOperationException("CRpcTask must be awaited on its owner CRpcLoop thread.");
         }
     }
 }

@@ -22,6 +22,42 @@ public class CRpcLoopTests : CrpcTestBase
     }
 
     [Fact]
+    public void AwaitOnWrongThreadThrowsWithAwaitSpecificMessage()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+
+        var source = new CRpcTaskCompletionSource<int>(loop);
+        source.TrySetResult(42);
+        var task = source.Task;
+
+        Exception? exception = null;
+        var isCompletedOnWrongThread = false;
+
+        var worker = new Thread(() =>
+        {
+            try
+            {
+                var awaiter = task.GetAwaiter();
+                isCompletedOnWrongThread = awaiter.IsCompleted;
+                awaiter.OnCompleted(() => { });
+            }
+            catch (Exception caughtException)
+            {
+                exception = caughtException;
+            }
+        });
+
+        worker.Start();
+        worker.Join();
+
+        Assert.False(isCompletedOnWrongThread);
+        Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("awaited", exception!.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("CRpcLoop", exception.Message);
+    }
+
+    [Fact]
     public void CompletionSourceRejectsCompletionFromNonLoopThread()
     {
         var loop = new CRpcLoop();
