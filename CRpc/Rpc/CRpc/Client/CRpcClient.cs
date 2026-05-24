@@ -77,6 +77,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         }
 
         channel = null;
+        FailPendingCalls(new ConnectionClosedException("CRpcClient channel was closed."));
         return CRpcTask.FromTask(currentChannel.CloseAsync(), ownerLoop);
     }
 
@@ -127,12 +128,20 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     /// <summary>
     /// Sends an RPC request and returns a task that completes when the response arrives or the call times out.
-    /// When <paramref name="timeout"/> is greater than zero, a timer is registered on the owner loop.
+    /// <paramref name="timeout"/> must be a positive value; a timer is registered on the owner loop.
     /// Must be called on the bound owner <see cref="CRpcLoop"/> thread while the loop is driven.
     /// </summary>
     public CRpcTask<CRpcMessage> CallAsync(ushort serviceId, ushort methodId, byte[] body, int timeout)
     {
         EnsureOwnerLoopThread();
+
+        if (timeout <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(timeout),
+                timeout,
+                "CRpcClient.CallAsync requires an explicit positive timeout.");
+        }
 
         var currentChannel = channel
             ?? throw new InvalidOperationException("CRpcClient is not connected.");
@@ -148,6 +157,19 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     internal void OnReceiveResponse(CRpcMessage message)
     {
         ownerLoop.Post(() => CompleteReceiveResponse(message));
+    }
+
+    internal void OnChannelInactive(IChannel inactiveChannel)
+    {
+        ownerLoop.Post(() =>
+        {
+            if (ReferenceEquals(channel, inactiveChannel))
+            {
+                channel = null;
+            }
+
+            FailPendingCalls(new ConnectionClosedException("CRpcClient channel became inactive."));
+        });
     }
 
     private void CompleteReceiveResponse(CRpcMessage message)
@@ -175,22 +197,36 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     private PendingCall __AddResultTaskAsync(long reqSeq, int timeout, CRpcLoop loop)
     {
         var pendingCall = new PendingCall(loop, new CRpcTaskCompletionSource<CRpcMessage>(loop));
-        if (timeout > 0)
-        {
-            pendingCall.TimeoutTimer = loop.ScheduleDelay(
-                timeout,
-                () =>
+        pendingCall.TimeoutTimer = loop.ScheduleDelay(
+            timeout,
+            () =>
+            {
+                if (results.Remove(reqSeq, out var removed))
                 {
-                    if (results.Remove(reqSeq, out var removed))
-                    {
-                        Console.WriteLine($"*********CallAsync timeout: {timeout}");
-                        removed.Source.TrySetException(new TimeoutException());
-                    }
-                });
-        }
+                    Console.WriteLine($"*********CallAsync timeout: {timeout}");
+                    removed.Source.TrySetException(new TimeoutException());
+                }
+            });
 
         results[reqSeq] = pendingCall;
         return pendingCall;
+    }
+
+    private void FailPendingCalls(Exception exception)
+    {
+        if (results.Count == 0)
+        {
+            return;
+        }
+
+        var pendingCalls = results.Values.ToArray();
+        results.Clear();
+
+        foreach (var pendingCall in pendingCalls)
+        {
+            pendingCall.TimeoutTimer?.Cancel();
+            pendingCall.Source.TrySetException(exception);
+        }
     }
 
     private void EnsureOwnerLoopThread()

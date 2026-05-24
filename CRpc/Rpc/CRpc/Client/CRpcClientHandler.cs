@@ -26,6 +26,12 @@ public class CRpcClientHandler : ChannelHandlerAdapter
         ctx.FireChannelRead(msg);
     }
 
+    public override void ChannelInactive(IChannelHandlerContext context)
+    {
+        client.OnChannelInactive(context.Channel);
+        context.FireChannelInactive();
+    }
+
     public override void ExceptionCaught(IChannelHandlerContext context, Exception exception)
     {
         Console.WriteLine($"******************exception={exception}");

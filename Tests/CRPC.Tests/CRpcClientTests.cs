@@ -21,7 +21,7 @@ public class CRpcClientTests : CrpcTestBase
 
         var client = new CRpcClient(loop);
         var exception = Assert.Throws<InvalidOperationException>(() =>
-            client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 0));
+            client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 1));
 
         Assert.Contains("not connected", exception.Message);
     }
@@ -53,9 +53,24 @@ public class CRpcClientTests : CrpcTestBase
 
         var client = new CRpcClient(ownerLoop);
         var exception = Assert.Throws<InvalidOperationException>(() =>
-            client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 0));
+            client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 1));
 
         Assert.Contains("owner CRpcLoop", exception.Message);
+    }
+
+    [Fact]
+    public void CallAsyncThrowsWhenTimeoutIsNotPositive()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+
+        var client = new CRpcClient(loop);
+        SetClientChannel(client, new EmbeddedChannel());
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 0));
+
+        Assert.Equal("timeout", exception.ParamName);
     }
 
     [Fact]
@@ -79,7 +94,7 @@ public class CRpcClientTests : CrpcTestBase
 
         var client = new CRpcClient(loop);
         SetClientChannel(client, new EmbeddedChannel());
-        var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 0);
+        var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
         var awaiter = task.GetAwaiter();
 
         int? continuationThreadId = null;
@@ -119,8 +134,8 @@ public class CRpcClientTests : CrpcTestBase
 
         var client = new CRpcClient(loop);
         SetClientChannel(client, new EmbeddedChannel());
-        var firstTask = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 0);
-        var secondTask = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 0);
+        var firstTask = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
+        var secondTask = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
         var firstAwaiter = firstTask.GetAwaiter();
         var secondAwaiter = secondTask.GetAwaiter();
 
@@ -215,6 +230,63 @@ public class CRpcClientTests : CrpcTestBase
 
         Assert.True(awaiter.IsCompleted);
         Assert.Throws<TimeoutException>(() => awaiter.GetResult());
+    }
+
+    [Fact]
+    public void CloseAsyncFailsPendingCalls()
+    {
+        var loop = new CRpcLoop();
+        var client = new CRpcClient(loop);
+        var channel = new EmbeddedChannel();
+        ConnectionClosedException? callException = null;
+
+        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            SetClientChannel(client, channel);
+            var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
+
+            await client.CloseAsync();
+
+            try
+            {
+                await task;
+            }
+            catch (ConnectionClosedException exception)
+            {
+                callException = exception;
+            }
+        });
+
+        Assert.NotNull(callException);
+        Assert.False(channel.Open);
+    }
+
+    [Fact]
+    public void ChannelInactiveFailsPendingCalls()
+    {
+        var loop = new CRpcLoop();
+        var client = new CRpcClient(loop);
+        ConnectionClosedException? callException = null;
+
+        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            var channel = new EmbeddedChannel(new CRpcClientHandler(client));
+            SetClientChannel(client, channel);
+            var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
+
+            channel.Pipeline.FireChannelInactive();
+
+            try
+            {
+                await task;
+            }
+            catch (ConnectionClosedException exception)
+            {
+                callException = exception;
+            }
+        });
+
+        Assert.NotNull(callException);
     }
 
     [Fact]
