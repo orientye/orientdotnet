@@ -1,5 +1,4 @@
 ﻿using CRpc.Async;
-using CRpc.Rpc.CRpc;
 using CRpc.Rpc.CRpc.Codec;
 using DotNetty.Handlers.Logging;
 using DotNetty.Handlers.Timeout;
@@ -42,6 +41,9 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
                 pipeline.AddLast(
                     "decoder",
                     new CRpcMessageDecoder(this.options.MaxFrameLength, this.options.HashLength));
+                pipeline.AddLast(
+                    "encoder",
+                    new CRpcMessageEncoder(this.options.HashLength, this.options.CompressThreshold));
                 pipeline.AddLast("handler", new CRpcClientHandler(this));
             }));
     }
@@ -227,14 +229,8 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         CRpcMessageHeader header = CRpcMessageHeader.valueOf(CRpcMessageState.STATE_NONE, 0, reqSeq, serviceId, methodId);
         header.addState(CRpcMessageState.NONE_ENCRYPT);
         CRpcMessage req = CRpcMessage.valueOf(header, bytes);
-        req.encryptAndCompress(options.CompressThreshold, true, true);
-        var size = req.getSize();
-        Console.WriteLine($"*******************rsp size: {size}");
         Console.WriteLine($"*********CallAsync send");
-        var writeTask = ChannelWriteUtil.WriteEncodedFrame(
-            currentChannel,
-            size,
-            frame => req.toFrame(frame, options.HashLength));
+        var writeTask = currentChannel.WriteAndFlushAsync(req);
         if (writeTask.IsCompleted)
         {
             writeTask.GetAwaiter().GetResult();

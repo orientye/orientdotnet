@@ -12,6 +12,20 @@ public class CRpcServerHandlerTests : CrpcTestBase
 {
     private static int nextServiceId = 1000;
 
+    private static EmbeddedChannel CreateHandlerChannel(CRpcServer server, params IChannelHandler[] extraHandlers)
+    {
+        var encoder = new CRpcMessageEncoder(
+            CRpcServerOptions.DefaultHashLength,
+            CRpcServerOptions.DefaultCompressThreshold);
+        var handlers = new List<IChannelHandler>(extraHandlers.Length + 2)
+        {
+            encoder,
+            new CRpcServerHandler(server),
+        };
+        handlers.InsertRange(0, extraHandlers);
+        return new EmbeddedChannel(handlers.ToArray());
+    }
+
     [Fact]
     public void ChannelReadDispatchesServiceWorkToCRpcLoop()
     {
@@ -19,7 +33,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
         var service = new RecordingService(NextServiceId());
         var server = new CRpcServer(loop);
         RegisterOnLoop(loop, service);
-        var channel = new EmbeddedChannel(new CRpcServerHandler(server));
+        var channel = CreateHandlerChannel(server);
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
 
@@ -49,7 +63,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
         using var firstDriver = new LoopTestDriver(firstLoop);
         firstDriver.Run(() => firstLoop.Post(() => firstLoop.RegisterService(firstService)));
 
-        var channel = new EmbeddedChannel(new CRpcServerHandler(firstServer));
+        var channel = CreateHandlerChannel(firstServer);
 
         Assert.False(channel.WriteInbound(CreateRequest(serviceId)));
 
@@ -69,7 +83,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
         var service = new RecordingService(NextServiceId());
         var server = new CRpcServer(loop);
         RegisterOnLoop(loop, service);
-        var channel = new EmbeddedChannel(new CRpcServerHandler(server));
+        var channel = CreateHandlerChannel(server);
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
         var loopThreadId = Environment.CurrentManagedThreadId;
@@ -88,7 +102,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
         var server = new CRpcServer(loop);
         RegisterOnLoop(loop, service);
         var delayedWrite = new DelayedWriteHandler();
-        var channel = new EmbeddedChannel(delayedWrite, new CRpcServerHandler(server));
+        var channel = CreateHandlerChannel(server, delayedWrite);
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
 
@@ -106,7 +120,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
         var service = new RecordingService(NextServiceId());
         var server = new CRpcServer(loop);
         RegisterOnLoop(loop, service);
-        var channel = new EmbeddedChannel(new CRpcServerHandler(server));
+        var channel = CreateHandlerChannel(server);
         var request = CreateRequest(service.GetServiceId());
 
         Assert.False(channel.WriteInbound(request));
@@ -122,7 +136,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
     {
         var exceptions = new ExceptionCaptureHandler();
         var server = new CRpcServer(new CRpcLoop());
-        var channel = new EmbeddedChannel(new CRpcServerHandler(server), exceptions);
+        var channel = CreateHandlerChannel(server, exceptions);
 
         channel.Pipeline.FireExceptionCaught(new SocketException(10054));
 
@@ -136,7 +150,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
         using var output = new StringWriter();
         var inactive = new InactiveCaptureHandler();
         var server = new CRpcServer(new CRpcLoop());
-        var channel = new EmbeddedChannel(new CRpcServerHandler(server), inactive);
+        var channel = CreateHandlerChannel(server, inactive);
 
         try
         {
@@ -158,7 +172,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
     {
         var exceptions = new ExceptionCaptureHandler();
         var server = new CRpcServer(new CRpcLoop());
-        var channel = new EmbeddedChannel(new CRpcServerHandler(server), exceptions);
+        var channel = CreateHandlerChannel(server, exceptions);
         var exception = new InvalidOperationException("boom");
 
         channel.Pipeline.FireExceptionCaught(exception);

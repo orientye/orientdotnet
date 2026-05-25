@@ -1,5 +1,6 @@
 ﻿using System.Net.Sockets;
 using CRpc.Async;
+using CRpc.Rpc;
 using CRpc.Rpc.CRpc.Codec;
 using DotNetty.Transport.Channels;
 
@@ -35,7 +36,7 @@ public class CRpcServerHandler : ChannelHandlerAdapter
 
     private void ProcessMessage(IRpcService rpcService, IChannelHandlerContext ctx, object msg)
     {
-        var task = ProcessMessageAsync(rpcService, ctx, msg, server.Options);
+        var task = ProcessMessageAsync(rpcService, ctx, msg);
         var awaiter = task.GetAwaiter();
         if (awaiter.IsCompleted)
         {
@@ -49,21 +50,13 @@ public class CRpcServerHandler : ChannelHandlerAdapter
     private static async CRpcTask ProcessMessageAsync(
         IRpcService rpcService,
         IChannelHandlerContext ctx,
-        object msg,
-        CRpcServerOptions options)
+        object msg)
     {
         var rpcContext = new CRpcContext();
         var request = (CRpcMessage)msg;
         var (resultCode, bytes) = await RpcServiceInvoker.InvokeAsync(rpcService, rpcContext, request);
         var rsp = RpcServiceInvoker.BuildCrpcResponse(request, resultCode, bytes);
-        rsp.encryptAndCompress(options.CompressThreshold, true, true);
-        var size = rsp.getSize();
-        Console.WriteLine($"*******************rsp size: {size}");
-        Console.WriteLine($"*******************channel: {ctx.Channel}");
-        ChannelWriteUtil.WriteEncodedFrameFireAndForget(
-            ctx,
-            size,
-            frame => rsp.toFrame(frame, options.HashLength));
+        ChannelWriteUtil.WriteAndFlushFireAndForget(ctx, rsp);
     }
 
     private static void CompleteProcessMessage(CRpcTask.Awaiter awaiter)

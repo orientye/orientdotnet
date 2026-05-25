@@ -136,6 +136,9 @@ public sealed class CRpcServer : IRpcServer
                 pipeline.AddLast(
                     "decoder",
                     new CRpcMessageDecoder(startOptions.MaxFrameLength, startOptions.HashLength));
+                pipeline.AddLast(
+                    "encoder",
+                    new CRpcMessageEncoder(startOptions.HashLength, startOptions.CompressThreshold));
                 pipeline.AddLast("handler", new CRpcServerHandler(this));
             }));
 
