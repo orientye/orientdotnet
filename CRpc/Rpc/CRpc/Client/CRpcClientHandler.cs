@@ -34,7 +34,7 @@ public class CRpcClientHandler : ChannelHandlerAdapter
 
     public override void ExceptionCaught(IChannelHandlerContext context, Exception exception)
     {
-        Console.WriteLine($"******************exception={exception}");
-        context.FireExceptionCaught(exception);
+        client.OnChannelException(context.Channel, exception);
+        context.CloseAsync();
     }
 }

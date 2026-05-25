@@ -170,14 +170,36 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     internal void OnChannelInactive(IChannel inactiveChannel)
     {
+        OnChannelLost(inactiveChannel, cause: null);
+    }
+
+    internal void OnChannelException(IChannel faultedChannel, Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        OnChannelLost(faultedChannel, exception);
+    }
+
+    private void OnChannelLost(IChannel lostChannel, Exception? cause)
+    {
         ownerLoop.Post(() =>
         {
-            if (ReferenceEquals(channel, inactiveChannel))
+            if (!ReferenceEquals(channel, lostChannel))
             {
-                channel = null;
+                return;
             }
 
-            FailPendingCalls(new ConnectionClosedException("CRpcClient channel became inactive."));
+            channel = null;
+
+            if (results.Count == 0)
+            {
+                return;
+            }
+
+            var exception = cause is null
+                ? new ConnectionClosedException("CRpcClient channel became inactive.")
+                : new ConnectionClosedException("CRpcClient channel encountered an exception.", cause);
+
+            FailPendingCalls(exception);
         });
     }
 

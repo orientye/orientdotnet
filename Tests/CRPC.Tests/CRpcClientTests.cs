@@ -290,6 +290,55 @@ public class CRpcClientTests : CrpcTestBase
     }
 
     [Fact]
+    public void ExceptionCaughtFailsPendingCalls()
+    {
+        var loop = new CRpcLoop();
+        var client = new CRpcClient(loop);
+        ConnectionClosedException? callException = null;
+        var pipelineException = new InvalidOperationException("boom");
+
+        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            var channel = new EmbeddedChannel(new CRpcClientHandler(client));
+            SetClientChannel(client, channel);
+            var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
+
+            channel.Pipeline.FireExceptionCaught(pipelineException);
+
+            try
+            {
+                await task;
+            }
+            catch (ConnectionClosedException exception)
+            {
+                callException = exception;
+            }
+        });
+
+        Assert.NotNull(callException);
+        Assert.Same(pipelineException, callException!.InnerException);
+    }
+
+    [Fact]
+    public void StaleChannelInactiveDoesNotFailCurrentChannelPendingCalls()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+
+        var client = new CRpcClient(loop);
+        var oldChannel = new EmbeddedChannel(new CRpcClientHandler(client));
+        var newChannel = new EmbeddedChannel();
+        SetClientChannel(client, newChannel);
+        var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
+        var awaiter = task.GetAwaiter();
+
+        oldChannel.Pipeline.FireChannelInactive();
+        loop.Tick();
+
+        Assert.False(awaiter.IsCompleted);
+    }
+
+    [Fact]
     public void CloseAsyncClosesConnectedChannel()
     {
         var loop = new CRpcLoop();
