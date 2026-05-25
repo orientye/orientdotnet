@@ -1,4 +1,5 @@
 ﻿using CRpc.Async;
+using CRpc.Rpc.CRpc;
 using CRpc.Rpc.CRpc.Codec;
 using DotNetty.Handlers.Logging;
 using DotNetty.Handlers.Timeout;
@@ -158,7 +159,15 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         long reqSeq = __IncrementReqId();
         var pendingCall = __AddResultTaskAsync(reqSeq, timeout, ownerLoop);
 
-        __Send(currentChannel, reqSeq, serviceId, methodId, body);
+        try
+        {
+            __Send(currentChannel, reqSeq, serviceId, methodId, body);
+        }
+        catch (Exception exception)
+        {
+            FailPendingCall(reqSeq, exception);
+            throw;
+        }
 
         return pendingCall.Source.Task;
     }
@@ -222,10 +231,14 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         var size = req.getSize();
         Console.WriteLine($"*******************rsp size: {size}");
         Console.WriteLine($"*********CallAsync send");
-        ChannelWriteUtil.WriteEncodedFrameFireAndForget(
+        var writeTask = ChannelWriteUtil.WriteEncodedFrame(
             currentChannel,
             size,
             frame => req.toFrame(frame, options.HashLength));
+        if (writeTask.IsCompleted)
+        {
+            writeTask.GetAwaiter().GetResult();
+        }
     }
 
     private PendingCall __AddResultTaskAsync(long reqSeq, int timeout, CRpcLoop loop)
@@ -244,6 +257,15 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
         results[reqSeq] = pendingCall;
         return pendingCall;
+    }
+
+    private void FailPendingCall(long reqSeq, Exception exception)
+    {
+        if (results.Remove(reqSeq, out var pendingCall))
+        {
+            pendingCall.TimeoutTimer?.Cancel();
+            pendingCall.Source.TrySetException(exception);
+        }
     }
 
     private void FailPendingCalls(Exception exception)

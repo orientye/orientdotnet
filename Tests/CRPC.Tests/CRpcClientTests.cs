@@ -1,6 +1,8 @@
 using CRpc.Async;
 using CRpc.Rpc.CRpc.Client;
 using CRpc.Rpc.CRpc.Codec;
+using DotNetty.Common.Utilities;
+using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Embedded;
 
 namespace CRPC.Tests;
@@ -11,6 +13,23 @@ public class CRpcClientTests : CrpcTestBase
     public void ConstructorThrowsWhenLoopIsNull()
     {
         Assert.Throws<ArgumentNullException>(() => new CRpcClient(null!));
+    }
+
+    [Fact]
+    public void CallAsyncClearsPendingCallWhenWriteFailsImmediately()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+
+        var client = new CRpcClient(loop);
+        var writeFailure = new InvalidOperationException("write submission failed");
+        SetClientChannel(client, new EmbeddedChannel(new ThrowOnWriteHandler(writeFailure)));
+
+        var thrown = Assert.Throws<InvalidOperationException>(() =>
+            client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 5000));
+
+        Assert.Same(writeFailure, thrown);
+        Assert.Equal(0, GetPendingCallCount(client));
     }
 
     [Fact]
@@ -409,6 +428,17 @@ public class CRpcClientTests : CrpcTestBase
         return CRpcMessage.valueOf(responseHeader, Array.Empty<byte>());
     }
 
+    private static int GetPendingCallCount(CRpcClient client)
+    {
+        var field = typeof(CRpcClient).GetField(
+            "results",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        var results = field!.GetValue(client);
+        Assert.NotNull(results);
+        return ((System.Collections.ICollection)results).Count;
+    }
+
     private static void SetClientChannel(CRpcClient client, EmbeddedChannel channel)
     {
         var field = typeof(CRpcClient).GetField(
@@ -416,5 +446,21 @@ public class CRpcClientTests : CrpcTestBase
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(field);
         field!.SetValue(client, channel);
+    }
+
+    private sealed class ThrowOnWriteHandler : ChannelHandlerAdapter
+    {
+        private readonly Exception exception;
+
+        public ThrowOnWriteHandler(Exception exception)
+        {
+            this.exception = exception;
+        }
+
+        public override Task WriteAsync(IChannelHandlerContext context, object message)
+        {
+            ReferenceCountUtil.Release(message);
+            throw exception;
+        }
     }
 }
