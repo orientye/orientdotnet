@@ -1327,7 +1327,7 @@ public sealed class LiveScenarioTransportFactory : IScenarioTransportFactory
 
         _ = account;
 
-        return new GameServerTcpTransport(codec);
+        return new GameServerDotNettyTransport(codec);
 
     }
 
