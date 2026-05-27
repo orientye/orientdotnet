@@ -12,17 +12,29 @@ public class CRpcServerHandlerTests : CrpcTestBase
 {
     private static int nextServiceId = 1000;
 
-    private static EmbeddedChannel CreateHandlerChannel(CRpcServer server, params IChannelHandler[] extraHandlers)
+    private static EmbeddedChannel CreateHandlerChannel(
+        CRpcServer server,
+        IChannelHandler[]? headHandlers = null,
+        IChannelHandler[]? tailHandlers = null)
     {
         var encoder = new CRpcMessageEncoder(
             CRpcServerOptions.DefaultHashLength,
             CRpcServerOptions.DefaultCompressThreshold);
-        var handlers = new List<IChannelHandler>(extraHandlers.Length + 2)
+        var handlers = new List<IChannelHandler>((headHandlers?.Length ?? 0) + (tailHandlers?.Length ?? 0) + 2)
         {
             encoder,
             new CRpcServerHandler(server),
         };
-        handlers.InsertRange(0, extraHandlers);
+        if (headHandlers is { Length: > 0 })
+        {
+            handlers.InsertRange(0, headHandlers);
+        }
+
+        if (tailHandlers is { Length: > 0 })
+        {
+            handlers.AddRange(tailHandlers);
+        }
+
         return new EmbeddedChannel(handlers.ToArray());
     }
 
@@ -102,7 +114,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
         var server = new CRpcServer(loop);
         RegisterOnLoop(loop, service);
         var delayedWrite = new DelayedWriteHandler();
-        var channel = CreateHandlerChannel(server, delayedWrite);
+        var channel = CreateHandlerChannel(server, headHandlers: new IChannelHandler[] { delayedWrite });
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
 
@@ -136,7 +148,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
     {
         var exceptions = new ExceptionCaptureHandler();
         var server = new CRpcServer(new CRpcLoop());
-        var channel = CreateHandlerChannel(server, exceptions);
+        var channel = CreateHandlerChannel(server, tailHandlers: new IChannelHandler[] { exceptions });
 
         channel.Pipeline.FireExceptionCaught(new SocketException(10054));
 
@@ -146,25 +158,14 @@ public class CRpcServerHandlerTests : CrpcTestBase
     [Fact]
     public void ChannelInactiveLogsNormalClientDisconnect()
     {
-        var originalOut = Console.Out;
-        using var output = new StringWriter();
         var inactive = new InactiveCaptureHandler();
         var server = new CRpcServer(new CRpcLoop());
-        var channel = CreateHandlerChannel(server, inactive);
+        var channel = CreateHandlerChannel(server, tailHandlers: new IChannelHandler[] { inactive });
 
-        try
-        {
-            Console.SetOut(output);
-
-            channel.Pipeline.FireChannelInactive();
-        }
-        finally
-        {
-            Console.SetOut(originalOut);
-        }
+        var output = ConsoleTestOutput.Capture(() => channel.Pipeline.FireChannelInactive());
 
         Assert.True(inactive.WasInactive);
-        Assert.Contains("client disconnected", output.ToString());
+        Assert.Contains("client disconnected", output);
     }
 
     [Fact]
@@ -172,7 +173,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
     {
         var exceptions = new ExceptionCaptureHandler();
         var server = new CRpcServer(new CRpcLoop());
-        var channel = CreateHandlerChannel(server, exceptions);
+        var channel = CreateHandlerChannel(server, tailHandlers: new IChannelHandler[] { exceptions });
         var exception = new InvalidOperationException("boom");
 
         channel.Pipeline.FireExceptionCaught(exception);

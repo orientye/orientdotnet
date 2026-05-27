@@ -5,7 +5,7 @@ using LordUnion.IntegrationTests.Protocol;
 
 namespace CRPC.Tests.LordUnion;
 
-public sealed class GameServerPipelineFactoryTests
+public sealed class GameServerPipelineFactoryTests : CrpcTestBase
 {
     [Fact]
     public void PipelineDecodesFrameAndPostsToHostLoop()

@@ -37,12 +37,22 @@ public sealed class LoopInboundHandlerTests : CrpcTestBase
             ChannelExceptionCaught = exception => received = exception
         };
         var channel = new EmbeddedChannel(new LoopInboundHandler(host));
+        SetHostChannel(host, channel);
         var expected = new InvalidOperationException("boom");
 
         channel.Pipeline.FireExceptionCaught(expected);
         loop.Tick();
 
         Assert.Same(expected, received);
+    }
+
+    private static void SetHostChannel(TcpChannelHost host, IChannel channel)
+    {
+        var field = typeof(TcpChannelHost).GetField(
+            "channel",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field!.SetValue(host, channel);
     }
 
     private sealed class EmptyPipelineFactory : IChannelPipelineFactory

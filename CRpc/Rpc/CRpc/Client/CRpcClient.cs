@@ -1,10 +1,7 @@
 ﻿using CRpc.Async;
 using CRpc.Rpc.CRpc.Codec;
-using DotNetty.Handlers.Logging;
-using DotNetty.Handlers.Timeout;
-using DotNetty.Transport.Bootstrapping;
+using CRpc.Transport;
 using DotNetty.Transport.Channels;
-using DotNetty.Transport.Channels.Sockets;
 
 namespace CRpc.Rpc.CRpc.Client;
 
@@ -12,40 +9,30 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 {
     private readonly Dictionary<long, PendingCall> results = new();
     private readonly CRpcClientOptions options;
-    private readonly IEventLoopGroup group;
+    private readonly TcpChannelHost host;
     private long reqSequence;
     private readonly CRpcLoop ownerLoop;
-    private IChannel? channel;
-
-    private readonly Bootstrap bootstrap = new Bootstrap();
 
     public CRpcClient(CRpcLoop loop, CRpcClientOptions? options = null)
+        : this(loop, options ?? new CRpcClientOptions(), createHost: true)
+    {
+    }
+
+    internal CRpcClient(CRpcLoop loop, CRpcClientOptions options, TcpChannelHost host)
     {
         ArgumentNullException.ThrowIfNull(loop);
-        ownerLoop = loop;
-        this.options = options ?? new CRpcClientOptions();
-        group = new MultithreadEventLoopGroup(this.options.IoThreadCount);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(host);
 
-        bootstrap
-            .Channel<TcpSocketChannel>()
-            .Option(ChannelOption.TcpNodelay, true)
-            .Option(ChannelOption.ConnectTimeout, TimeSpan.FromSeconds(this.options.ConnectTimeoutSeconds))
-            .Group(group)
-            .Handler(new ActionChannelInitializer<ISocketChannel>(c =>
-            {
-                var pipeline = c.Pipeline;
-                pipeline.AddLast(new LoggingHandler("crpc-client"));
-                pipeline.AddLast(
-                    "timeout",
-                    new IdleStateHandler(0, 0, this.options.HeartbeatIdleSeconds));
-                pipeline.AddLast(
-                    "decoder",
-                    new CRpcMessageDecoder(this.options.MaxFrameLength, this.options.HashLength));
-                pipeline.AddLast(
-                    "encoder",
-                    new CRpcMessageEncoder(this.options.HashLength, this.options.CompressThreshold));
-                pipeline.AddLast("handler", new CRpcClientHandler(this));
-            }));
+        ownerLoop = loop;
+        this.options = options;
+        this.host = host;
+        ConfigureHostCallbacks();
+    }
+
+    private CRpcClient(CRpcLoop loop, CRpcClientOptions options, bool createHost)
+        : this(loop, options, CreateHost(loop, options))
+    {
     }
 
     public CRpcClientOptions Options => options;
@@ -59,19 +46,12 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     {
         EnsureOwnerLoopThread();
 
-        if (channel is not null)
+        if (this.host.IsConnected)
         {
             throw new InvalidOperationException("CRpcClient is already connected.");
         }
 
-        return ConnectInternalAsync(host, port);
-    }
-
-    private async CRpcTask<IChannel> ConnectInternalAsync(string host, int port)
-    {
-        var connectedChannel = await CRpcTask.FromTask(bootstrap.ConnectAsync(host, port), ownerLoop);
-        channel = connectedChannel;
-        return connectedChannel;
+        return this.host.ConnectAsync(host, port);
     }
 
     /// <summary>
@@ -82,15 +62,8 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     {
         EnsureOwnerLoopThread();
 
-        var currentChannel = channel;
-        if (currentChannel is null)
-        {
-            return CRpcTask.CompletedTask(ownerLoop);
-        }
-
-        channel = null;
         FailPendingCalls(new ConnectionClosedException("CRpcClient channel was closed."));
-        return CRpcTask.FromTask(currentChannel.CloseAsync(), ownerLoop);
+        return this.host.CloseAsync();
     }
 
     /// <summary>
@@ -99,7 +72,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     public CRpcTask ShutdownIoAsync()
     {
         EnsureOwnerLoopThread();
-        return CRpcTask.FromTask(group.ShutdownGracefullyAsync(), ownerLoop);
+        return host.ShutdownIoAsync();
     }
 
     /// <summary>
@@ -155,15 +128,17 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
                 "CRpcClient.CallAsync requires an explicit positive timeout.");
         }
 
-        var currentChannel = channel
-            ?? throw new InvalidOperationException("CRpcClient is not connected.");
+        if (!host.IsConnected)
+        {
+            throw new InvalidOperationException("CRpcClient is not connected.");
+        }
 
         long reqSeq = __IncrementReqId();
         var pendingCall = __AddResultTaskAsync(reqSeq, timeout, ownerLoop);
 
         try
         {
-            __Send(currentChannel, reqSeq, serviceId, methodId, body);
+            __Send(reqSeq, serviceId, methodId, body);
         }
         catch (Exception exception)
         {
@@ -179,39 +154,50 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         ownerLoop.Post(() => CompleteReceiveResponse(message));
     }
 
-    internal void OnChannelInactive(IChannel inactiveChannel)
+    private void ConfigureHostCallbacks()
     {
-        OnChannelLost(inactiveChannel, cause: null);
+        host.InboundMessageReceived = OnHostInboundMessage;
+        host.ChannelBecameInactive = OnHostChannelInactive;
+        host.ChannelExceptionCaught = OnHostChannelException;
     }
 
-    internal void OnChannelException(IChannel faultedChannel, Exception exception)
+    private static TcpChannelHost CreateHost(CRpcLoop loop, CRpcClientOptions options)
+    {
+        return new TcpChannelHost(
+            loop,
+            new CRpcClientPipelineFactory(options),
+            new TcpChannelHostOptions
+            {
+                IoThreadCount = options.IoThreadCount,
+                ConnectTimeoutSeconds = options.ConnectTimeoutSeconds,
+                TcpNoDelay = true,
+                LoggingName = "crpc-client",
+            });
+    }
+
+    private void OnHostInboundMessage(object message)
+    {
+        if (message is not CRpcMessage response)
+        {
+            OnHostChannelException(new InvalidOperationException(
+                $"CRpcClient received unexpected inbound message type '{message.GetType().FullName}'."));
+            return;
+        }
+
+        CompleteReceiveResponse(response);
+    }
+
+    private void OnHostChannelInactive()
+    {
+        FailPendingCalls(new ConnectionClosedException("CRpcClient channel became inactive."));
+    }
+
+    private void OnHostChannelException(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        OnChannelLost(faultedChannel, exception);
-    }
-
-    private void OnChannelLost(IChannel lostChannel, Exception? cause)
-    {
-        ownerLoop.Post(() =>
-        {
-            if (!ReferenceEquals(channel, lostChannel))
-            {
-                return;
-            }
-
-            channel = null;
-
-            if (results.Count == 0)
-            {
-                return;
-            }
-
-            var exception = cause is null
-                ? new ConnectionClosedException("CRpcClient channel became inactive.")
-                : new ConnectionClosedException("CRpcClient channel encountered an exception.", cause);
-
-            FailPendingCalls(exception);
-        });
+        FailPendingCalls(new ConnectionClosedException(
+            "CRpcClient channel encountered an exception.",
+            exception));
     }
 
     private void CompleteReceiveResponse(CRpcMessage message)
@@ -224,16 +210,17 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         }
     }
 
-    private void __Send(IChannel currentChannel, long reqSeq, ushort serviceId, ushort methodId, byte[] bytes)
+    private void __Send(long reqSeq, ushort serviceId, ushort methodId, byte[] bytes)
     {
         CRpcMessageHeader header = CRpcMessageHeader.valueOf(CRpcMessageState.STATE_NONE, 0, reqSeq, serviceId, methodId);
         header.addState(CRpcMessageState.NONE_ENCRYPT);
         CRpcMessage req = CRpcMessage.valueOf(header, bytes);
         Console.WriteLine($"*********CallAsync send");
-        var writeTask = currentChannel.WriteAndFlushAsync(req);
-        if (writeTask.IsCompleted)
+        var writeTask = host.WriteAndFlushAsync(req);
+        var awaiter = writeTask.GetAwaiter();
+        if (awaiter.IsCompleted)
         {
-            writeTask.GetAwaiter().GetResult();
+            awaiter.GetResult();
         }
     }
 

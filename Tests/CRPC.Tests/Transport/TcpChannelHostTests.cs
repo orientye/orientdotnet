@@ -58,6 +58,99 @@ public sealed class TcpChannelHostTests : CrpcTestBase
         Assert.NotNull(channel.Pipeline.Get<LoopInboundHandler>());
     }
 
+    [Fact]
+    public void StaleChannelInactiveDoesNotInvokeCallback()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var currentChannel = new EmbeddedChannel();
+        var staleChannel = new EmbeddedChannel();
+        var callbackCount = 0;
+        var host = new TcpChannelHost(loop, new EmptyPipelineFactory())
+        {
+            ChannelBecameInactive = () => callbackCount++
+        };
+        SetHostChannel(host, currentChannel);
+
+        host.PostChannelInactive(staleChannel);
+        DrainOwnerLoop(loop);
+
+        Assert.Equal(0, callbackCount);
+    }
+
+    [Fact]
+    public void CurrentChannelInactiveInvokesCallback()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var currentChannel = new EmbeddedChannel();
+        var callbackCount = 0;
+        var host = new TcpChannelHost(loop, new EmptyPipelineFactory())
+        {
+            ChannelBecameInactive = () => callbackCount++
+        };
+        SetHostChannel(host, currentChannel);
+
+        host.PostChannelInactive(currentChannel);
+        DrainOwnerLoop(loop);
+
+        Assert.Equal(1, callbackCount);
+    }
+
+    [Fact]
+    public void StaleChannelExceptionDoesNotInvokeCallback()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var currentChannel = new EmbeddedChannel();
+        var staleChannel = new EmbeddedChannel();
+        var callbackCount = 0;
+        var host = new TcpChannelHost(loop, new EmptyPipelineFactory())
+        {
+            ChannelExceptionCaught = _ => callbackCount++
+        };
+        SetHostChannel(host, currentChannel);
+
+        host.PostChannelException(staleChannel, new InvalidOperationException("boom"));
+        DrainOwnerLoop(loop);
+
+        Assert.Equal(0, callbackCount);
+    }
+
+    [Fact]
+    public void CurrentChannelExceptionInvokesCallback()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var currentChannel = new EmbeddedChannel();
+        var expected = new InvalidOperationException("boom");
+        Exception? received = null;
+        var host = new TcpChannelHost(loop, new EmptyPipelineFactory())
+        {
+            ChannelExceptionCaught = exception => received = exception
+        };
+        SetHostChannel(host, currentChannel);
+
+        host.PostChannelException(currentChannel, expected);
+        DrainOwnerLoop(loop);
+
+        Assert.Same(expected, received);
+    }
+
+    private static void SetHostChannel(TcpChannelHost host, IChannel channel)
+    {
+        var field = typeof(TcpChannelHost).GetField(
+            "channel",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        field!.SetValue(host, channel);
+    }
+
+    private static void DrainOwnerLoop(CRpcLoop loop)
+    {
+        loop.Tick();
+    }
+
     private sealed class EmptyPipelineFactory : IChannelPipelineFactory
     {
         public void Configure(IChannelPipeline pipeline, TcpChannelHost host)

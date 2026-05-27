@@ -47,11 +47,11 @@ public sealed class TcpChannelHost : IAsyncDisposable
 
     public bool IsConnected => channel is not null && channel.Active;
 
-    public Action<object>? InboundMessageReceived { get; init; }
+    public Action<object>? InboundMessageReceived { get; set; }
 
-    public Action? ChannelBecameInactive { get; init; }
+    public Action? ChannelBecameInactive { get; set; }
 
-    public Action<Exception>? ChannelExceptionCaught { get; init; }
+    public Action<Exception>? ChannelExceptionCaught { get; set; }
 
     public CRpcTask<IChannel> ConnectAsync(string host, int port)
     {
@@ -118,15 +118,33 @@ public sealed class TcpChannelHost : IAsyncDisposable
         ownerLoop.Post(() => InboundMessageReceived?.Invoke(message));
     }
 
-    internal void PostChannelInactive()
+    internal void PostChannelInactive(IChannel eventChannel)
     {
-        ownerLoop.Post(() => ChannelBecameInactive?.Invoke());
+        ArgumentNullException.ThrowIfNull(eventChannel);
+        ownerLoop.Post(() =>
+        {
+            if (!ReferenceEquals(channel, eventChannel))
+            {
+                return;
+            }
+
+            ChannelBecameInactive?.Invoke();
+        });
     }
 
-    internal void PostChannelException(Exception exception)
+    internal void PostChannelException(IChannel eventChannel, Exception exception)
     {
+        ArgumentNullException.ThrowIfNull(eventChannel);
         ArgumentNullException.ThrowIfNull(exception);
-        ownerLoop.Post(() => ChannelExceptionCaught?.Invoke(exception));
+        ownerLoop.Post(() =>
+        {
+            if (!ReferenceEquals(channel, eventChannel))
+            {
+                return;
+            }
+
+            ChannelExceptionCaught?.Invoke(exception);
+        });
     }
 
     public ValueTask DisposeAsync()

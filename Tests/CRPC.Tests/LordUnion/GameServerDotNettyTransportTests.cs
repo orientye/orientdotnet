@@ -5,7 +5,7 @@ using LordUnion.IntegrationTests.Sessions;
 
 namespace CRPC.Tests.LordUnion;
 
-public sealed class GameServerDotNettyTransportTests
+public sealed class GameServerDotNettyTransportTests : CrpcTestBase
 {
     [Fact]
     public void DeliverFrameDecodesProtocolMessageOnSessionLoop()

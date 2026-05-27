@@ -1,6 +1,7 @@
 using CRpc.Async;
 using CRpc.Rpc.CRpc.Client;
 using CRpc.Rpc.CRpc.Codec;
+using CRpc.Transport;
 using DotNetty.Common.Utilities;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Embedded;
@@ -23,7 +24,7 @@ public class CRpcClientTests : CrpcTestBase
 
         var client = new CRpcClient(loop);
         var writeFailure = new InvalidOperationException("write submission failed");
-        SetClientChannel(client, new EmbeddedChannel(new ThrowOnWriteHandler(writeFailure)));
+        SetClientHostChannel(client, new EmbeddedChannel(new ThrowOnWriteHandler(writeFailure)));
 
         var thrown = Assert.Throws<InvalidOperationException>(() =>
             client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 5000));
@@ -84,7 +85,7 @@ public class CRpcClientTests : CrpcTestBase
         loop.BindToCurrentThread();
 
         var client = new CRpcClient(loop);
-        SetClientChannel(client, new EmbeddedChannel());
+        SetClientHostChannel(client, new EmbeddedChannel());
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
             client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 0));
@@ -112,7 +113,7 @@ public class CRpcClientTests : CrpcTestBase
         var loopThreadId = Environment.CurrentManagedThreadId;
 
         var client = new CRpcClient(loop);
-        SetClientChannel(client, new EmbeddedChannel());
+        SetClientHostChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
         var awaiter = task.GetAwaiter();
 
@@ -152,7 +153,7 @@ public class CRpcClientTests : CrpcTestBase
         loop.BindToCurrentThread();
 
         var client = new CRpcClient(loop);
-        SetClientChannel(client, new EmbeddedChannel());
+        SetClientHostChannel(client, new EmbeddedChannel());
         var firstTask = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
         var secondTask = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
         var firstAwaiter = firstTask.GetAwaiter();
@@ -190,7 +191,7 @@ public class CRpcClientTests : CrpcTestBase
         loop.BindToCurrentThread();
 
         var client = new CRpcClient(loop);
-        SetClientChannel(client, new EmbeddedChannel());
+        SetClientHostChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 1);
         var awaiter = task.GetAwaiter();
         CRpcMessage? result = null;
@@ -214,7 +215,7 @@ public class CRpcClientTests : CrpcTestBase
         loop.BindToCurrentThread();
 
         var client = new CRpcClient(loop);
-        SetClientChannel(client, new EmbeddedChannel());
+        SetClientHostChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 1);
         var awaiter = task.GetAwaiter();
 
@@ -237,7 +238,7 @@ public class CRpcClientTests : CrpcTestBase
         loop.BindToCurrentThread();
 
         var client = new CRpcClient(loop);
-        SetClientChannel(client, new EmbeddedChannel());
+        SetClientHostChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 1);
         var awaiter = task.GetAwaiter();
 
@@ -261,7 +262,7 @@ public class CRpcClientTests : CrpcTestBase
 
         CRpcLoopRunner.RunUntilComplete(loop, async () =>
         {
-            SetClientChannel(client, channel);
+            SetClientHostChannel(client, channel);
             var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
 
             await client.CloseAsync();
@@ -289,11 +290,12 @@ public class CRpcClientTests : CrpcTestBase
 
         CRpcLoopRunner.RunUntilComplete(loop, async () =>
         {
-            var channel = new EmbeddedChannel(new CRpcClientHandler(client));
-            SetClientChannel(client, channel);
+            var channel = new EmbeddedChannel();
+            SetClientHostChannel(client, channel);
             var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
 
-            channel.Pipeline.FireChannelInactive();
+            GetClientHost(client).PostChannelInactive(channel);
+            loop.Tick();
 
             try
             {
@@ -318,11 +320,12 @@ public class CRpcClientTests : CrpcTestBase
 
         CRpcLoopRunner.RunUntilComplete(loop, async () =>
         {
-            var channel = new EmbeddedChannel(new CRpcClientHandler(client));
-            SetClientChannel(client, channel);
+            var channel = new EmbeddedChannel();
+            SetClientHostChannel(client, channel);
             var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
 
-            channel.Pipeline.FireExceptionCaught(pipelineException);
+            GetClientHost(client).PostChannelException(channel, pipelineException);
+            loop.Tick();
 
             try
             {
@@ -345,13 +348,13 @@ public class CRpcClientTests : CrpcTestBase
         loop.BindToCurrentThread();
 
         var client = new CRpcClient(loop);
-        var oldChannel = new EmbeddedChannel(new CRpcClientHandler(client));
+        var oldChannel = new EmbeddedChannel();
         var newChannel = new EmbeddedChannel();
-        SetClientChannel(client, newChannel);
+        SetClientHostChannel(client, newChannel);
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
         var awaiter = task.GetAwaiter();
 
-        oldChannel.Pipeline.FireChannelInactive();
+        GetClientHost(client).PostChannelInactive(oldChannel);
         loop.Tick();
 
         Assert.False(awaiter.IsCompleted);
@@ -366,7 +369,7 @@ public class CRpcClientTests : CrpcTestBase
 
         CRpcLoopRunner.RunUntilComplete(loop, async () =>
         {
-            SetClientChannel(client, channel);
+            SetClientHostChannel(client, channel);
             await client.CloseAsync();
         });
 
@@ -382,11 +385,62 @@ public class CRpcClientTests : CrpcTestBase
 
         CRpcLoopRunner.RunUntilComplete(loop, async () =>
         {
-            SetClientChannel(client, channel);
+            SetClientHostChannel(client, channel);
             await client.DisposeAsync();
         });
 
         Assert.False(channel.Open);
+    }
+
+    [Fact]
+    public void ConstructorAllowsTestHostInjection()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var options = new CRpcClientOptions();
+        var host = new TcpChannelHost(loop, new CRpcClientPipelineFactory(options));
+
+        var client = new CRpcClient(loop, options, host);
+
+        Assert.Same(options, client.Options);
+    }
+
+    [Fact]
+    public void HostInboundMessageCompletesPendingCall()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+
+        var client = new CRpcClient(loop);
+        SetClientHostChannel(client, new EmbeddedChannel());
+        var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
+        var awaiter = task.GetAwaiter();
+        CRpcMessage? result = null;
+        awaiter.OnCompleted(() => result = awaiter.GetResult());
+
+        GetClientHost(client).PostInboundMessage(CreateResponse(reqSequence: 1));
+        loop.Tick();
+
+        Assert.True(awaiter.IsCompleted);
+        Assert.Same(result, awaiter.GetResult());
+    }
+
+    [Fact]
+    public void UnexpectedHostInboundMessageFailsPendingCalls()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+
+        var client = new CRpcClient(loop);
+        SetClientHostChannel(client, new EmbeddedChannel());
+        var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
+        var awaiter = task.GetAwaiter();
+
+        GetClientHost(client).PostInboundMessage(new object());
+        loop.Tick();
+
+        var exception = Assert.Throws<ConnectionClosedException>(() => awaiter.GetResult());
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
     }
 
     [Fact]
@@ -439,13 +493,23 @@ public class CRpcClientTests : CrpcTestBase
         return ((System.Collections.ICollection)results).Count;
     }
 
-    private static void SetClientChannel(CRpcClient client, EmbeddedChannel channel)
+    private static TcpChannelHost GetClientHost(CRpcClient client)
     {
-        var field = typeof(CRpcClient).GetField(
+        var hostField = typeof(CRpcClient).GetField(
+            "host",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(hostField);
+        return Assert.IsType<TcpChannelHost>(hostField!.GetValue(client));
+    }
+
+    private static void SetClientHostChannel(CRpcClient client, EmbeddedChannel channel)
+    {
+        var host = GetClientHost(client);
+        var channelField = typeof(TcpChannelHost).GetField(
             "channel",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        Assert.NotNull(field);
-        field!.SetValue(client, channel);
+        Assert.NotNull(channelField);
+        channelField!.SetValue(host, channel);
     }
 
     private sealed class ThrowOnWriteHandler : ChannelHandlerAdapter

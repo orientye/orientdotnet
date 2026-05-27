@@ -18,13 +18,13 @@ public sealed class LoopInboundHandler : ChannelHandlerAdapter
 
     public override void ChannelInactive(IChannelHandlerContext context)
     {
-        host.PostChannelInactive();
+        host.PostChannelInactive(context.Channel);
         base.ChannelInactive(context);
     }
 
     public override void ExceptionCaught(IChannelHandlerContext context, Exception exception)
     {
-        host.PostChannelException(exception);
+        host.PostChannelException(context.Channel, exception);
         _ = context.CloseAsync();
     }
 }
