@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\CRPC\CRPC.csproj" />
+    <ProjectReference Include="..\LordUnion.IntegrationTests\LordUnion.IntegrationTests.csproj" />
   </ItemGroup>
 
 </Project>

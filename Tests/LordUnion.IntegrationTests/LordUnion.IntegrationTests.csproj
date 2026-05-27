@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+
+
+  <PropertyGroup>
+
+    <OutputType>Exe</OutputType>
+
+    <TargetFramework>net8.0</TargetFramework>
+
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <Nullable>enable</Nullable>
+
+    <RootNamespace>LordUnion.IntegrationTests</RootNamespace>
+
+    <AssemblyName>LordUnion.IntegrationTests</AssemblyName>
+
+  </PropertyGroup>
+
+
+
+  <ItemGroup>
+
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+
+    <PackageReference Include="protobuf-net" Version="3.2.30" />
+
+  </ItemGroup>
+
+
+
+  <ItemGroup>
+
+    <ProjectReference Include="..\..\CRPC\CRPC.csproj" />
+
+  </ItemGroup>
+
+
+
+  <ItemGroup>
+
+    <None Update="appsettings.example.json">
+
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+
+    </None>
+
+    <None Update="appsettings.local.json.example">
+
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+
+    </None>
+
+  </ItemGroup>
+
+
+
+</Project>
+

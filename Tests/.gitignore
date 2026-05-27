@@ -1,0 +1,6 @@
+# LordUnion integration test local secrets
+LordUnion.IntegrationTests/appsettings.local.json
+
+# LordUnion integration test reports and logs
+LordUnion.IntegrationTests/lordunion-test-output/
+
