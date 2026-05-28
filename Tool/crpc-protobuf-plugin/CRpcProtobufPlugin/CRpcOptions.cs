@@ -4,5 +4,6 @@
     {
         public const int ServiceId = 60001;
         public const int MethodId = 60002;
+        public const int ServerPush = 60003;
     }
 }

@@ -23,10 +23,13 @@ public sealed class CRpcServer : IRpcServer
     {
         ArgumentNullException.ThrowIfNull(loop);
         Loop = loop;
+        Connections = new CRpcConnectionRegistry(loop);
         this.options = options ?? new CRpcServerOptions();
     }
 
     public CRpcLoop Loop { get; }
+
+    public CRpcConnectionRegistry Connections { get; }
 
     public CRpcServerOptions Options => options;
 

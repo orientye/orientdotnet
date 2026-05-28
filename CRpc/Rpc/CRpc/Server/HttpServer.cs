@@ -22,10 +22,13 @@ public sealed class HttpServer
     {
         ArgumentNullException.ThrowIfNull(loop);
         this.loop = loop;
+        Connections = new CRpcConnectionRegistry(loop);
         this.options = options ?? new HttpServerOptions();
     }
 
     public CRpcLoop Loop => loop;
+
+    public CRpcConnectionRegistry Connections { get; }
 
     public bool IsRunning => Volatile.Read(ref isRunning) == 1;
 
@@ -61,7 +64,7 @@ public sealed class HttpServer
             var pipeline = channel.Pipeline;
             pipeline.AddLast(new HttpServerCodec());
             pipeline.AddLast(new HttpObjectAggregator(options.MaxContentLength));
-            pipeline.AddLast(new HttpServerHandler(loop));
+            pipeline.AddLast(new HttpServerHandler(loop, Connections));
         }));
 
         try

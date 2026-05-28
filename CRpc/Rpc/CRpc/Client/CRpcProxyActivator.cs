@@ -1,4 +1,3 @@
-using System.Reflection;
 using CRpc.Rpc;
 
 namespace CRpc.Rpc.CRpc.Client;
@@ -11,17 +10,13 @@ public static class CRpcProxyActivator
         ArgumentNullException.ThrowIfNull(rpcClient);
 
         var proxy = new TProxy();
-        var field = typeof(TProxy).GetField(
-            "__client",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-        if (field is null || !typeof(IRpcClient).IsAssignableFrom(field.FieldType))
+        if (proxy is not ICRpcGeneratedClient generatedClient)
         {
             throw new InvalidOperationException(
-                $"{typeof(TProxy).FullName} must expose an IRpcClient field named __client.");
+                $"{typeof(TProxy).FullName} must implement {nameof(ICRpcGeneratedClient)}.");
         }
 
-        field.SetValue(proxy, rpcClient);
+        generatedClient.BindRpcClient(rpcClient);
         return proxy;
     }
 }

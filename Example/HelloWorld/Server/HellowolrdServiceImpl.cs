@@ -1,18 +1,20 @@
 using CRpc.Async;
-using CRpc.Rpc.CRpc;
 using CRpc.Rpc.CRpc.Server;
 
 namespace Example;
 
-public class HelloworldServiceImpl : GreeterBase
+public class HelloworldServiceImpl : GreeterServiceBase
 {
-    protected override CRpcTask<(int, Example.HelloReply)> SayHelloAsync(CRpcContext context, Example.HelloRequest request)
+    protected override CRpcTask<(int, HelloReply)> SayHelloAsync(
+        CRpcContext context,
+        HelloRequest request)
     {
-        var resp = new HelloReply();
-        var tm = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-        resp.Msg = $"echo from server, tm={tm}";
-        Console.WriteLine($"request form client={request.Msg}");
-        Console.WriteLine($"************ {tm} **********RPC result={resp.Msg}***************");
-        return CRpcTask.FromResult((0, resp));
+        _ = PushServerNoticeAsync(
+            context.Connection,
+            new ServerNoticePush { Msg = $"server saw: {request.Msg}" });
+
+        return CRpcTask.FromResult(
+            (0, new HelloReply { Msg = $"Hello {request.Msg}" }),
+            CRpcLoop.Current);
     }
 }

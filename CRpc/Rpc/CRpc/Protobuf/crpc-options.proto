@@ -12,4 +12,5 @@ extend google.protobuf.ServiceOptions {
 
 extend google.protobuf.MethodOptions {
   int32 method_id = 60002;
+  bool server_push = 60003;
 }

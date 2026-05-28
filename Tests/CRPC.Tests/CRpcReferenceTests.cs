@@ -8,22 +8,23 @@ namespace CRPC.Tests;
 public class CRpcReferenceTests : CrpcTestBase
 {
     [Fact]
-    public void ProxyActivatorInjectsRpcClientIntoGeneratedClientField()
+    public void ProxyActivatorBindsGeneratedClientThroughInterface()
     {
         var rpcClient = new RecordingRpcClient();
 
         var proxy = CRpcProxyActivator.Create<TestGeneratedClient>(rpcClient);
 
-        Assert.Same(rpcClient, proxy.__client);
+        Assert.Same(rpcClient, proxy.Client);
+        Assert.Equal(1, proxy.BindCount);
     }
 
     [Fact]
-    public void ProxyActivatorRejectsTypeWithoutGeneratedClientField()
+    public void ProxyActivatorRejectsTypeWithoutGeneratedClientInterface()
     {
         var exception = Assert.Throws<InvalidOperationException>(
             () => CRpcProxyActivator.Create<InvalidGeneratedClient>(new RecordingRpcClient()));
 
-        Assert.Contains("__client", exception.Message);
+        Assert.Contains(nameof(ICRpcGeneratedClient), exception.Message);
     }
 
     [Fact]
@@ -44,9 +45,17 @@ public class CRpcReferenceTests : CrpcTestBase
         Assert.Contains("port", exception.Message);
     }
 
-    private sealed class TestGeneratedClient
+    private sealed class TestGeneratedClient : ICRpcGeneratedClient
     {
-        public IRpcClient? __client;
+        public IRpcClient? Client { get; private set; }
+
+        public int BindCount { get; private set; }
+
+        public void BindRpcClient(IRpcClient client)
+        {
+            Client = client;
+            BindCount++;
+        }
     }
 
     private sealed class InvalidGeneratedClient
@@ -58,6 +67,10 @@ public class CRpcReferenceTests : CrpcTestBase
         public CRpcTask<CRpcMessage> CallAsync(ushort serviceId, ushort methodId, byte[] body, int timeout)
         {
             throw new NotSupportedException();
+        }
+
+        public void RegisterPushHandler(ushort serviceId, ushort methodId, CRpcPushHandler handler)
+        {
         }
     }
 }

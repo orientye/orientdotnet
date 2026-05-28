@@ -21,11 +21,42 @@ public sealed class HttpServerHandler : SimpleChannelInboundHandler<IFullHttpReq
     private static long nextSequence;
 
     private readonly CRpcLoop loop;
+    private readonly CRpcConnectionRegistry connections;
 
-    public HttpServerHandler(CRpcLoop loop)
+    public HttpServerHandler(CRpcLoop loop, CRpcConnectionRegistry connections)
     {
         ArgumentNullException.ThrowIfNull(loop);
+        ArgumentNullException.ThrowIfNull(connections);
         this.loop = loop;
+        this.connections = connections;
+    }
+
+    public override void ChannelActive(IChannelHandlerContext context)
+    {
+        if (loop.IsInLoopThread)
+        {
+            connections.Register(context.Channel);
+        }
+        else
+        {
+            loop.Post(() => connections.Register(context.Channel));
+        }
+
+        base.ChannelActive(context);
+    }
+
+    public override void ChannelInactive(IChannelHandlerContext context)
+    {
+        if (loop.IsInLoopThread)
+        {
+            connections.Unregister(context.Channel);
+        }
+        else
+        {
+            loop.Post(() => connections.Unregister(context.Channel));
+        }
+
+        base.ChannelInactive(context);
     }
 
     protected override void ChannelRead0(IChannelHandlerContext ctx, IFullHttpRequest request)
@@ -94,7 +125,13 @@ public sealed class HttpServerHandler : SimpleChannelInboundHandler<IFullHttpReq
 
             var sn = Interlocked.Increment(ref nextSequence);
             var rpcRequest = CreateRpcRequest(serviceId, methodId, requestBytes, sn);
-            var invokeTask = RpcServiceInvoker.InvokeAsync(service, new CRpcContext(), rpcRequest);
+            if (!connections.TryGetByChannel(ctx.Channel, out var connection))
+            {
+                WriteJsonResponse(ctx, httpRequest, HttpResponseStatus.ServiceUnavailable, """{"error":"connection not ready"}""");
+                return;
+            }
+
+            var invokeTask = RpcServiceInvoker.InvokeAsync(service, new CRpcContext(connection), rpcRequest);
             var awaiter = invokeTask.GetAwaiter();
             if (awaiter.IsCompleted)
             {

@@ -471,6 +471,123 @@ public class CRpcClientTests : CrpcTestBase
         Assert.Equal(typeof(Dictionary<,>), field!.FieldType.GetGenericTypeDefinition());
     }
 
+    [Fact]
+    public void PushMessageDispatchesRegisteredHandlerOnOwnerLoop()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var loopThreadId = Environment.CurrentManagedThreadId;
+        var client = new CRpcClient(loop);
+
+        CRpcPushContext? capturedContext = null;
+        byte[]? capturedBody = null;
+        int? handlerThreadId = null;
+        client.RegisterPushHandler(
+            10,
+            20,
+            (context, body) =>
+            {
+                capturedContext = context;
+                capturedBody = body;
+                handlerThreadId = Environment.CurrentManagedThreadId;
+                return CRpcTask.CompletedTask(context.Loop);
+            });
+
+        var push = CreatePush(serviceId: 10, methodId: 20, body: [1, 2, 3]);
+        var worker = new Thread(() => client.OnReceiveResponse(push));
+        worker.Start();
+        worker.Join();
+
+        Assert.Null(capturedContext);
+
+        loop.Tick();
+
+        Assert.NotNull(capturedContext);
+        Assert.Same(loop, capturedContext!.Loop);
+        Assert.Equal(10, capturedContext.ServiceId);
+        Assert.Equal(20, capturedContext.MethodId);
+        Assert.Equal([1, 2, 3], capturedBody);
+        Assert.Equal(loopThreadId, handlerThreadId);
+    }
+
+    [Fact]
+    public void PushMessageDoesNotCompletePendingCallWithSameSequence()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var client = new CRpcClient(loop);
+        SetClientHostChannel(client, new EmbeddedChannel());
+        var task = client.CallAsync(10, 20, Array.Empty<byte>(), timeout: 5000);
+        var awaiter = task.GetAwaiter();
+
+        client.OnReceiveResponse(CreatePush(10, 20, Array.Empty<byte>(), reqSequence: 1));
+        loop.Tick();
+
+        Assert.False(awaiter.IsCompleted);
+        Assert.Equal(1, GetPendingCallCount(client));
+    }
+
+    [Fact]
+    public void UnknownPushInvokesUnhandledCallbackAndKeepsConnectionUsable()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var client = new CRpcClient(loop);
+        CRpcPushContext? unhandled = null;
+        client.OnUnhandledPush = context => unhandled = context;
+
+        client.OnReceiveResponse(CreatePush(77, 88, [9]));
+        loop.Tick();
+
+        Assert.NotNull(unhandled);
+        Assert.Equal(77, unhandled!.ServiceId);
+        Assert.Equal(88, unhandled.MethodId);
+    }
+
+    [Fact]
+    public void PushHandlerExceptionInvokesExceptionCallback()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var client = new CRpcClient(loop);
+        var expected = new InvalidOperationException("push failed");
+        Exception? captured = null;
+        CRpcPushContext? capturedContext = null;
+
+        client.RegisterPushHandler(
+            1,
+            2,
+            (context, body) => throw expected);
+        client.OnPushException = (context, exception) =>
+        {
+            capturedContext = context;
+            captured = exception;
+        };
+
+        client.OnReceiveResponse(CreatePush(1, 2, Array.Empty<byte>()));
+        loop.Tick();
+
+        Assert.Same(expected, captured);
+        Assert.Equal(1, capturedContext!.ServiceId);
+        Assert.Equal(2, capturedContext.MethodId);
+    }
+
+    private static CRpcMessage CreatePush(
+        ushort serviceId,
+        ushort methodId,
+        byte[] body,
+        long reqSequence = 0)
+    {
+        var header = CRpcMessageHeader.valueOf(
+            CRpcMessageState.STATE_PUSH,
+            resultCode: 0,
+            sn: reqSequence,
+            module: serviceId,
+            command: methodId);
+        header.addState(CRpcMessageState.NONE_ENCRYPT);
+        return CRpcMessage.valueOf(header, body);
+    }
+
     private static CRpcMessage CreateResponse(long reqSequence)
     {
         var responseHeader = CRpcMessageHeader.valueOf(

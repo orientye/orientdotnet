@@ -39,6 +39,57 @@ public class CRpcServerHandlerTests : CrpcTestBase
     }
 
     [Fact]
+    public void ChannelActiveRegistersConnection()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var server = new CRpcServer(loop);
+        var channel = CreateHandlerChannel(server);
+
+        channel.Pipeline.FireChannelActive();
+        loop.Tick();
+
+        var connection = Assert.Single(server.Connections.Snapshot());
+        Assert.True(connection.IsActive);
+    }
+
+    [Fact]
+    public void ChannelInactiveUnregistersConnection()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var server = new CRpcServer(loop);
+        var channel = CreateHandlerChannel(server);
+        channel.Pipeline.FireChannelActive();
+        loop.Tick();
+        var connection = Assert.Single(server.Connections.Snapshot());
+
+        channel.Pipeline.FireChannelInactive();
+        loop.Tick();
+
+        Assert.Empty(server.Connections.Snapshot());
+        Assert.False(connection.IsActive);
+    }
+
+    [Fact]
+    public void ServiceReceivesCurrentConnectionInContext()
+    {
+        var loop = new CRpcLoop();
+        var service = new ContextRecordingService(NextServiceId());
+        var server = new CRpcServer(loop);
+        RegisterOnLoop(loop, service);
+        var channel = CreateHandlerChannel(server);
+
+        channel.Pipeline.FireChannelActive();
+        loop.Tick();
+        Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
+        loop.Tick();
+
+        Assert.NotNull(service.Connection);
+        Assert.Equal(1, service.Connection!.ConnectionId);
+    }
+
+    [Fact]
     public void ChannelReadDispatchesServiceWorkToCRpcLoop()
     {
         var loop = new CRpcLoop();
@@ -46,6 +97,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
         var server = new CRpcServer(loop);
         RegisterOnLoop(loop, service);
         var channel = CreateHandlerChannel(server);
+        ActivateChannel(loop, channel);
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
 
@@ -82,6 +134,11 @@ public class CRpcServerHandlerTests : CrpcTestBase
         Assert.Equal(0, firstService.CallCount);
         Assert.Equal(0, secondService.CallCount);
 
+        firstDriver.Run(() =>
+        {
+            channel.Pipeline.FireChannelActive();
+            firstLoop.Tick();
+        });
         firstDriver.Run(() => firstLoop.Tick());
 
         Assert.Equal(1, firstService.CallCount);
@@ -96,6 +153,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
         var server = new CRpcServer(loop);
         RegisterOnLoop(loop, service);
         var channel = CreateHandlerChannel(server);
+        ActivateChannel(loop, channel);
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
         var loopThreadId = Environment.CurrentManagedThreadId;
@@ -115,6 +173,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
         RegisterOnLoop(loop, service);
         var delayedWrite = new DelayedWriteHandler();
         var channel = CreateHandlerChannel(server, headHandlers: new IChannelHandler[] { delayedWrite });
+        ActivateChannel(loop, channel);
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
 
@@ -133,6 +192,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
         var server = new CRpcServer(loop);
         RegisterOnLoop(loop, service);
         var channel = CreateHandlerChannel(server);
+        ActivateChannel(loop, channel);
         var request = CreateRequest(service.GetServiceId());
 
         Assert.False(channel.WriteInbound(request));
@@ -202,6 +262,32 @@ public class CRpcServerHandlerTests : CrpcTestBase
     {
         loop.Post(() => loop.RegisterService(service));
         loop.Tick();
+    }
+
+    private static void ActivateChannel(CRpcLoop loop, EmbeddedChannel channel)
+    {
+        channel.Pipeline.FireChannelActive();
+        loop.Tick();
+    }
+
+    private sealed class ContextRecordingService : IRpcService
+    {
+        private readonly ushort serviceId;
+
+        public ContextRecordingService(ushort serviceId)
+        {
+            this.serviceId = serviceId;
+        }
+
+        public CRpcConnection? Connection { get; private set; }
+
+        public ushort GetServiceId() => serviceId;
+
+        public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+        {
+            Connection = ((CRpcContext)context).Connection;
+            return CRpcTask.FromResult((0, Array.Empty<byte>()), CRpcLoop.Current);
+        }
     }
 
     private sealed class RecordingService : IRpcService

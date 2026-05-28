@@ -1,5 +1,11 @@
 ﻿namespace CRpc.Rpc.CRpc.Server;
 
-public class CRpcContext : IRpcContext
+public sealed class CRpcContext : IRpcContext
 {
+    public CRpcContext(CRpcConnection connection)
+    {
+        Connection = connection ?? throw new ArgumentNullException(nameof(connection));
+    }
+
+    public CRpcConnection Connection { get; }
 }

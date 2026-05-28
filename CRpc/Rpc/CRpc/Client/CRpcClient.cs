@@ -8,10 +8,15 @@ namespace CRpc.Rpc.CRpc.Client;
 public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 {
     private readonly Dictionary<long, PendingCall> results = new();
+    private readonly Dictionary<(ushort ServiceId, ushort MethodId), CRpcPushHandler> pushHandlers = new();
     private readonly CRpcClientOptions options;
     private readonly TcpChannelHost host;
     private long reqSequence;
     private readonly CRpcLoop ownerLoop;
+
+    public Action<CRpcPushContext, Exception>? OnPushException { get; set; }
+
+    public Action<CRpcPushContext>? OnUnhandledPush { get; set; }
 
     public CRpcClient(CRpcLoop loop, CRpcClientOptions? options = null)
         : this(loop, options ?? new CRpcClientOptions(), createHost: true)
@@ -149,6 +154,13 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         return pendingCall.Source.Task;
     }
 
+    public void RegisterPushHandler(ushort serviceId, ushort methodId, CRpcPushHandler handler)
+    {
+        EnsureOwnerLoopThread();
+        ArgumentNullException.ThrowIfNull(handler);
+        pushHandlers[(serviceId, methodId)] = handler;
+    }
+
     internal void OnReceiveResponse(CRpcMessage message)
     {
         ownerLoop.Post(() => CompleteReceiveResponse(message));
@@ -202,12 +214,93 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     private void CompleteReceiveResponse(CRpcMessage message)
     {
+        var header = message.getHeader();
+        if (header.hasState(CRpcMessageState.STATE_PUSH))
+        {
+            DispatchPush(message);
+            return;
+        }
+
+        if (!header.hasState(CRpcMessageState.STATE_RESPONSE))
+        {
+            Console.WriteLine(
+                $"CRpcClient ignored inbound message without response or push state: serviceId={message.getServiceId()}, methodId={message.getMethodId()}");
+            return;
+        }
+
         var reqSequence = message.getReqSequence();
         if (results.Remove(reqSequence, out var pendingCall))
         {
             pendingCall.TimeoutTimer?.Cancel();
             pendingCall.Source.TrySetResult(message);
         }
+    }
+
+    private void DispatchPush(CRpcMessage message)
+    {
+        var serviceId = message.getServiceId();
+        var methodId = message.getMethodId();
+        var context = new CRpcPushContext(ownerLoop, serviceId, methodId);
+
+        if (!pushHandlers.TryGetValue((serviceId, methodId), out var handler))
+        {
+            if (OnUnhandledPush is not null)
+            {
+                OnUnhandledPush(context);
+            }
+            else
+            {
+                Console.WriteLine($"CRpcClient unhandled push: serviceId={serviceId}, methodId={methodId}");
+            }
+
+            return;
+        }
+
+        try
+        {
+            var task = handler(context, message.getBody());
+            ObservePushHandler(task, context);
+        }
+        catch (Exception exception)
+        {
+            ReportPushException(context, exception);
+        }
+    }
+
+    private void ObservePushHandler(CRpcTask task, CRpcPushContext context)
+    {
+        var awaiter = task.GetAwaiter();
+        if (awaiter.IsCompleted)
+        {
+            CompletePushHandler(awaiter, context);
+            return;
+        }
+
+        awaiter.OnCompleted(() => CompletePushHandler(awaiter, context));
+    }
+
+    private void CompletePushHandler(CRpcTask.Awaiter awaiter, CRpcPushContext context)
+    {
+        try
+        {
+            awaiter.GetResult();
+        }
+        catch (Exception exception)
+        {
+            ReportPushException(context, exception);
+        }
+    }
+
+    private void ReportPushException(CRpcPushContext context, Exception exception)
+    {
+        if (OnPushException is not null)
+        {
+            OnPushException(context, exception);
+            return;
+        }
+
+        Console.WriteLine(
+            $"CRpcClient push handler exception: serviceId={context.ServiceId}, methodId={context.MethodId}, exception={exception}");
     }
 
     private void __Send(long reqSeq, ushort serviceId, ushort methodId, byte[] bytes)

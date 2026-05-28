@@ -9,3 +9,7 @@ message HelloRequest {
 message HelloReply {
    string msg = 1;
 }
+
+message ServerNoticePush {
+  string msg = 1;
+}

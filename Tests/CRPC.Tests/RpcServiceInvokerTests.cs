@@ -2,6 +2,7 @@ using CRpc.Async;
 using CRpc.Rpc;
 using CRpc.Rpc.CRpc.Codec;
 using CRpc.Rpc.CRpc.Server;
+using DotNetty.Transport.Channels.Embedded;
 
 namespace CRPC.Tests;
 
@@ -11,24 +12,22 @@ public class RpcServiceInvokerTests : CrpcTestBase
     public void InvokeAsyncReturnsServiceResult()
     {
         var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
         var service = new ByteReturnService(1000);
-        loop.Post(() => loop.RegisterService(service));
-        loop.Tick();
+        loop.RegisterService(service);
 
         (int code, byte[] body)? result = null;
         var request = CreateRequest(1000, 1);
-        loop.Post(() =>
+        var registry = new CRpcConnectionRegistry(loop);
+        var connection = registry.Register(new EmbeddedChannel());
+        var task = RpcServiceInvoker.InvokeAsync(service, new CRpcContext(connection), request);
+        var awaiter = task.GetAwaiter();
+        if (!awaiter.IsCompleted)
         {
-            var task = RpcServiceInvoker.InvokeAsync(service, new CRpcContext(), request);
-            var awaiter = task.GetAwaiter();
-            if (!awaiter.IsCompleted)
-            {
-                throw new InvalidOperationException("Expected synchronous completion.");
-            }
+            throw new InvalidOperationException("Expected synchronous completion.");
+        }
 
-            result = awaiter.GetResult();
-        });
-        loop.Tick();
+        result = awaiter.GetResult();
 
         Assert.NotNull(result);
         Assert.Equal(0, result.Value.code);

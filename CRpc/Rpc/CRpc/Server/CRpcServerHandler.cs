@@ -16,6 +16,12 @@ public class CRpcServerHandler : ChannelHandlerAdapter
         this.server = server;
     }
 
+    public override void ChannelActive(IChannelHandlerContext context)
+    {
+        server.Loop.Post(() => server.Connections.Register(context.Channel));
+        base.ChannelActive(context);
+    }
+
     public override void ChannelRead(IChannelHandlerContext ctx, object msg)
     {
         var message = (CRpcMessage)msg;
@@ -36,7 +42,12 @@ public class CRpcServerHandler : ChannelHandlerAdapter
 
     private void ProcessMessage(IRpcService rpcService, IChannelHandlerContext ctx, object msg)
     {
-        var task = ProcessMessageAsync(rpcService, ctx, msg);
+        if (!server.Connections.TryGetByChannel(ctx.Channel, out var connection))
+        {
+            return;
+        }
+
+        var task = ProcessMessageAsync(rpcService, connection, ctx, msg);
         var awaiter = task.GetAwaiter();
         if (awaiter.IsCompleted)
         {
@@ -49,10 +60,11 @@ public class CRpcServerHandler : ChannelHandlerAdapter
 
     private static async CRpcTask ProcessMessageAsync(
         IRpcService rpcService,
+        CRpcConnection connection,
         IChannelHandlerContext ctx,
         object msg)
     {
-        var rpcContext = new CRpcContext();
+        var rpcContext = new CRpcContext(connection);
         var request = (CRpcMessage)msg;
         var (resultCode, bytes) = await RpcServiceInvoker.InvokeAsync(rpcService, rpcContext, request);
         var rsp = RpcServiceInvoker.BuildCrpcResponse(request, resultCode, bytes);
@@ -73,6 +85,7 @@ public class CRpcServerHandler : ChannelHandlerAdapter
 
     public override void ChannelInactive(IChannelHandlerContext context)
     {
+        server.Loop.Post(() => server.Connections.Unregister(context.Channel));
         Console.WriteLine($"CRpcServerHandler client disconnected: {context.Channel.RemoteAddress}");
         context.FireChannelInactive();
     }

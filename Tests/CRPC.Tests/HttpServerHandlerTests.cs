@@ -20,7 +20,9 @@ public class HttpServerHandlerTests : CrpcTestBase
         var service = new TestJsonEchoService();
         loop.RegisterService(service);
 
-        var channel = new EmbeddedChannel(new HttpServerHandler(loop));
+        var connections = new CRpcConnectionRegistry(loop);
+        var channel = new EmbeddedChannel(new HttpServerHandler(loop, connections));
+        channel.Pipeline.FireChannelActive();
 
         var request = new DefaultFullHttpRequest(
             DotNetty.Codecs.Http.HttpVersion.Http11,
@@ -45,7 +47,9 @@ public class HttpServerHandlerTests : CrpcTestBase
     public void WrongContentTypeReturns415()
     {
         var loop = new CRpcLoop();
-        var channel = new EmbeddedChannel(new HttpServerHandler(loop));
+        var connections = new CRpcConnectionRegistry(loop);
+        var channel = new EmbeddedChannel(new HttpServerHandler(loop, connections));
+        channel.Pipeline.FireChannelActive();
 
         var request = new DefaultFullHttpRequest(
             DotNetty.Codecs.Http.HttpVersion.Http11,

@@ -43,6 +43,7 @@ namespace CRpcProtobufPlugin
             sb.AppendLine($"// source: {fileDescriptorProto.Name}");
 
             sb.AppendLine("");
+            sb.AppendLine("using System;");
             sb.AppendLine("using Google.Protobuf;");
             sb.AppendLine("using Google.Protobuf.WellKnownTypes;");
             sb.AppendLine("using CRpc.Async;");
@@ -79,6 +80,7 @@ namespace CRpcProtobufPlugin
             sb.AppendLine($"// source: {fileDescriptorProto.Name}");
 
             sb.AppendLine("");
+            sb.AppendLine("using System;");
             sb.AppendLine("using Google.Protobuf;");
             sb.AppendLine("using Google.Protobuf.WellKnownTypes;");
             sb.AppendLine("using CRpc.Async;");
@@ -113,10 +115,35 @@ namespace CRpcProtobufPlugin
                 throw new Exception("Service=" + service.Name + " ServiceId NOT FOUND");
             if (serviceId >= ushort.MaxValue)
                 throw new Exception("Service=" + service.Name + "ServiceId too large");
-            
-            sb.AppendLine($"public sealed class {service.Name}Client : IRpcClient");
+
+            sb.AppendLine($"public abstract class {service.Name}ClientBase : ICRpcGeneratedClient");
             sb.AppendLine("{");
-            
+            sb.AppendLine("    public IRpcClient __client = null!;");
+            sb.AppendLine();
+            sb.AppendLine("    public void BindRpcClient(IRpcClient client)");
+            sb.AppendLine("    {");
+            sb.AppendLine("        __client = client ?? throw new ArgumentNullException(nameof(client));");
+
+            foreach (var method in service.Method)
+            {
+                if (!IsServerPush(method))
+                {
+                    continue;
+                }
+
+                ValidateServerPushMethod(service, method);
+                var hasMsgId = method.Options.CustomOptions.TryGetInt32(CRpcOptions.MethodId, out int msgId);
+                if (!hasMsgId || msgId <= 0)
+                    throw new Exception("Service" + service.Name + "." + method.Name + " ' MessageId NOT FOUND");
+                if (msgId >= ushort.MaxValue)
+                    throw new Exception("Service" + service.Name + "." + method.Name + " is too large");
+
+                sb.AppendLine($"        client.RegisterPushHandler({serviceId}, {msgId}, __OnPush{method.Name}Async);");
+            }
+
+            sb.AppendLine("    }");
+            sb.AppendLine();
+
             foreach (var method in service.Method)
             {
                 var hasMsgId = method.Options.CustomOptions.TryGetInt32(CRpcOptions.MethodId, out int msgId);
@@ -124,19 +151,39 @@ namespace CRpcProtobufPlugin
                     throw new Exception("Service" + service.Name + "." + method.Name + " ' MessageId NOT FOUND");
                 if (msgId >= ushort.MaxValue)
                     throw new Exception("Service" + service.Name + "." + method.Name + " is too large");
-       
+
                 var outType = GetTypeName(method.OutputType);
                 var inType = GetTypeName(method.InputType);
 
+                if (IsServerPush(method))
+                {
+                    ValidateServerPushMethod(service, method);
+
+                    sb.AppendLine($"    private async CRpcTask __OnPush{method.Name}Async(CRpcPushContext context, byte[] body)");
+                    sb.AppendLine("    {");
+                    sb.AppendLine($"        await OnPush{method.Name}Async(context, {inType}.Parser.ParseFrom(body));");
+                    sb.AppendLine("    }");
+                    sb.AppendLine();
+                    sb.AppendLine($"    protected virtual CRpcTask OnPush{method.Name}Async(CRpcPushContext context, {inType} message)");
+                    sb.AppendLine("    {");
+                    sb.AppendLine("        return CRpcTask.CompletedTask(context.Loop);");
+                    sb.AppendLine("    }");
+                    sb.AppendLine();
+                    continue;
+                }
+
                 sb.AppendLine($"    public async CRpcTask<(int, {outType})> {method.Name}Async({inType} request, int timeOut = 5000)");
-                sb.AppendLine( "    {");
-                sb.AppendLine( "        var result = 0;");
-                sb.AppendLine( "        if (0 == result)");
-                sb.AppendLine( "        {");
-                sb.AppendLine($"            return (0, {outType}.Parser.ParseFrom(new byte[0]));");
-                sb.AppendLine( "        }");
-                sb.AppendLine($"        return (-1, new {outType}());");
-                sb.AppendLine( "    }");
+                sb.AppendLine("    {");
+                sb.AppendLine($"        CRpcMessage message = await __client.CallAsync({serviceId}, {msgId}, request.ToByteArray(), timeOut);");
+                sb.AppendLine("        var result = message.getHeader().getResultCode();");
+                sb.AppendLine("        if (0 == result)");
+                sb.AppendLine("        {");
+                sb.AppendLine("            byte[] data = message.getBody();");
+                sb.AppendLine($"            return (0, {outType}.Parser.ParseFrom(data));");
+                sb.AppendLine("        }");
+                sb.AppendLine();
+                sb.AppendLine($"        return (-1, null);");
+                sb.AppendLine("    }");
                 sb.AppendLine();
             }
 
@@ -151,6 +198,7 @@ namespace CRpcProtobufPlugin
             if (serviceId >= ushort.MaxValue) throw new Exception("Service=" + service.Name + "ServiceId too large");
 
             var sbMethodParsers = new StringBuilder();
+            var sbPushHelpers = new StringBuilder();
             foreach (var method in service.Method)
             {
                 var hasMethodId = method.Options.CustomOptions.TryGetInt32(CRpcOptions.MethodId, out int methodId);
@@ -161,10 +209,24 @@ namespace CRpcProtobufPlugin
 
                 var outType = GetTypeName(method.OutputType);
                 var inType = GetTypeName(method.InputType);
+
+                if (IsServerPush(method))
+                {
+                    ValidateServerPushMethod(service, method);
+                    sbPushHelpers.AppendLine($"    protected CRpcTask<bool> Push{method.Name}Async(CRpcConnection connection, {inType} message)");
+                    sbPushHelpers.AppendLine("    {");
+                    sbPushHelpers.AppendLine("        ArgumentNullException.ThrowIfNull(connection);");
+                    sbPushHelpers.AppendLine("        ArgumentNullException.ThrowIfNull(message);");
+                    sbPushHelpers.AppendLine($"        return connection.SendPushAsync({serviceId}, {methodId}, message.ToByteArray());");
+                    sbPushHelpers.AppendLine("    }");
+                    sbPushHelpers.AppendLine();
+                    continue;
+                }
+
                 sbMethodParsers.AppendLine($"        if (methodId == {methodId}) {{ requestParser = {inType}.Parser; responseParser = {outType}.Parser; return true; }}");
             }
 
-            sb.AppendLine($"public abstract class {service.Name}Base : IRpcService, IRpcHttpJsonCodec");
+            sb.AppendLine($"public abstract class {service.Name}ServiceBase : IRpcService, IRpcHttpJsonCodec");
             sb.AppendLine("{");
             
             sb.AppendLine( "    public ushort GetServiceId()");
@@ -183,6 +245,12 @@ namespace CRpcProtobufPlugin
                     throw new Exception("Service" + service.Name + "." + method.Name + " ' MethodId NOT FOUND");
                 if (methodId >= ushort.MaxValue)
                     throw new Exception("Service" + service.Name + "." + method.Name + " is too large");
+
+                if (IsServerPush(method))
+                {
+                    ValidateServerPushMethod(service, method);
+                    continue;
+                }
 
                 var outType = GetTypeName(method.OutputType);
                 var inType = GetTypeName(method.InputType);
@@ -220,11 +288,28 @@ namespace CRpcProtobufPlugin
             sb.AppendLine();
 
             sb.Append(sbMethodInner);
-            sb.Append("    // Please implement the following:");
-            sb.AppendLine();
-            sb.Append(sbMethodAbstract);
+            sb.Append(sbPushHelpers);
+            if (sbMethodAbstract.Length > 0)
+            {
+                sb.Append("    // Please implement the following:");
+                sb.AppendLine();
+                sb.Append(sbMethodAbstract);
+            }
 
             sb.AppendLine("}");
+        }
+
+        private static bool IsServerPush(MethodDescriptorProto method)
+        {
+            return method.Options.CustomOptions.TryGetBool(CRpcOptions.ServerPush, out var serverPush) && serverPush;
+        }
+
+        private static void ValidateServerPushMethod(ServiceDescriptorProto service, MethodDescriptorProto method)
+        {
+            if (method.OutputType != ".google.protobuf.Empty")
+            {
+                throw new Exception($"Service {service.Name}.{method.Name} server_push methods must return google.protobuf.Empty");
+            }
         }
 
         private static string GetFileNamespace(FileDescriptorProto protofile)
