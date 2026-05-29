@@ -35,6 +35,9 @@ public sealed class ScenarioReport
 
     public uint? WinSeat { get; init; }
 
+    public IReadOnlyList<AccountGameEndSummary> GameEndSummaries { get; init; } =
+        Array.Empty<AccountGameEndSummary>();
+
     public IReadOnlyList<SignupDiagnosticSnapshot> SignupDiagnostics { get; init; } =
         Array.Empty<SignupDiagnosticSnapshot>();
 }

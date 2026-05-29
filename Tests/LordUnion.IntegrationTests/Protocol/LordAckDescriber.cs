@@ -51,9 +51,12 @@ public static class LordAckDescriber
             return "LordInitBottomCardAck";
         }
 
-        if (lordAck.LordresultAckMsg is not null)
+        if (lordAck.LordresultAckMsg is { } resultAck)
         {
-            return "LordResultAck";
+            var scores = resultAck.Score.Count == 0
+                ? "-"
+                : string.Join(",", resultAck.Score);
+            return $"LordResultAck winseat={resultAck.Winseat} scores=[{scores}]";
         }
 
         return "LordAck(other)";

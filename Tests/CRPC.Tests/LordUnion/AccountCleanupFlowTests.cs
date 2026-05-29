@@ -72,6 +72,38 @@ public class AccountCleanupFlowTests : CrpcTestBase
     }
 
     [Fact]
+    public void RunAsync_PostGame_ExitsKnownMatchIdWithoutDrain()
+    {
+        const uint matchId = 475051269;
+
+        var loop = new CRpcLoop();
+        var session = new AccountSession(loop, "player1", codec);
+
+        var result = CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            session.SetState(AccountSessionState.Finished);
+            session.UserId = 214291552;
+            session.MatchId = matchId;
+
+            var transport = CreateAutoResponder(
+                session,
+                CreateUnsignupAck(tourneyId: 159740, matchPoint: 2008280, param: 0),
+                CreateExitGameAck(matchId));
+
+            var flow = new AccountCleanupFlow(codec);
+            return await flow.RunAsync(
+                session,
+                CreateMatch(),
+                transport,
+                AccountCleanupRunOptions.PostGameCleanup(matchId));
+        });
+
+        Assert.Contains(matchId, result.DiscoveredMatchIds);
+        Assert.Contains(matchId, result.ExitGameAttemptedMatchIds);
+        Assert.Equal(AccountSessionState.Finished, session.State);
+    }
+
+    [Fact]
     public void CaptureMatchIds_RecordsStartClientExMatchId()
     {
         var discovered = new HashSet<uint>();

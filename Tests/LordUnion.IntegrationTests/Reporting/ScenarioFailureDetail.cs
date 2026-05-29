@@ -15,7 +15,8 @@ public sealed class ScenarioFailureDetail
 
     public SessionMessageLogEntry? LastReceivedMessage { get; init; }
 
-    public IReadOnlyList<SessionMessageLogEntry> ReceivedMessages { get; init; } = Array.Empty<SessionMessageLogEntry>();
+    public IReadOnlyList<SessionMessageLogEntry> ReceivedMessages { get; init; } =
+        Array.Empty<SessionMessageLogEntry>();
 
     public string Message { get; init; } = string.Empty;
 

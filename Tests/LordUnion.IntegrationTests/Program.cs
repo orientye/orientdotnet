@@ -64,7 +64,8 @@ public static class Program
         {
             Console.WriteLine();
             Console.WriteLine("Dry run complete. Live server execution is disabled.");
-            Console.WriteLine($"Re-run with --live --config \"{DefaultLocalConfigFileName}\" to connect to the real server.");
+            Console.WriteLine(
+                $"Re-run with --live --config \"{DefaultLocalConfigFileName}\" to connect to the real server.");
             return 0;
         }
 
@@ -99,20 +100,23 @@ public static class Program
         {
             if (string.IsNullOrWhiteSpace(options.ConfigPath))
             {
-                Console.Error.WriteLine($"Live mode requires --config <path> pointing to a local config file (for example {DefaultLocalConfigFileName}).");
+                Console.Error.WriteLine(
+                    $"Live mode requires --config <path> pointing to a local config file (for example {DefaultLocalConfigFileName}).");
                 return null;
             }
 
             if (!File.Exists(options.ConfigPath))
             {
                 Console.Error.WriteLine($"Live mode config file not found: {options.ConfigPath}");
-                Console.Error.WriteLine($"Copy {ExampleConfigFileName} to {DefaultLocalConfigFileName} and fill in credentials.");
+                Console.Error.WriteLine(
+                    $"Copy {ExampleConfigFileName} to {DefaultLocalConfigFileName} and fill in credentials.");
                 return null;
             }
 
             if (IsExampleConfigPath(options.ConfigPath))
             {
-                Console.Error.WriteLine("Live mode cannot use the example config file. Use a local config such as appsettings.local.json.");
+                Console.Error.WriteLine(
+                    "Live mode cannot use the example config file. Use a local config such as appsettings.local.json.");
                 return null;
             }
 
@@ -143,7 +147,8 @@ public static class Program
             return exampleConfig;
         }
 
-        Console.Error.WriteLine($"No config file found. Pass --config <path> or place {ExampleConfigFileName} next to the runner.");
+        Console.Error.WriteLine(
+            $"No config file found. Pass --config <path> or place {ExampleConfigFileName} next to the runner.");
         return null;
     }
 
@@ -151,7 +156,7 @@ public static class Program
     {
         var fileName = Path.GetFileName(configPath);
         return fileName.Equals(ExampleConfigFileName, StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".example.json", StringComparison.OrdinalIgnoreCase);
+               || fileName.EndsWith(".example.json", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? FindConfigNearApp(string fileName)
@@ -166,7 +171,8 @@ public static class Program
         Console.WriteLine($"Config: {configPath}");
         Console.WriteLine($"Server: {config.Server.Host}:{config.Server.Port}");
         Console.WriteLine($"Protocol: appId={config.Protocol.AppId}, loginType={config.Protocol.LoginType}");
-        Console.WriteLine($"Match: gameId={config.Match.GameId}, productId={config.Match.ProductId}, tourneyId={config.Match.TourneyId}");
+        Console.WriteLine(
+            $"Match: gameId={config.Match.GameId}, productId={config.Match.ProductId}, tourneyId={config.Match.TourneyId}");
         Console.WriteLine($"Accounts: {string.Join(", ", config.Accounts.Select(a => a.Alias))}");
         Console.WriteLine($"Output: {IntegrationTestPaths.ResolveOutputDirectory(config.Output.Directory)}");
     }
@@ -180,8 +186,10 @@ public static class Program
         Console.WriteLine("  LordUnion.IntegrationTests --live --config <path>");
         Console.WriteLine();
         Console.WriteLine("Options:");
-        Console.WriteLine("  --config <path>   Config JSON path (dry run defaults to appsettings.example.json when present)");
-        Console.WriteLine("  --live            Enable live server execution (requires a local config file, not *.example.json)");
+        Console.WriteLine(
+            "  --config <path>   Config JSON path (dry run defaults to appsettings.example.json when present)");
+        Console.WriteLine(
+            "  --live            Enable live server execution (requires a local config file, not *.example.json)");
         Console.WriteLine("  -h, --help        Show this help");
     }
 

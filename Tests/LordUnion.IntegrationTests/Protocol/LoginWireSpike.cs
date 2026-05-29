@@ -45,7 +45,8 @@ public sealed class LoginWireSpike
 {
     private readonly ServerProtocolCodec _codec = new();
 
-    public async Task<LoginWireSpikeResult> RunAsync(LoginWireSpikeOptions options, CancellationToken cancellationToken = default)
+    public async Task<LoginWireSpikeResult> RunAsync(LoginWireSpikeOptions options,
+        CancellationToken cancellationToken = default)
     {
         using var client = new TcpClient();
         using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -56,7 +57,8 @@ public sealed class LoginWireSpike
         stream.ReadTimeout = options.ReadTimeoutMs;
         stream.WriteTimeout = options.ReadTimeoutMs;
 
-        var anonymousPacket = _codec.EncodeClientRequest(_codec.CreateAnonymousBrowseRequest(options.AnonymousSerialId));
+        var anonymousPacket =
+            _codec.EncodeClientRequest(_codec.CreateAnonymousBrowseRequest(options.AnonymousSerialId));
         await stream.WriteAsync(anonymousPacket, cancellationToken);
 
         var anonymousStopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -111,8 +113,8 @@ public sealed class LoginWireSpike
             ? LobbyAes128Crypto.DecryptFromHex(commonLoginAck.Jsondata!, aesKey)
             : commonLoginAck.Jsondata;
         var userId = commonLoginAck.Userinfo?.Userid
-            ?? minimalLoginAck.LobbyAckMsg?.CommonLoginAckMsg?.UserInfo?.UserId
-            ?? LoginAckJsonParser.TryGetUserId(decryptedLoginJson);
+                     ?? minimalLoginAck.LobbyAckMsg?.CommonLoginAckMsg?.UserInfo?.UserId
+                     ?? LoginAckJsonParser.TryGetUserId(decryptedLoginJson);
         var sessionId = LoginAckJsonParser.TryGetSessionId(decryptedLoginJson);
         var success = userId is > 0 && (loginMessage.Param == 0 || (loginMessage.Param == 31 && sessionId is > 0));
         string? message = null;
@@ -120,7 +122,8 @@ public sealed class LoginWireSpike
         {
             if (loginMessage.Param != 0)
             {
-                message = $"Login failed with error code {loginMessage.Param}. timestampMillis={loginTimestampMillis}, ackJson={decryptedLoginJson}";
+                message =
+                    $"Login failed with error code {loginMessage.Param}. timestampMillis={loginTimestampMillis}, ackJson={decryptedLoginJson}";
             }
             else if (userId is null or 0)
             {
@@ -129,7 +132,8 @@ public sealed class LoginWireSpike
         }
         else if (loginMessage.Param == 31)
         {
-            message = $"Login returned param=31 with pid={userId} and sessionId={sessionId}; accepted for integration spike.";
+            message =
+                $"Login returned param=31 with pid={userId} and sessionId={sessionId}; accepted for integration spike.";
         }
 
         return new LoginWireSpikeResult
@@ -165,43 +169,34 @@ public sealed class LoginWireSpike
     [ProtoContract]
     private sealed class MinimalLoginAckBody
     {
-        [ProtoMember(1)]
-        public uint Param { get; set; }
+        [ProtoMember(1)] public uint Param { get; set; }
 
-        [ProtoMember(2)]
-        public MinimalLobbyAckBody? LobbyAckMsg { get; set; }
+        [ProtoMember(2)] public MinimalLobbyAckBody? LobbyAckMsg { get; set; }
     }
 
     [ProtoContract]
     private sealed class MinimalLobbyAckBody
     {
-        [ProtoMember(134)]
-        public MinimalCommonLoginAckBody? CommonLoginAckMsg { get; set; }
+        [ProtoMember(134)] public MinimalCommonLoginAckBody? CommonLoginAckMsg { get; set; }
     }
 
     [ProtoContract]
     private sealed class MinimalCommonLoginAckBody
     {
-        [ProtoMember(1)]
-        public string? JsonData { get; set; }
+        [ProtoMember(1)] public string? JsonData { get; set; }
 
-        [ProtoMember(2)]
-        public uint CryptoType { get; set; }
+        [ProtoMember(2)] public uint CryptoType { get; set; }
 
-        [ProtoMember(3)]
-        public MinimalUserInfoBody? UserInfo { get; set; }
+        [ProtoMember(3)] public MinimalUserInfoBody? UserInfo { get; set; }
 
-        [ProtoMember(4)]
-        public uint MsgType { get; set; }
+        [ProtoMember(4)] public uint MsgType { get; set; }
     }
 
     [ProtoContract]
     private sealed class MinimalUserInfoBody
     {
-        [ProtoMember(1)]
-        public uint UserId { get; set; }
+        [ProtoMember(1)] public uint UserId { get; set; }
 
-        [ProtoMember(2)]
-        public string Nickname { get; set; } = string.Empty;
+        [ProtoMember(2)] public string Nickname { get; set; } = string.Empty;
     }
 }

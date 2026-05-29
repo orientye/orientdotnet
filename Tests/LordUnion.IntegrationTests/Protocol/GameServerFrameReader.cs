@@ -4,7 +4,8 @@ namespace LordUnion.IntegrationTests.Protocol;
 
 public static class GameServerFrameReader
 {
-    public static async Task<ServerPacketFrame> ReadFrameAsync(NetworkStream stream, CancellationToken cancellationToken)
+    public static async Task<ServerPacketFrame> ReadFrameAsync(NetworkStream stream,
+        CancellationToken cancellationToken)
     {
         var header = await ReadExactAsync(stream, ServerPacketFrame.HeaderLength, cancellationToken);
         var frameHeader = ServerPacketFrame.DecodeHeader(header);

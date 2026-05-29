@@ -68,7 +68,7 @@ public class GameFlowTests : CrpcTestBase
     }
 
     [Fact]
-    public void RunUntilFinishedAsync_CompletesOnOverGameAck()
+    public void RunUntilFinishedAsync_CompletesOnLordResultAfterOverGameAck()
     {
         var loop = new CRpcLoop();
         var session = new AccountSession(loop, "player1", codec);
@@ -91,16 +91,56 @@ public class GameFlowTests : CrpcTestBase
                 transport);
 
             DeliverLordEvent(session, CreateOverGameAck());
+            DeliverLordEvent(session, CreateGameFinishedAck(winSeat: 2, scores: new[] { 10, -5, -5 }));
 
             return await flowTask;
         });
 
         Assert.True(result.Success);
+        Assert.Equal(2u, result.WinSeat);
+        Assert.Equal("LordResultAck", result.EndSignal);
         Assert.Equal(AccountSessionState.Finished, session.State);
     }
 
     [Fact]
-    public void RunUntilFinishedAsync_CompletesOnHandOverAck()
+    public void RunUntilFinishedAsync_OverGameAlone_DoesNotCompleteUntilLordResultAck()
+    {
+        var loop = new CRpcLoop();
+        var session = new AccountSession(loop, "player1", codec);
+        var bot = new MinimalLandlordBot();
+        var transport = new FakeGameServerTransport();
+        transport.BindIncomingHandler(session, codec);
+
+        var result = CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            session.SetState(AccountSessionState.InGame);
+            session.MatchId = MatchId;
+            session.SeatOrder = SeatOrder;
+
+            var flow = new GameFlow(codec);
+            var flowTask = flow.RunUntilFinishedAsync(
+                session,
+                bot,
+                variant,
+                TimeSpan.FromSeconds(5),
+                transport);
+
+            DeliverLordEvent(session, CreateOverGameAck());
+            await CRpcTask.Delay(20, loop);
+            Assert.False(flowTask.GetAwaiter().IsCompleted);
+
+            DeliverLordEvent(session, CreateGameFinishedAck(winSeat: SeatOrder, scores: new[] { 1, 0, -1 }));
+
+            return await flowTask;
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal(SeatOrder, result.WinSeat);
+        Assert.Equal("LordResultAck", result.EndSignal);
+    }
+
+    [Fact]
+    public void RunUntilFinishedAsync_CompletesOnLordResultAfterHandOverAck()
     {
         var loop = new CRpcLoop();
         var session = new AccountSession(loop, "player1", codec);
@@ -120,11 +160,14 @@ public class GameFlowTests : CrpcTestBase
                 TimeSpan.FromSeconds(5));
 
             DeliverLordEvent(session, CreateHandOverAck());
+            DeliverLordEvent(session, CreateGameFinishedAck(winSeat: SeatOrder, scores: new[] { 3, -1, -2 }));
 
             return await flowTask;
         });
 
         Assert.True(result.Success);
+        Assert.Equal(SeatOrder, result.WinSeat);
+        Assert.Equal("LordResultAck", result.EndSignal);
         Assert.Equal(AccountSessionState.Finished, session.State);
     }
 

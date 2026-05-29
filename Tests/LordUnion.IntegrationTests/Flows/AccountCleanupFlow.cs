@@ -12,7 +12,6 @@ namespace LordUnion.IntegrationTests.Flows;
 /// </summary>
 public sealed class AccountCleanupFlow
 {
-    private const int DefaultDrainWindowMs = 2000;
     private const int UnsignupWaitMs = 5000;
     private const int ExitStepWaitMs = 3000;
     private const int PostCleanupSettleMs = 3000;
@@ -28,25 +27,35 @@ public sealed class AccountCleanupFlow
         AccountSession session,
         MatchConfig match,
         IGameServerTransport? transport = null,
-        int drainWindowMs = DefaultDrainWindowMs)
+        int drainWindowMs = AccountCleanupRunOptions.DefaultDrainWindowMs)
     {
-        return RunCoreAsync(session, match, transport, drainWindowMs);
+        return RunAsync(session, match, transport, AccountCleanupRunOptions.PreSignup(drainWindowMs));
+    }
+
+    public CRpcTask<AccountCleanupFlowResult> RunAsync(
+        AccountSession session,
+        MatchConfig match,
+        IGameServerTransport? transport,
+        AccountCleanupRunOptions options)
+    {
+        return RunCoreAsync(session, match, transport, options);
     }
 
     private async CRpcTask<AccountCleanupFlowResult> RunCoreAsync(
         AccountSession session,
         MatchConfig match,
         IGameServerTransport? transport,
-        int drainWindowMs)
+        AccountCleanupRunOptions options)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(match);
+        ArgumentNullException.ThrowIfNull(options);
         EnsureOnLoopThread(session);
 
-        if (session.State != AccountSessionState.LoggedIn)
+        if (!IsAllowedSessionState(session.State, options.PostGame))
         {
             throw new InvalidOperationException(
-                $"AccountCleanupFlow requires session '{session.Alias}' to be logged in; current state is {session.State}.");
+                $"AccountCleanupFlow requires a valid session state for '{session.Alias}'; current state is {session.State}, postGame={options.PostGame}.");
         }
 
         if (session.UserId is not uint userId || userId == 0)
@@ -71,11 +80,19 @@ public sealed class AccountCleanupFlow
             CaptureMatchIds(message, discoveredMatchIds);
         };
 
+        foreach (var matchId in options.KnownMatchIds)
+        {
+            if (matchId > 0)
+            {
+                discoveredMatchIds.Add(matchId);
+            }
+        }
+
         try
         {
-            if (drainWindowMs > 0)
+            if (options.DrainWindowMs > 0)
             {
-                await CRpcTask.Delay(drainWindowMs, session.Loop);
+                await CRpcTask.Delay(options.DrainWindowMs, session.Loop);
             }
 
             await SendRequestAsync(
@@ -211,6 +228,19 @@ public sealed class AccountCleanupFlow
         {
             await transport.SendAsync(session.LastSentPacket, session.Loop);
         }
+    }
+
+    private static bool IsAllowedSessionState(AccountSessionState state, bool postGame)
+    {
+        if (state == AccountSessionState.LoggedIn)
+        {
+            return true;
+        }
+
+        return postGame
+               && state is AccountSessionState.Finished
+                   or AccountSessionState.InGame
+                   or AccountSessionState.SignedUp;
     }
 
     private static void EnsureOnLoopThread(AccountSession session)

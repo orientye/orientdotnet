@@ -94,7 +94,7 @@ public sealed class EnterMatchFlow
                 ProtocolMessageKind.EnterMatchAck,
                 ToTimeoutMilliseconds(enterMatchTimeout));
             var enterMatchAck = enterMatchMessage.EnterMatchAcknowledgement
-                ?? throw new InvalidOperationException("EnterMatchAck missing in server response.");
+                                ?? throw new InvalidOperationException("EnterMatchAck missing in server response.");
 
             if (enterMatchAck.Matchid != matchStart.MatchId)
             {
@@ -471,7 +471,7 @@ public sealed class EnterMatchFlow
         if (message.Kind == ProtocolMessageKind.StartGameClientAck)
         {
             var ack = message.StartGameClientAcknowledgement
-                ?? throw new InvalidOperationException("StartGameClientAck missing in server response.");
+                      ?? throw new InvalidOperationException("StartGameClientAck missing in server response.");
             return new EnterMatchStartInfo
             {
                 MatchId = ack.Matchid,
@@ -485,7 +485,7 @@ public sealed class EnterMatchFlow
         if (message.Kind == ProtocolMessageKind.StartClientExAck)
         {
             var ack = message.StartClientExAcknowledgement
-                ?? throw new InvalidOperationException("StartClientExAck missing in server response.");
+                      ?? throw new InvalidOperationException("StartClientExAck missing in server response.");
             return new EnterMatchStartInfo
             {
                 MatchId = ack.Matchid,

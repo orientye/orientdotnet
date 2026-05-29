@@ -39,21 +39,22 @@ public sealed class MinimalLandlordBotPolicy : IBotPolicy
                     gameEvent.ValidateScore ?? 0)),
             GameEventKind.BidRequested
                 when gameEvent.NextCallSeat == seat && gameEvent.NextCallSeat != uint.MaxValue => bot.DecideBid(
-                new BidContext(
-                    matchId,
-                    seat,
-                    gameEvent.NextCallSeat ?? seat,
-                    gameEvent.CurScore ?? 0,
-                    gameEvent.ValidateScore ?? 0)),
+                    new BidContext(
+                        matchId,
+                        seat,
+                        gameEvent.NextCallSeat ?? seat,
+                        gameEvent.CurScore ?? 0,
+                        gameEvent.ValidateScore ?? 0)),
             GameEventKind.LandlordDeclared
                 when gameEvent.LordSeat == seat && !bot.State.LandlordFirstLeadDone => DecideFirstLead(
-                bot,
-                matchId,
-                seat),
-            GameEventKind.TurnStarted when IsLeadTurn(gameEvent, seat) && !bot.State.LandlordFirstLeadDone => DecideFirstLead(
-                bot,
-                matchId,
-                seat),
+                    bot,
+                    matchId,
+                    seat),
+            GameEventKind.TurnStarted when IsLeadTurn(gameEvent, seat) && !bot.State.LandlordFirstLeadDone =>
+                DecideFirstLead(
+                    bot,
+                    matchId,
+                    seat),
             GameEventKind.CardsPlayed or GameEventKind.PassPlayed when gameEvent.NextPlayer == seat => bot.DecidePlay(
                 new PlayContext(
                     matchId,

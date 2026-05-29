@@ -12,7 +12,8 @@ public sealed class GameServerFrameDecoder : ByteToMessageDecoder
     {
         if (maxBodyLength <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(maxBodyLength), maxBodyLength, "Max body length must be positive.");
+            throw new ArgumentOutOfRangeException(nameof(maxBodyLength), maxBodyLength,
+                "Max body length must be positive.");
         }
 
         this.maxBodyLength = maxBodyLength;

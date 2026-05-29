@@ -29,7 +29,7 @@ public static class SessionMessageRouter
                 => SessionMessageRouteArea.Lobby,
 
             ProtocolMessageKind.EnterMatchReq or ProtocolMessageKind.EnterMatchAck
-                or             ProtocolMessageKind.EnterRoundReq or ProtocolMessageKind.EnterRoundAck
+                or ProtocolMessageKind.EnterRoundReq or ProtocolMessageKind.EnterRoundAck
                 or ProtocolMessageKind.InitGameTableAck or ProtocolMessageKind.MatchTipMsgAck
                 or ProtocolMessageKind.AddGamePlayerInfoAck or ProtocolMessageKind.PushMatchPlayerInfoAck
                 or ProtocolMessageKind.ExitGameReq or ProtocolMessageKind.ExitGameAck

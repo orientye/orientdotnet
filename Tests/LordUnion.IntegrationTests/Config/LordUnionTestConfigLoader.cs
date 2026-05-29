@@ -27,7 +27,7 @@ public static class LordUnionTestConfigLoader
 
         var json = File.ReadAllText(configPath);
         var config = JsonSerializer.Deserialize<LordUnionTestConfig>(json, SerializerOptions)
-            ?? throw new InvalidOperationException($"Failed to deserialize config: {configPath}");
+                     ?? throw new InvalidOperationException($"Failed to deserialize config: {configPath}");
 
         ApplyDefaults(config);
         return config;

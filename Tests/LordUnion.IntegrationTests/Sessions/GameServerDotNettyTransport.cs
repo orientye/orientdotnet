@@ -123,7 +123,7 @@ public sealed class GameServerDotNettyTransport : IGameServerTransport, IAsyncDi
         }
 
         var activeSession = session
-            ?? throw new InvalidOperationException("Incoming handler is not bound.");
+                            ?? throw new InvalidOperationException("Incoming handler is not bound.");
 
         var packet = ServerPacketFrame.EncodeFrame(frame.Header0, frame.Body);
         var protocolMessage = codec.DecodePacket(

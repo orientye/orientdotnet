@@ -17,9 +17,55 @@ public class ReportWriterTests
 
         var output = CaptureConsoleOutput(() => reportWriter.WriteConsoleSummary(report, metadata));
 
-        Assert.Contains("SUCCESS", output, StringComparison.Ordinal);
+        Assert.Contains("SUCCESS ThreePlayersOneGame", output, StringComparison.Ordinal);
         Assert.Contains("player1", output, StringComparison.Ordinal);
-        Assert.Contains("WinSeat: 1", output, StringComparison.Ordinal);
+        Assert.Contains("winSeat=1", output, StringComparison.Ordinal);
+        Assert.Contains("gameEnd player1:seat=1/signal=LordResultAck", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WriteConsoleSummary_UsesCompactSuccessOutput()
+    {
+        var report = new ScenarioReport
+        {
+            Success = true,
+            MatchId = 475051269,
+            TableId = 475051269,
+            WinSeat = 1,
+            GameEndSummaries =
+            [
+                new AccountGameEndSummary
+                {
+                    AccountAlias = "player1",
+                    GameFlowWinSeat = 1,
+                    EndSignal = "LordResultAck",
+                },
+            ],
+            AccountTimings =
+            [
+                new AccountPhaseTiming
+                {
+                    AccountAlias = "player1",
+                    LoginDuration = TimeSpan.FromMilliseconds(416),
+                    SignupDuration = TimeSpan.FromMilliseconds(74),
+                    EnterMatchDuration = TimeSpan.FromMilliseconds(3440),
+                    GameDuration = TimeSpan.FromMilliseconds(146300),
+                },
+            ],
+        };
+        var metadata = new ReportMetadata
+        {
+            ScenarioName = "ThreePlayersOneGame",
+            StartedAt = DateTimeOffset.Parse("2026-05-29T03:20:00Z"),
+            EndedAt = DateTimeOffset.Parse("2026-05-29T03:22:35Z"),
+        };
+
+        var output = CaptureConsoleOutput(() => reportWriter.WriteConsoleSummary(report, metadata));
+
+        Assert.Contains("SUCCESS ThreePlayersOneGame", output, StringComparison.Ordinal);
+        Assert.Contains("player1 login=416ms signup=74ms enter=3.44s game=146.30s", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("--- Signup Diagnostics ---", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Post-signup messages", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -88,6 +134,12 @@ public class ReportWriterTests
             MatchId = 900001,
             TableId = 900001,
             WinSeat = 1,
+            GameEndSummaries =
+            [
+                new AccountGameEndSummary { AccountAlias = "player1", GameFlowWinSeat = 1, EndSignal = "LordResultAck" },
+                new AccountGameEndSummary { AccountAlias = "player2", GameFlowWinSeat = 1, EndSignal = "LordResultAck" },
+                new AccountGameEndSummary { AccountAlias = "player3", GameFlowWinSeat = 1, EndSignal = "LordResultAck" },
+            ],
             SeatUserMapping = new Dictionary<uint, uint>
             {
                 [1] = 10001,

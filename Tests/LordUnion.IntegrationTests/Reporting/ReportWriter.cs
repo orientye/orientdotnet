@@ -27,6 +27,12 @@ public sealed class ReportWriter
         ArgumentNullException.ThrowIfNull(report);
         ArgumentNullException.ThrowIfNull(metadata);
 
+        if (report.Success)
+        {
+            WriteCompactSuccessSummary(report, metadata);
+            return;
+        }
+
         Console.WriteLine();
         Console.WriteLine("=== Scenario Report ===");
         Console.WriteLine($"Scenario: {metadata.ScenarioName}");
@@ -104,6 +110,30 @@ public sealed class ReportWriter
         return path;
     }
 
+    private static void WriteCompactSuccessSummary(ScenarioReport report, ReportMetadata metadata)
+    {
+        Console.WriteLine(
+            $"SUCCESS {metadata.ScenarioName} duration={FormatDuration(metadata.EndedAt - metadata.StartedAt)} " +
+            $"matchId={report.MatchId?.ToString() ?? "(unknown)"} " +
+            $"tableId={report.TableId?.ToString() ?? "(unknown)"} " +
+            $"winSeat={FormatWinSeat(report.WinSeat)}");
+
+        if (report.GameEndSummaries.Count > 0)
+        {
+            Console.WriteLine($"gameEnd {FormatGameEndSummaries(report.GameEndSummaries)}");
+        }
+
+        foreach (var timing in report.AccountTimings)
+        {
+            Console.WriteLine(
+                $"{timing.AccountAlias} " +
+                $"login={FormatDuration(timing.LoginDuration)} " +
+                $"signup={FormatDuration(timing.SignupDuration)} " +
+                $"enter={FormatDuration(timing.EnterMatchDuration)} " +
+                $"game={FormatDuration(timing.GameDuration)}");
+        }
+    }
+
     private static void WriteFailureSection(ScenarioFailureDetail failure)
     {
         Console.WriteLine();
@@ -160,6 +190,14 @@ public sealed class ReportWriter
             MatchId = report.MatchId,
             TableId = report.TableId,
             WinSeat = report.WinSeat,
+            GameEndSummaries = report.GameEndSummaries
+                .Select(summary => new AccountGameEndSummaryJson
+                {
+                    AccountAlias = summary.AccountAlias,
+                    GameFlowWinSeat = summary.GameFlowWinSeat,
+                    EndSignal = summary.EndSignal,
+                })
+                .ToList(),
             SeatUserMapping = report.SeatUserMapping is null
                 ? null
                 : report.SeatUserMapping.ToDictionary(pair => pair.Key, pair => pair.Value),
@@ -221,7 +259,8 @@ public sealed class ReportWriter
             ExceptionType = failure.Exception?.GetType().FullName,
             ExceptionMessage = failure.Exception?.Message,
             LastSentMessage = failure.LastSentMessage is null ? null : ToMessageJson(failure.LastSentMessage),
-            LastReceivedMessage = failure.LastReceivedMessage is null ? null : ToMessageJson(failure.LastReceivedMessage),
+            LastReceivedMessage =
+                failure.LastReceivedMessage is null ? null : ToMessageJson(failure.LastReceivedMessage),
         };
     }
 
@@ -241,6 +280,15 @@ public sealed class ReportWriter
             Description = entry.Description,
         };
     }
+
+    private static string FormatWinSeat(uint? winSeat) =>
+        winSeat.HasValue ? winSeat.Value.ToString() : "(unknown)";
+
+    private static string FormatGameEndSummaries(IReadOnlyList<AccountGameEndSummary> summaries) =>
+        string.Join(
+            " ",
+            summaries.Select(summary =>
+                $"{summary.AccountAlias}:seat={FormatWinSeat(summary.GameFlowWinSeat)}/signal={summary.EndSignal ?? "(unknown)"}"));
 
     private static string FormatDuration(TimeSpan duration)
     {
@@ -271,6 +319,8 @@ public sealed class ReportWriter
         public uint? TableId { get; init; }
 
         public uint? WinSeat { get; init; }
+
+        public List<AccountGameEndSummaryJson> GameEndSummaries { get; init; } = [];
 
         public Dictionary<uint, uint>? SeatUserMapping { get; init; }
 
@@ -327,6 +377,15 @@ public sealed class ReportWriter
         public uint? MobileParam { get; init; }
 
         public string Description { get; init; } = string.Empty;
+    }
+
+    private sealed class AccountGameEndSummaryJson
+    {
+        public string AccountAlias { get; init; } = string.Empty;
+
+        public uint? GameFlowWinSeat { get; init; }
+
+        public string? EndSignal { get; init; }
     }
 
     private sealed class AccountPhaseTimingJson
