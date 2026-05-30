@@ -1,6 +1,7 @@
 using System.Text;
 using CRpc.Async;
 using LordUnion.IntegrationTests.Config;
+using LordUnion.IntegrationTests.Flows;
 using LordUnion.IntegrationTests.GameVariants;
 using LordUnion.IntegrationTests.Protocol;
 using LordUnion.IntegrationTests.Protocol.Generated;
@@ -423,6 +424,142 @@ public sealed class LordUnionSessionClientTests : CrpcTestBase
             Assert.Equal(AccountSessionState.EnteringMatch, session.State);
         });
     }
+
+    [Fact]
+    public void CleanupAsync_PreSignup_SendsUnsignupThroughClientTransport()
+    {
+        const uint userId = 214291552;
+
+        var loop = new CRpcLoop();
+        var session = new AccountSession(loop, "player1", codec)
+        {
+            UserId = userId,
+            Nickname = "player-one",
+        };
+        var transport = new FakeGameServerTransport();
+        var client = new LordUnionSessionClient(session, transport, codec);
+
+        transport.OnPacketSentAsync = (packet, packetLoop) =>
+        {
+            var sent = transport.DecodeSentPacket(
+                packet,
+                new ProtocolDecodeContext { AccountAlias = session.Alias, Phase = session.CurrentPhase });
+
+            if (sent.Kind == ProtocolMessageKind.TourneyUnsignupReq)
+            {
+                transport.DeliverIncomingMessage(CreateTourneyUnsignupAck(
+                    tourneyId: 159740,
+                    matchPoint: 2008280,
+                    param: 0));
+            }
+
+            return CRpcTask.CompletedTask(packetLoop);
+        };
+
+        var result = CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            await client.ConnectAsync(new ServerConfig(), TimeSpan.FromSeconds(1));
+            session.SetState(AccountSessionState.LoggedIn);
+
+            return await client.CleanupAsync(CreateMatchConfig(), AccountCleanupRunOptions.PreSignup(0));
+        });
+
+        Assert.True(result.UnsignupSent);
+        Assert.True(result.UnsignupAckReceived);
+        Assert.Equal(0u, result.UnsignupParam);
+        Assert.Equal(AccountSessionState.LoggedIn, session.State);
+    }
+
+    [Fact]
+    public void CleanupAsync_PostGame_AllowsFinishedStateAndKnownMatchId()
+    {
+        const uint matchId = 475051269;
+
+        var loop = new CRpcLoop();
+        var session = new AccountSession(loop, "player1", codec)
+        {
+            UserId = 214291552,
+            MatchId = matchId,
+        };
+        var transport = new FakeGameServerTransport();
+        var client = new LordUnionSessionClient(session, transport, codec);
+
+        transport.OnPacketSentAsync = (packet, packetLoop) =>
+        {
+            var sent = transport.DecodeSentPacket(
+                packet,
+                new ProtocolDecodeContext { AccountAlias = session.Alias, Phase = session.CurrentPhase });
+
+            switch (sent.Kind)
+            {
+                case ProtocolMessageKind.TourneyUnsignupReq:
+                    transport.DeliverIncomingMessage(CreateTourneyUnsignupAck(
+                        tourneyId: 159740,
+                        matchPoint: 2008280,
+                        param: 0));
+                    break;
+                case ProtocolMessageKind.ExitGameReq:
+                    transport.DeliverIncomingMessage(CreateExitGameAck(matchId));
+                    break;
+            }
+
+            return CRpcTask.CompletedTask(packetLoop);
+        };
+
+        var result = CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            await client.ConnectAsync(new ServerConfig(), TimeSpan.FromSeconds(1));
+            session.SetState(AccountSessionState.Finished);
+
+            return await client.CleanupAsync(
+                CreateMatchConfig(),
+                AccountCleanupRunOptions.PostGameCleanup(matchId));
+        });
+
+        Assert.Contains(matchId, result.DiscoveredMatchIds);
+        Assert.Contains(matchId, result.ExitGameAttemptedMatchIds);
+        Assert.Contains(matchId, result.ExitMatchAttemptedMatchIds);
+    }
+
+    private static MatchConfig CreateMatchConfig() =>
+        new()
+        {
+            GameId = 1001,
+            ProductId = 2008280,
+            TourneyId = 159740,
+        };
+
+    private static ProtocolMessage CreateTourneyUnsignupAck(uint tourneyId, uint matchPoint, uint param) =>
+        new()
+        {
+            Kind = ProtocolMessageKind.TourneyUnsignupAck,
+            Acknowledgement = new TKMobileAckMsg
+            {
+                LobbyAckMsg = new LobbyAckMsg
+                {
+                    TourneyunsignupAckMsg = new TourneyUnsignupAck
+                    {
+                        Tourneyid = tourneyId,
+                        Matchpoint = matchPoint,
+                        Param = param,
+                    },
+                },
+            },
+        };
+
+    private static ProtocolMessage CreateExitGameAck(uint matchId) =>
+        new()
+        {
+            Kind = ProtocolMessageKind.ExitGameAck,
+            Acknowledgement = new TKMobileAckMsg
+            {
+                MatchAckMsg = new MatchAckMsg
+                {
+                    Matchid = matchId,
+                    ExitgameAckMsg = new ExitGameAck(),
+                },
+            },
+        };
 
     private static ProtocolMessage CreateAnonymousBrowseAck(uint header0, string aesKey)
     {

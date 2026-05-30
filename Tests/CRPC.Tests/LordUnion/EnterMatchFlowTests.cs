@@ -575,6 +575,50 @@ public class EnterMatchFlowTests : CrpcTestBase
     }
 
     [Fact]
+    public void RunAsync_SucceedsWhenEnterRoundAckArrivesInsteadOfEnterMatchAck()
+    {
+        const uint userId = 214291552;
+        const uint matchId = 900011;
+        const uint tourneyId = 159740;
+        const uint matchPoint = 2008280;
+        const uint gameId = 1001;
+        const string ticket = "test-ticket";
+        const uint seatOrder = 1;
+
+        var loop = new CRpcLoop();
+        var session = new AccountSession(loop, "player1", codec);
+
+        var result = CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            session.SetState(AccountSessionState.SignedUp);
+            session.UserId = userId;
+
+            var transport = CreateEnterMatchAutoResponder(
+                session,
+                enterMatchAck: null,
+                CreateEnterRoundAck(userId, seatOrder),
+                CreateInitGameTableAck((0, 214291551), (1, userId), (2, 214291553)));
+
+            var flow = new EnterMatchFlow(codec);
+            var flowTask = flow.RunAsync(
+                session,
+                CreateMatch(),
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(5),
+                TimeSpan.FromSeconds(5),
+                transport);
+            transport.DeliverIncomingMessage(
+                CreateStartGameClientAck(userId, matchId, tourneyId, matchPoint, gameId, ticket));
+            return await flowTask;
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal(matchId, result.MatchId);
+        Assert.Equal(seatOrder, result.SeatOrder);
+        Assert.Equal(AccountSessionState.InGame, session.State);
+    }
+
+    [Fact]
     public void RunAsync_TimesOutWhenEnterMatchAckMissing()
     {
         const uint userId = 214291552;
@@ -685,9 +729,16 @@ public class EnterMatchFlowTests : CrpcTestBase
                 packet,
                 new ProtocolDecodeContext { AccountAlias = session.Alias, Phase = session.CurrentPhase });
 
-            if (decoded.Kind == ProtocolMessageKind.EnterMatchReq && enterMatchAck is not null)
+            if (decoded.Kind == ProtocolMessageKind.EnterMatchReq)
             {
-                transport.DeliverIncomingMessage(enterMatchAck);
+                if (enterMatchAck is not null)
+                {
+                    transport.DeliverIncomingMessage(enterMatchAck);
+                }
+                else if (enterRoundAck is not null)
+                {
+                    transport.DeliverIncomingMessage(enterRoundAck);
+                }
             }
             else if (decoded.Kind == ProtocolMessageKind.EnterRoundReq)
             {

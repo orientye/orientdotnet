@@ -75,7 +75,8 @@ public sealed class EnterMatchFlow
         AccountSession session,
         EnterMatchStartInfo matchStart,
         TimeSpan enterMatchTimeout,
-        IGameServerTransport? transport = null)
+        IGameServerTransport? transport = null,
+        EnterMatchFlowSessionState? state = null)
     {
         ArgumentNullException.ThrowIfNull(matchStart);
         EnsureSignedUpUserId(session, out _);
@@ -85,24 +86,62 @@ public sealed class EnterMatchFlow
             ApplyMatchStartToSession(session, matchStart);
             session.SetState(AccountSessionState.EnteringMatch);
 
+            if (IsAlreadyInMatch(state))
+            {
+                return true;
+            }
+
             await SendRequestAsync(
                 session,
                 transport,
                 codec.CreateEnterMatchRequest(matchStart.MatchId, matchStart.GameId, matchStart.Ticket));
 
-            var enterMatchMessage = await session.WaitForMessageAsync(
-                ProtocolMessageKind.EnterMatchAck,
-                ToTimeoutMilliseconds(enterMatchTimeout));
-            var enterMatchAck = enterMatchMessage.EnterMatchAcknowledgement
-                                ?? throw new InvalidOperationException("EnterMatchAck missing in server response.");
-
-            if (enterMatchAck.Matchid != matchStart.MatchId)
+            if (IsAlreadyInMatch(state))
             {
-                throw new InvalidOperationException(
-                    $"EnterMatchAck matchid {enterMatchAck.Matchid} did not match match start matchid {matchStart.MatchId}.");
+                return true;
             }
 
-            return true;
+            var timeoutMs = ToTimeoutMilliseconds(enterMatchTimeout);
+            var startedAt = Environment.TickCount64;
+
+            while (true)
+            {
+                var remainingMs = timeoutMs - (int)(Environment.TickCount64 - startedAt);
+                if (remainingMs <= 0)
+                {
+                    throw new TimeoutException(
+                        $"Timed out waiting for EnterMatchAck on account '{session.Alias}' in state {session.State} (phase {session.CurrentPhase}).");
+                }
+
+                var message = await session.WaitForMessageAsync(
+                    candidate => IsEnterMatchProgressMessage(candidate, matchStart.MatchId),
+                    "EnterMatchAck or in-match progress",
+                    remainingMs);
+
+                state?.CaptureFromAnyMessage(message);
+
+                if (message.Kind == ProtocolMessageKind.EnterMatchAck)
+                {
+                    var enterMatchAck = message.EnterMatchAcknowledgement
+                                        ?? throw new InvalidOperationException(
+                                            "EnterMatchAck missing in server response.");
+
+                    if (enterMatchAck.Matchid != matchStart.MatchId)
+                    {
+                        throw new InvalidOperationException(
+                            $"EnterMatchAck matchid {enterMatchAck.Matchid} did not match match start matchid {matchStart.MatchId}.");
+                    }
+
+                    return true;
+                }
+
+                if (IsAlreadyInMatch(state))
+                {
+                    return true;
+                }
+
+                await CRpcTask.Delay(1, session.Loop);
+            }
         }
         catch (TimeoutException)
         {
@@ -262,7 +301,7 @@ public sealed class EnterMatchFlow
         EnterMatchFlowSessionState state)
     {
         var matchStart = await WaitForMatchStartAsync(session, matchStartTimeout, transport, state);
-        await EnterMatchOnlyAsync(session, matchStart, enterMatchTimeout, transport);
+        await EnterMatchOnlyAsync(session, matchStart, enterMatchTimeout, transport, state);
         var seatOrder = await EnterRoundOnlyAsync(session, matchStart, enterRoundTimeout, transport, state);
         return CreateSuccessResult(session, matchStart, seatOrder, state);
     }
@@ -334,7 +373,8 @@ public sealed class EnterMatchFlow
                 session,
                 matchStart,
                 TimeSpan.FromMilliseconds(enterMatchTimeoutMs),
-                transport);
+                transport,
+                state);
             var seatOrder = await EnterRoundOnlyAsync(
                 session,
                 matchStart,
@@ -397,6 +437,39 @@ public sealed class EnterMatchFlow
             ProtocolMessageKind.LordAck => true,
             _ => false,
         };
+    }
+
+    private static bool IsEnterMatchProgressMessage(ProtocolMessage message, uint matchId)
+    {
+        return message.Kind switch
+        {
+            ProtocolMessageKind.EnterMatchAck => true,
+            ProtocolMessageKind.EnterRoundAck => true,
+            ProtocolMessageKind.InitGameTableAck => MessageMatchesMatchId(message, matchId),
+            ProtocolMessageKind.AddGamePlayerInfoAck => MessageMatchesMatchId(message, matchId),
+            ProtocolMessageKind.LordAck => MessageMatchesMatchId(message, matchId),
+            _ => false,
+        };
+    }
+
+    private static bool MessageMatchesMatchId(ProtocolMessage message, uint matchId)
+    {
+        if (message.Acknowledgement?.MatchAckMsg?.Matchid is uint ackMatchId and > 0)
+        {
+            return ackMatchId == matchId;
+        }
+
+        return message.LordAcknowledgement?.Matchid == matchId;
+    }
+
+    private static bool IsAlreadyInMatch(EnterMatchFlowSessionState? state)
+    {
+        if (state is null)
+        {
+            return false;
+        }
+
+        return state.LastEnterRoundAck is not null || state.InitGameTableAck is not null;
     }
 
     private static bool IsEnterRoundComplete(

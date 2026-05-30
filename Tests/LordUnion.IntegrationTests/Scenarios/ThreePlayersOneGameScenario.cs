@@ -22,9 +22,7 @@ public sealed class ThreePlayersOneGameScenario
 {
     private readonly ServerProtocolCodec codec;
 
-    private readonly AccountCleanupFlow accountCleanupFlow;
-
-    private readonly EnterMatchFlow enterMatchFlow;
+    private readonly EnterMatchFlow? enterMatchFlow;
 
     private readonly GameFlow gameFlow;
 
@@ -34,7 +32,6 @@ public sealed class ThreePlayersOneGameScenario
     public ThreePlayersOneGameScenario(
         ServerProtocolCodec? codec = null,
         ILordGameVariant? variant = null,
-        AccountCleanupFlow? accountCleanupFlow = null,
         EnterMatchFlow? enterMatchFlow = null,
         GameFlow? gameFlow = null)
 
@@ -43,9 +40,7 @@ public sealed class ThreePlayersOneGameScenario
 
         this.variant = variant ?? new ClassicLordVariant();
 
-        this.accountCleanupFlow = accountCleanupFlow ?? new AccountCleanupFlow(this.codec);
-
-        this.enterMatchFlow = enterMatchFlow ?? new EnterMatchFlow(this.codec);
+        this.enterMatchFlow = enterMatchFlow;
 
         this.gameFlow = gameFlow ?? new GameFlow(this.codec);
     }
@@ -146,7 +141,7 @@ public sealed class ThreePlayersOneGameScenario
         {
             await RunPhaseConcurrentOnLoopAsync(
                 bundles,
-                bundle => RunAccountCleanupAsync(bundle, config, cancellationToken),
+                bundle => bundle.Client.CleanupAsync(config.Match),
                 static (_, _) => { });
         }
 
@@ -235,16 +230,23 @@ public sealed class ThreePlayersOneGameScenario
 
         var referenceEnter = successfulEnterResults[0];
 
+        IReadOnlyList<AccountCleanupSummary> postGameCleanupSummaries = Array.Empty<AccountCleanupSummary>();
+
         if (!options.SkipAccountCleanup)
         {
-            await RunPhaseConcurrentOnLoopAsync(
+            postGameCleanupSummaries = (await RunPhaseConcurrentOnLoopAsync(
                 bundles,
                 bundle => RunPostAccountCleanupAsync(
                     bundle,
                     config,
                     referenceEnter.MatchId,
                     cancellationToken),
-                static (_, _) => { });
+                static (_, _) => { }))
+                .Select(result => result.Result ?? AccountCleanupSummary.FromResult(
+                    result.Bundle.Session.Alias,
+                    result: null,
+                    result.Exception?.Message ?? "Post-game cleanup did not return a result."))
+                .ToList();
         }
 
         return new ScenarioReport
@@ -259,6 +261,8 @@ public sealed class ThreePlayersOneGameScenario
             TableId = referenceEnter.TableId ?? referenceEnter.MatchId,
 
             SeatUserMapping = referenceEnter.SeatUserMapping,
+
+            PostGameCleanupSummaries = postGameCleanupSummaries,
 
             GameEndSummaries = gameResults
                 .Select(result => new AccountGameEndSummary
@@ -327,22 +331,7 @@ public sealed class ThreePlayersOneGameScenario
     }
 
 
-    private async CRpcTask<AccountCleanupFlowResult> RunAccountCleanupAsync(
-        AccountBundle bundle,
-        LordUnionTestConfig config,
-        CancellationToken cancellationToken)
-
-    {
-        _ = cancellationToken;
-
-        return await accountCleanupFlow.RunAsync(
-            bundle.Session,
-            config.Match,
-            bundle.Transport);
-    }
-
-
-    private async CRpcTask<AccountCleanupFlowResult?> RunPostAccountCleanupAsync(
+    private async CRpcTask<AccountCleanupSummary> RunPostAccountCleanupAsync(
         AccountBundle bundle,
         LordUnionTestConfig config,
         uint? matchId,
@@ -351,29 +340,28 @@ public sealed class ThreePlayersOneGameScenario
     {
         _ = cancellationToken;
 
+        var knownMatchIds = new List<uint>();
+        if (matchId is uint resolvedMatchId and > 0)
+        {
+            knownMatchIds.Add(resolvedMatchId);
+        }
+
+        if (bundle.Session.MatchId is uint sessionMatchId and > 0)
+        {
+            knownMatchIds.Add(sessionMatchId);
+        }
+
         try
         {
-            var knownMatchIds = new List<uint>();
-            if (matchId is uint resolvedMatchId and > 0)
-            {
-                knownMatchIds.Add(resolvedMatchId);
-            }
-
-            if (bundle.Session.MatchId is uint sessionMatchId and > 0)
-            {
-                knownMatchIds.Add(sessionMatchId);
-            }
-
-            return await accountCleanupFlow.RunAsync(
-                bundle.Session,
+            var result = await bundle.Client.CleanupAsync(
                 config.Match,
-                bundle.Transport,
                 AccountCleanupRunOptions.PostGameCleanup(knownMatchIds.Distinct().ToArray()));
+
+            return AccountCleanupSummary.FromResult(bundle.Session.Alias, result, errorMessage: null);
         }
-        catch
+        catch (Exception ex)
         {
-            // Post-game cleanup is best-effort and must not fail a successful scenario.
-            return null;
+            return AccountCleanupSummary.FromResult(bundle.Session.Alias, result: null, ex.Message);
         }
     }
 

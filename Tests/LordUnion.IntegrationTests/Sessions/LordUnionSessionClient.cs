@@ -15,6 +15,7 @@ public sealed class LordUnionSessionClient
     private readonly IGameServerTransport transport;
     private readonly ServerProtocolCodec codec;
     private readonly EnterMatchFlow enterMatchFlow;
+    private readonly AccountCleanupFlow cleanupFlow;
     private readonly EnterMatchFlowSessionState enterMatchState = new();
     private EnterMatchStartInfo? lastMatchStartInfo;
 
@@ -22,12 +23,14 @@ public sealed class LordUnionSessionClient
         AccountSession session,
         IGameServerTransport transport,
         ServerProtocolCodec codec,
-        EnterMatchFlow? enterMatchFlow = null)
+        EnterMatchFlow? enterMatchFlow = null,
+        AccountCleanupFlow? cleanupFlow = null)
     {
         this.session = session ?? throw new ArgumentNullException(nameof(session));
         this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
         this.codec = codec ?? throw new ArgumentNullException(nameof(codec));
         this.enterMatchFlow = enterMatchFlow ?? new EnterMatchFlow(codec);
+        this.cleanupFlow = cleanupFlow ?? new AccountCleanupFlow(codec);
     }
 
     public AccountSession Session => session;
@@ -130,6 +133,20 @@ public sealed class LordUnionSessionClient
         ArgumentNullException.ThrowIfNull(monitor);
         EnsureOnLoopThread();
         monitor.SeedFlowState(enterMatchState);
+    }
+
+    public CRpcTask<AccountCleanupFlowResult> CleanupAsync(
+        MatchConfig match,
+        AccountCleanupRunOptions? options = null)
+    {
+        EnsureOnLoopThread();
+        ArgumentNullException.ThrowIfNull(match);
+
+        return cleanupFlow.RunAsync(
+            session,
+            match,
+            transport,
+            options ?? AccountCleanupRunOptions.PreSignup());
     }
 
     public async CRpcTask<SignupStageResult> SignupAsync(
@@ -280,7 +297,8 @@ public sealed class LordUnionSessionClient
             session,
             startInfo,
             timeout,
-            transport);
+            transport,
+            enterMatchState);
 
         return new EnterMatchStageResult(
             startInfo.MatchId,

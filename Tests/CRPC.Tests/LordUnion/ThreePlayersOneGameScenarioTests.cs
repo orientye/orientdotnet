@@ -96,6 +96,17 @@ public class ThreePlayersOneGameScenarioTests : CrpcTestBase
         Assert.Equal(MatchId, report.TableId);
         Assert.Equal(3, report.AccountTimings.Count);
         Assert.Equal(1u, report.WinSeat);
+        Assert.Equal(3, report.PostGameCleanupSummaries.Count);
+        Assert.All(
+            report.PostGameCleanupSummaries,
+            summary =>
+            {
+                Assert.True(summary.Completed);
+                Assert.True(summary.UnsignupSent);
+                Assert.True(summary.UnsignupAckReceived);
+                Assert.Contains(MatchId, summary.DiscoveredMatchIds);
+                Assert.Contains(MatchId, summary.ExitGameAttemptedMatchIds);
+            });
     }
 
     private static LordUnionTestConfig CreateConfig()

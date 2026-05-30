@@ -123,6 +123,11 @@ public sealed class ReportWriter
             Console.WriteLine($"gameEnd {FormatGameEndSummaries(report.GameEndSummaries)}");
         }
 
+        if (report.PostGameCleanupSummaries.Count > 0)
+        {
+            Console.WriteLine($"cleanup {FormatCleanupSummaries(report.PostGameCleanupSummaries)}");
+        }
+
         foreach (var timing in report.AccountTimings)
         {
             Console.WriteLine(
@@ -213,6 +218,20 @@ public sealed class ReportWriter
                     TotalDurationMs = timing.TotalDuration.TotalMilliseconds,
                 })
                 .ToList(),
+            PostGameCleanupSummaries = report.PostGameCleanupSummaries
+                .Select(summary => new AccountCleanupSummaryJson
+                {
+                    AccountAlias = summary.AccountAlias,
+                    Completed = summary.Completed,
+                    UnsignupSent = summary.UnsignupSent,
+                    UnsignupAckReceived = summary.UnsignupAckReceived,
+                    UnsignupParam = summary.UnsignupParam,
+                    DiscoveredMatchIds = summary.DiscoveredMatchIds.ToList(),
+                    ExitGameAttemptedMatchIds = summary.ExitGameAttemptedMatchIds.ToList(),
+                    ExitMatchAttemptedMatchIds = summary.ExitMatchAttemptedMatchIds.ToList(),
+                    ErrorMessage = summary.ErrorMessage,
+                })
+                .ToList(),
             SignupDiagnostics = report.SignupDiagnostics
                 .Select(snapshot => new SignupDiagnosticSnapshotJson
                 {
@@ -290,6 +309,15 @@ public sealed class ReportWriter
             summaries.Select(summary =>
                 $"{summary.AccountAlias}:seat={FormatWinSeat(summary.GameFlowWinSeat)}/signal={summary.EndSignal ?? "(unknown)"}"));
 
+    private static string FormatCleanupSummaries(IReadOnlyList<AccountCleanupSummary> summaries) =>
+        string.Join(
+            " ",
+            summaries.Select(summary =>
+                $"{summary.AccountAlias}:completed={summary.Completed}/unsignup={FormatOptionalUInt(summary.UnsignupParam)}"));
+
+    private static string FormatOptionalUInt(uint? value) =>
+        value.HasValue ? value.Value.ToString() : "(unknown)";
+
     private static string FormatDuration(TimeSpan duration)
     {
         if (duration.TotalHours >= 1)
@@ -328,7 +356,30 @@ public sealed class ReportWriter
 
         public List<SignupDiagnosticSnapshotJson> SignupDiagnostics { get; init; } = [];
 
+        public List<AccountCleanupSummaryJson> PostGameCleanupSummaries { get; init; } = [];
+
         public ScenarioFailureDetailJson? FirstFailure { get; init; }
+    }
+
+    private sealed class AccountCleanupSummaryJson
+    {
+        public string AccountAlias { get; init; } = string.Empty;
+
+        public bool Completed { get; init; }
+
+        public bool UnsignupSent { get; init; }
+
+        public bool UnsignupAckReceived { get; init; }
+
+        public uint? UnsignupParam { get; init; }
+
+        public List<uint> DiscoveredMatchIds { get; init; } = [];
+
+        public List<uint> ExitGameAttemptedMatchIds { get; init; } = [];
+
+        public List<uint> ExitMatchAttemptedMatchIds { get; init; } = [];
+
+        public string? ErrorMessage { get; init; }
     }
 
     private sealed class SignupDiagnosticSnapshotJson

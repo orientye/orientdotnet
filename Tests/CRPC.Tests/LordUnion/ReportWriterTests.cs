@@ -21,6 +21,7 @@ public class ReportWriterTests
         Assert.Contains("player1", output, StringComparison.Ordinal);
         Assert.Contains("winSeat=1", output, StringComparison.Ordinal);
         Assert.Contains("gameEnd player1:seat=1/signal=LordResultAck", output, StringComparison.Ordinal);
+        Assert.Contains("cleanup player1:completed=True/unsignup=0", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -100,6 +101,10 @@ public class ReportWriterTests
         Assert.Equal(900001u, root.GetProperty("tableId").GetUInt32());
         Assert.Equal(1u, root.GetProperty("winSeat").GetUInt32());
         Assert.Equal(3, root.GetProperty("accountTimings").GetArrayLength());
+        var cleanup = root.GetProperty("postGameCleanupSummaries");
+        Assert.Single(cleanup.EnumerateArray());
+        Assert.True(cleanup[0].GetProperty("completed").GetBoolean());
+        Assert.Equal(0u, cleanup[0].GetProperty("unsignupParam").GetUInt32());
         if (root.TryGetProperty("firstFailure", out var failure))
         {
             Assert.Equal(JsonValueKind.Null, failure.ValueKind);
@@ -146,6 +151,20 @@ public class ReportWriterTests
                 [2] = 10002,
                 [3] = 10003,
             },
+            PostGameCleanupSummaries =
+            [
+                new AccountCleanupSummary
+                {
+                    AccountAlias = "player1",
+                    Completed = true,
+                    UnsignupSent = true,
+                    UnsignupAckReceived = true,
+                    UnsignupParam = 0,
+                    DiscoveredMatchIds = [900001],
+                    ExitGameAttemptedMatchIds = [900001],
+                    ExitMatchAttemptedMatchIds = [900001],
+                },
+            ],
             AccountTimings =
             [
                 new AccountPhaseTiming

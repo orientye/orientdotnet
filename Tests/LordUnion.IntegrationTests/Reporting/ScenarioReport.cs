@@ -40,4 +40,7 @@ public sealed class ScenarioReport
 
     public IReadOnlyList<SignupDiagnosticSnapshot> SignupDiagnostics { get; init; } =
         Array.Empty<SignupDiagnosticSnapshot>();
+
+    public IReadOnlyList<AccountCleanupSummary> PostGameCleanupSummaries { get; init; } =
+        Array.Empty<AccountCleanupSummary>();
 }
