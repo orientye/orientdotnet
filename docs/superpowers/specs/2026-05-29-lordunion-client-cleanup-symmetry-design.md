@@ -1,7 +1,7 @@
 # LordUnion Client Cleanup Symmetry Design
 
 **Date:** 2026-05-29  
-**Status:** Proposed
+**Status:** Implemented
 
 ## Goal
 

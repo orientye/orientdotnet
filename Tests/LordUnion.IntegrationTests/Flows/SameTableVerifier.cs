@@ -1,8 +1,10 @@
+using LordUnion.IntegrationTests.Scenarios;
+
 namespace LordUnion.IntegrationTests.Flows;
 
 public static class SameTableVerifier
 {
-    public static void Verify(IReadOnlyList<EnterMatchFlowResult> results)
+    public static void Verify(IReadOnlyList<EnterTableStageResult> results)
     {
         ArgumentNullException.ThrowIfNull(results);
 
@@ -10,15 +12,6 @@ public static class SameTableVerifier
         {
             throw new InvalidOperationException(
                 $"Same-table verification requires exactly 3 successful enter-match results, got {results.Count}.");
-        }
-
-        for (var index = 0; index < results.Count; index++)
-        {
-            if (!results[index].Success)
-            {
-                throw new InvalidOperationException(
-                    $"Same-table verification requires all results to be successful; result at index {index} failed.");
-            }
         }
 
         var matchId = results[0].MatchId;
@@ -32,10 +25,10 @@ public static class SameTableVerifier
         VerifyTableIdentity(results, matchId);
     }
 
-    private static void VerifyTableIdentity(IReadOnlyList<EnterMatchFlowResult> results, uint matchId)
+    private static void VerifyTableIdentity(IReadOnlyList<EnterTableStageResult> results, uint matchId)
     {
         var tableIds = results
-            .Select(result => result.TableId ?? result.MatchId)
+            .Select(result => result.TableId)
             .Distinct()
             .ToList();
         if (tableIds.Count != 1)
@@ -60,7 +53,7 @@ public static class SameTableVerifier
         }
     }
 
-    private static void VerifySeatMapping(IReadOnlyList<EnterMatchFlowResult> results)
+    private static void VerifySeatMapping(IReadOnlyList<EnterTableStageResult> results)
     {
         var seatOrders = results.Select(result => result.SeatOrder).ToList();
         if (seatOrders.Any(seat => seat > 2))
@@ -88,7 +81,7 @@ public static class SameTableVerifier
 
         foreach (var result in results)
         {
-            if (result.SeatUserMapping.Count == 0 || result.UserId is not uint userId || userId == 0)
+            if (result.SeatUserMapping.Count == 0 || result.UserId == 0)
             {
                 continue;
             }
@@ -99,10 +92,10 @@ public static class SameTableVerifier
                     $"Seat mapping for seat {result.SeatOrder} is missing in InitGameTableAck.");
             }
 
-            if (mappedUserId != userId)
+            if (mappedUserId != result.UserId)
             {
                 throw new InvalidOperationException(
-                    $"Seat {result.SeatOrder} userid mismatch: EnterRound user {userId}, InitGameTable user {mappedUserId}.");
+                    $"Seat {result.SeatOrder} userid mismatch: EnterRound user {result.UserId}, InitGameTable user {mappedUserId}.");
             }
         }
     }

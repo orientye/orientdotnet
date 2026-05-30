@@ -362,6 +362,47 @@ public class ServerProtocolCodecTests
     }
 
     [Fact]
+    public void ResolveMatchAckKind_MapsHighValueEnterRoundPushAcks()
+    {
+        const uint matchId = 475051269u;
+
+        Assert.Equal(
+            ProtocolMessageKind.BeginHandAck,
+            DecodeMatchKind(matchId, ack => ack.BeginhandAckMsg = new BeginHandAck()));
+
+        Assert.Equal(
+            ProtocolMessageKind.RulerInfoAck,
+            DecodeMatchKind(matchId, ack => ack.RulerinfoAckMsg = new RulerInfoAck()));
+
+        Assert.Equal(
+            ProtocolMessageKind.RulerInfoExAck,
+            DecodeMatchKind(matchId, ack => ack.RulerinfoexAckMsg = new RulerInfoExAck()));
+
+        Assert.Equal(
+            ProtocolMessageKind.PushRoundRulerInfoAck,
+            DecodeMatchKind(matchId, ack => ack.PushroundrulerinfoAckMsg = new PushRoundRulerInfoAck()));
+
+        Assert.Equal(
+            ProtocolMessageKind.StagePlayerOrderChangedAck,
+            DecodeMatchKind(matchId, ack => ack.StageplayerorderchangedAckMsg = new StagePlayerOrderChangedAck()));
+
+        Assert.Equal(
+            ProtocolMessageKind.PushPlayerGameDataAck,
+            DecodeMatchKind(matchId, ack => ack.PushplayergamedataAckMsg = new PushPlayerGameDataAck()));
+
+        Assert.Equal(
+            ProtocolMessageKind.PushMatchActionAck,
+            DecodeMatchKind(matchId, ack => ack.PushmatchactionAckMsg = new PushMatchActionAck()));
+    }
+
+    private static ProtocolMessageKind DecodeMatchKind(uint matchId, Action<MatchAckMsg> configure)
+    {
+        var match = new MatchAckMsg { Matchid = matchId };
+        configure(match);
+        return MatchAckKindResolver.Resolve(match);
+    }
+
+    [Fact]
     public void DescribeMessage_UnknownAck_IncludesPopulatedSubMessages()
     {
         var ack = new TKMobileAckMsg

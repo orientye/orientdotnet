@@ -90,7 +90,7 @@ public class ThreePlayersOneGameScenarioTests : CrpcTestBase
         var report = CRpcLoopRunner.RunUntilComplete(loop, () =>
             new ThreePlayersOneGameScenario(codec).RunAsync(loop, config, options));
 
-        Assert.True(report.Success);
+        Assert.True(report.Success, report.FirstFailure?.Message ?? "scenario failed");
         Assert.Null(report.FirstFailure);
         Assert.Equal(MatchId, report.MatchId);
         Assert.Equal(MatchId, report.TableId);

@@ -2,6 +2,7 @@ using System.Text;
 using CRpc.Async;
 using LordUnion.IntegrationTests.Config;
 using LordUnion.IntegrationTests.Flows;
+using LordUnion.IntegrationTests.Scenarios;
 using LordUnion.IntegrationTests.Protocol;
 using LordUnion.IntegrationTests.Protocol.Generated;
 using LordUnion.IntegrationTests.Sessions;
@@ -762,19 +763,18 @@ public class EnterMatchFlowTests : CrpcTestBase
     private static MatchConfig CreateMatch() =>
         new() { GameId = 1001, ProductId = 2008280, TourneyId = 159740 };
 
-    private static EnterMatchFlowResult CreateSuccessfulResult(uint matchId, uint userId, uint seatOrder) =>
-        new()
-        {
-            Success = true,
-            MatchId = matchId,
-            TableId = matchId,
-            UserId = userId,
-            SeatOrder = seatOrder,
-            TourneyId = 159740,
-            MatchPoint = 2008280,
-            GameId = 1001,
-            Ticket = Encoding.UTF8.GetBytes("ticket"),
-        };
+    private static EnterTableStageResult CreateSuccessfulResult(uint matchId, uint userId, uint seatOrder) =>
+        new(
+            userId,
+            matchId,
+            matchId,
+            seatOrder,
+            new Dictionary<uint, uint>
+            {
+                [0] = 101,
+                [1] = 102,
+                [2] = 103,
+            });
 
     private static ProtocolMessage CreateStartClientExAck(
         uint userId,

@@ -258,7 +258,7 @@ public sealed class ThreePlayersOneGameScenario
 
             MatchId = referenceEnter.MatchId,
 
-            TableId = referenceEnter.TableId ?? referenceEnter.MatchId,
+            TableId = referenceEnter.TableId,
 
             SeatUserMapping = referenceEnter.SeatUserMapping,
 
@@ -281,7 +281,7 @@ public sealed class ThreePlayersOneGameScenario
     }
 
 
-    private async CRpcTask<LoginFlowResult> RunLoginAsync(
+    private async CRpcTask<LoginStageResult> RunLoginAsync(
         AccountBundle bundle,
         LordUnionTestConfig config,
         CancellationToken cancellationToken)
@@ -293,40 +293,21 @@ public sealed class ThreePlayersOneGameScenario
         {
             await bundle.Client.ConnectAsync(config.Server, config.Timeouts.ConnectTimeout);
 
-            var login = await bundle.Client.LoginAsync(
+            return await bundle.Client.LoginAsync(
                 bundle.Account,
                 config.Protocol,
                 config.Timeouts.LoginTimeout);
-
-            return new LoginFlowResult
-            {
-                Success = true,
-                UserId = login.UserId,
-                Nickname = login.Nickname,
-                AesKey = login.AesKey,
-                SessionId = login.SessionId,
-                LoginErrorCode = (uint)login.Result,
-                AnonymousRouteId = bundle.Session.AnonymousRouteId ?? 0,
-                LoginRouteId = bundle.Session.LoginRouteId ?? 0,
-                DecryptedLoginAckJson = null,
-                FailureMessage = null,
-            };
         }
         catch (InvalidOperationException)
         {
-            var loginErrorCode = bundle.Session.LoginErrorCode ?? 0;
-            return new LoginFlowResult
-            {
-                Success = false,
-                UserId = bundle.Session.UserId,
-                Nickname = bundle.Session.Nickname,
-                AesKey = bundle.Session.AesKey,
-                SessionId = bundle.Session.SessionId,
-                LoginErrorCode = loginErrorCode,
-                AnonymousRouteId = bundle.Session.AnonymousRouteId ?? 0,
-                LoginRouteId = bundle.Session.LoginRouteId ?? 0,
-                FailureMessage = $"Login failed with error code {loginErrorCode}. ackJson=",
-            };
+            var loginErrorCode = (int)(bundle.Session.LoginErrorCode ?? 0);
+            return new LoginStageResult(
+                loginErrorCode,
+                bundle.Session.UserId ?? 0,
+                bundle.Session.SessionId,
+                bundle.Session.Nickname,
+                bundle.Session.AesKey ?? string.Empty,
+                $"Login failed with error code {loginErrorCode}.");
         }
     }
 
@@ -366,7 +347,7 @@ public sealed class ThreePlayersOneGameScenario
     }
 
 
-    private async CRpcTask<SignupFlowResult> RunSignupAsync(
+    private async CRpcTask<SignupStageResult> RunSignupAsync(
         AccountBundle bundle,
         LordUnionTestConfig config,
         LordUnionGameProfile profile,
@@ -377,30 +358,18 @@ public sealed class ThreePlayersOneGameScenario
 
         try
         {
-            var signup = await bundle.Client.SignupAsync(profile, config.Timeouts.SignupTimeout);
-
-            return new SignupFlowResult
-            {
-                Success = true,
-                SignupErrorCode = signup.SignupAckParam,
-                MobileAckParam = (uint)signup.MobileResult,
-                Flags = 0,
-                TourneyId = signup.TourneyId,
-                MatchPoint = signup.MatchPoint,
-                GameId = (int)signup.GameId,
-                FailureMessage = null,
-            };
+            return await bundle.Client.SignupAsync(profile, config.Timeouts.SignupTimeout);
         }
         catch (InvalidOperationException ex)
         {
             var signupErrorCode = TryParseSignupErrorCode(ex.Message);
-            return new SignupFlowResult
-            {
-                Success = false,
-                SignupErrorCode = signupErrorCode,
-                MobileAckParam = signupErrorCode,
-                FailureMessage = $"Tourney signup failed with error code {signupErrorCode}.",
-            };
+            return new SignupStageResult(
+                (int)signupErrorCode,
+                signupErrorCode,
+                profile.TourneyId,
+                profile.MatchPoint,
+                profile.GameId,
+                $"Tourney signup failed with error code {signupErrorCode}.");
         }
     }
 
@@ -430,7 +399,7 @@ public sealed class ThreePlayersOneGameScenario
     }
 
 
-    private async CRpcTask<List<PhaseResult<EnterMatchFlowResult>>> RunEnterMatchPhaseAsync(
+    private async CRpcTask<List<PhaseResult<EnterTableStageResult>>> RunEnterMatchPhaseAsync(
         IReadOnlyList<AccountBundle> bundles,
         LordUnionTestConfig config,
         LordUnionGameProfile profile,
@@ -472,7 +441,7 @@ public sealed class ThreePlayersOneGameScenario
                 bundle.Timing.EnterMatchDuration = phaseStopwatch.Elapsed;
             }
 
-            return startResults.Select(result => new PhaseResult<EnterMatchFlowResult>(
+            return startResults.Select(result => new PhaseResult<EnterTableStageResult>(
                 result.Bundle,
                 null,
                 result.Exception)).ToList();
@@ -497,7 +466,7 @@ public sealed class ThreePlayersOneGameScenario
                 bundle.Timing.EnterMatchDuration = phaseStopwatch.Elapsed;
             }
 
-            return enterMatchResults.Select(result => new PhaseResult<EnterMatchFlowResult>(
+            return enterMatchResults.Select(result => new PhaseResult<EnterTableStageResult>(
                 result.Bundle,
                 null,
                 result.Exception)).ToList();
@@ -510,7 +479,7 @@ public sealed class ThreePlayersOneGameScenario
                 var enterRound = await bundle.Client.EnterRoundAsync(
                     profile,
                     config.Timeouts.EnterRoundTimeout);
-                return MapEnterRoundResult(bundle, profile, enterRound);
+                return bundle.Client.ToEnterTableStageResult(profile, enterRound);
             },
             null);
 
@@ -522,7 +491,7 @@ public sealed class ThreePlayersOneGameScenario
         return enterResults;
     }
 
-    private async CRpcTask<EnterMatchFlowResult> RunEnterMatchAsync(
+    private async CRpcTask<EnterTableStageResult> RunEnterMatchAsync(
         AccountBundle bundle,
         LordUnionTestConfig config,
         LordUnionGameProfile profile,
@@ -551,7 +520,7 @@ public sealed class ThreePlayersOneGameScenario
                 profile,
                 config.Timeouts.EnterRoundTimeout);
 
-            return MapEnterRoundResult(bundle, profile, enterRound);
+            return bundle.Client.ToEnterTableStageResult(profile, enterRound);
         }
 
         var matchStartInfo = await bundle.Client.WaitForMatchStartAsync(config.Timeouts.MatchStartTimeout);
@@ -565,27 +534,7 @@ public sealed class ThreePlayersOneGameScenario
             profile,
             config.Timeouts.EnterRoundTimeout);
 
-        return MapEnterRoundResult(bundle, profile, enterRoundResult);
-    }
-
-    private static EnterMatchFlowResult MapEnterRoundResult(
-        AccountBundle bundle,
-        LordUnionGameProfile profile,
-        EnterRoundStageResult enterRound)
-    {
-        return new EnterMatchFlowResult
-        {
-            Success = true,
-            UserId = bundle.Session.UserId,
-            MatchId = enterRound.MatchId,
-            TableId = enterRound.TableId,
-            SeatOrder = enterRound.Seat,
-            TourneyId = profile.TourneyId,
-            MatchPoint = profile.MatchPoint,
-            GameId = profile.GameId,
-            Ticket = bundle.Session.Ticket ?? Array.Empty<byte>(),
-            FailureMessage = null,
-        };
+        return bundle.Client.ToEnterTableStageResult(profile, enterRoundResult);
     }
 
 
@@ -762,21 +711,21 @@ public sealed class ThreePlayersOneGameScenario
     }
 
 
-    private static ScenarioFailureDetail? FindLoginFailure(IReadOnlyList<PhaseResult<LoginFlowResult>> results) =>
+    private static ScenarioFailureDetail? FindLoginFailure(IReadOnlyList<PhaseResult<LoginStageResult>> results) =>
         FindFlowFailure(results, "Login failed.");
 
 
-    private static ScenarioFailureDetail? FindSignupFailure(IReadOnlyList<PhaseResult<SignupFlowResult>> results) =>
+    private static ScenarioFailureDetail? FindSignupFailure(IReadOnlyList<PhaseResult<SignupStageResult>> results) =>
         FindFlowFailure(results, "Signup failed.");
 
 
     private static bool AllSignupsSucceeded(
-        IReadOnlyList<PhaseResult<SignupFlowResult>> results,
+        IReadOnlyList<PhaseResult<SignupStageResult>> results,
         out ScenarioFailureDetail? failure)
     {
         foreach (var phaseResult in results)
         {
-            if (phaseResult.Result is not SignupFlowResult signup || !signup.Success)
+            if (phaseResult.Result is not SignupStageResult signup || !signup.Success)
             {
                 failure = ScenarioFailureDetail.FromSession(
                     phaseResult.Bundle.Session,
@@ -799,7 +748,7 @@ public sealed class ThreePlayersOneGameScenario
 
 
     private static ScenarioFailureDetail? FindEnterMatchFailure(
-        IReadOnlyList<PhaseResult<EnterMatchFlowResult>> results) =>
+        IReadOnlyList<PhaseResult<EnterTableStageResult>> results) =>
         FindFlowFailure(results, "Enter match failed.");
 
 
@@ -889,22 +838,16 @@ public sealed class ThreePlayersOneGameScenario
 
             string? failure = null;
 
-            if (phaseResult.Result is LoginFlowResult login && !login.Success)
+            if (phaseResult.Result is LoginStageResult login && !login.Success)
 
             {
                 failure = login.FailureMessage ?? defaultMessage;
             }
 
-            else if (phaseResult.Result is SignupFlowResult signup && !signup.Success)
+            else if (phaseResult.Result is SignupStageResult signup && !signup.Success)
 
             {
                 failure = signup.FailureMessage ?? defaultMessage;
-            }
-
-            else if (phaseResult.Result is EnterMatchFlowResult enter && !enter.Success)
-
-            {
-                failure = enter.FailureMessage ?? defaultMessage;
             }
 
 

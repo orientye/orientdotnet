@@ -346,6 +346,20 @@ public sealed class LordUnionSessionClient
         return new EnterRoundStageResult(matchId, tableId, seat);
     }
 
+    public EnterTableStageResult ToEnterTableStageResult(
+        LordUnionGameProfile profile,
+        EnterRoundStageResult enterRound)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(enterRound);
+
+        return EnterMatchFlow.CreateEnterTableStageResult(
+            session,
+            profile,
+            enterRound.Seat,
+            enterMatchState);
+    }
+
     private EnterMatchStartInfo CreateStartInfo(
         LordUnionGameProfile profile,
         MatchStartStageResult matchStart)

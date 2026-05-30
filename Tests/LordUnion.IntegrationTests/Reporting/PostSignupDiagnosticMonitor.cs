@@ -1,5 +1,6 @@
 using LordUnion.IntegrationTests.Flows;
 using LordUnion.IntegrationTests.Protocol;
+using LordUnion.IntegrationTests.Scenarios;
 using LordUnion.IntegrationTests.Sessions;
 
 namespace LordUnion.IntegrationTests.Reporting;
@@ -7,7 +8,7 @@ namespace LordUnion.IntegrationTests.Reporting;
 public sealed class PostSignupDiagnosticMonitor
 {
     private readonly AccountSession session;
-    private readonly SignupFlowResult signupResult;
+    private readonly SignupStageResult signupResult;
     private readonly List<PostSignupMessageEntry> postSignupMessages = new();
     private Action<ProtocolMessage>? previousPushHandler;
     private bool startClientExReceived;
@@ -19,7 +20,7 @@ public sealed class PostSignupDiagnosticMonitor
     private ProtocolMessage? capturedMatchStartMessage;
     private readonly List<ProtocolMessage> capturedMatchProgressMessages = new();
 
-    private PostSignupDiagnosticMonitor(AccountSession session, SignupFlowResult signupResult)
+    private PostSignupDiagnosticMonitor(AccountSession session, SignupStageResult signupResult)
     {
         this.session = session;
         this.signupResult = signupResult;
@@ -28,7 +29,7 @@ public sealed class PostSignupDiagnosticMonitor
     public string AccountAlias => session.Alias;
 
     public static IReadOnlyList<PostSignupDiagnosticMonitor> Install(
-        IEnumerable<(AccountSession Session, SignupFlowResult Result)> signupResults)
+        IEnumerable<(AccountSession Session, SignupStageResult Result)> signupResults)
     {
         var monitors = new List<PostSignupDiagnosticMonitor>();
         foreach (var (session, signupResult) in signupResults)
@@ -80,7 +81,7 @@ public sealed class PostSignupDiagnosticMonitor
             SignupFlags = signupResult.Flags,
             TourneyId = signupResult.TourneyId,
             MatchPoint = signupResult.MatchPoint,
-            GameId = signupResult.GameId,
+            GameId = (int)signupResult.GameId,
             StartClientExReceived = startClientExReceived,
             StartClientExMatchId = startClientExMatchId,
             StartClientExIp = startClientExIp,

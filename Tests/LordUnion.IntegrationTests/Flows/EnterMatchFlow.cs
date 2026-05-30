@@ -4,6 +4,7 @@ using LordUnion.IntegrationTests.Config;
 using LordUnion.IntegrationTests.Protocol;
 using LordUnion.IntegrationTests.Protocol.Generated;
 using LordUnion.IntegrationTests.Reporting;
+using LordUnion.IntegrationTests.Scenarios;
 using LordUnion.IntegrationTests.Sessions;
 
 namespace LordUnion.IntegrationTests.Flows;
@@ -268,6 +269,27 @@ public sealed class EnterMatchFlow
             SeatOrder = seatOrder,
             SeatUserMapping = BuildSeatUserMapping(state?.InitGameTableAck),
         };
+    }
+
+    public static EnterTableStageResult CreateEnterTableStageResult(
+        AccountSession session,
+        LordUnionGameProfile profile,
+        uint seatOrder,
+        EnterMatchFlowSessionState? state)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(profile);
+        EnsureEnterTableUserId(session, out var userId);
+
+        var matchId = session.MatchId ?? 0;
+        var tableId = session.TableId ?? ResolveTableId(matchId, state?.InitGameTableAck) ?? matchId;
+
+        return new EnterTableStageResult(
+            userId,
+            matchId,
+            tableId,
+            seatOrder,
+            BuildSeatUserMapping(state?.InitGameTableAck));
     }
 
     public CRpcTask<EnterMatchFlowResult> EnterTableAsync(
@@ -636,6 +658,18 @@ public sealed class EnterMatchFlow
     private static void EnsureSignedUpUserId(AccountSession session, out uint userId)
     {
         EnsureSignedUp(session);
+        EnsureNonZeroUserId(session, out userId);
+    }
+
+    private static void EnsureEnterTableUserId(AccountSession session, out uint userId)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        EnsureOnLoopThread(session);
+        EnsureNonZeroUserId(session, out userId);
+    }
+
+    private static void EnsureNonZeroUserId(AccountSession session, out uint userId)
+    {
         if (session.UserId is not uint resolvedUserId || resolvedUserId == 0)
         {
             throw new InvalidOperationException(

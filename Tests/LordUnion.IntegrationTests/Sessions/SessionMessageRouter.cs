@@ -32,6 +32,10 @@ public static class SessionMessageRouter
                 or ProtocolMessageKind.EnterRoundReq or ProtocolMessageKind.EnterRoundAck
                 or ProtocolMessageKind.InitGameTableAck or ProtocolMessageKind.MatchTipMsgAck
                 or ProtocolMessageKind.AddGamePlayerInfoAck or ProtocolMessageKind.PushMatchPlayerInfoAck
+                or ProtocolMessageKind.BeginHandAck or ProtocolMessageKind.RulerInfoAck
+                or ProtocolMessageKind.RulerInfoExAck or ProtocolMessageKind.PushRoundRulerInfoAck
+                or ProtocolMessageKind.StagePlayerOrderChangedAck
+                or ProtocolMessageKind.PushPlayerGameDataAck or ProtocolMessageKind.PushMatchActionAck
                 or ProtocolMessageKind.ExitGameReq or ProtocolMessageKind.ExitGameAck
                 or ProtocolMessageKind.ExitMatchReq
                 or ProtocolMessageKind.OverGameAck or ProtocolMessageKind.HandOverAck
