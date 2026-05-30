@@ -1,5 +1,6 @@
 using CRpc.Async;
 using CRpc.Transport;
+using DotNetty.Transport.Channels;
 using LordUnion.IntegrationTests.Config;
 using LordUnion.IntegrationTests.Protocol;
 
@@ -8,12 +9,19 @@ namespace LordUnion.IntegrationTests.Sessions;
 public sealed class GameServerDotNettyTransport : IGameServerTransport, IAsyncDisposable
 {
     private readonly ServerProtocolCodec codec;
+    private readonly IEventLoopGroup? sharedEventLoopGroup;
     private TcpChannelHost? host;
     private AccountSession? session;
 
     public GameServerDotNettyTransport(ServerProtocolCodec? codec = null)
+        : this(codec, sharedEventLoopGroup: null)
+    {
+    }
+
+    public GameServerDotNettyTransport(ServerProtocolCodec? codec, IEventLoopGroup? sharedEventLoopGroup)
     {
         this.codec = codec ?? new ServerProtocolCodec();
+        this.sharedEventLoopGroup = sharedEventLoopGroup;
     }
 
     public void BindIncomingHandler(AccountSession session, ServerProtocolCodec codec)
@@ -35,7 +43,9 @@ public sealed class GameServerDotNettyTransport : IGameServerTransport, IAsyncDi
         var options = new TcpChannelHostOptions
         {
             ConnectTimeoutSeconds = Math.Max(1, (int)Math.Ceiling(timeout.TotalSeconds)),
-            LoggingName = "game-server"
+            LoggingName = session is null
+                ? "game-server"
+                : $"game-server-{session.Alias}",
         };
 
         return ConnectCoreAsync(server, loop, options);
@@ -43,7 +53,7 @@ public sealed class GameServerDotNettyTransport : IGameServerTransport, IAsyncDi
 
     private async CRpcTask ConnectCoreAsync(ServerConfig server, CRpcLoop ownerLoop, TcpChannelHostOptions options)
     {
-        host = new TcpChannelHost(ownerLoop, new GameServerPipelineFactory(), options)
+        host = new TcpChannelHost(ownerLoop, new GameServerPipelineFactory(), options, sharedEventLoopGroup)
         {
             InboundMessageReceived = HandleInboundMessage,
             ChannelBecameInactive = HandleChannelInactive,

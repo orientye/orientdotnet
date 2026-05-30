@@ -3,6 +3,7 @@ using CRpc.Transport;
 using DotNetty.Buffers;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Embedded;
+using DotNetty.Transport.Channels.Sockets;
 
 namespace CRPC.Tests.Transport;
 
@@ -115,6 +116,66 @@ public sealed class TcpChannelHostTests : CrpcTestBase
         DrainOwnerLoop(loop);
 
         Assert.Equal(0, callbackCount);
+    }
+
+    [Fact]
+    public void BorrowedEventLoopGroupDoesNotOwnGroup()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var sharedGroup = new MultithreadEventLoopGroup(1);
+        try
+        {
+            var host = new TcpChannelHost(loop, new EmptyPipelineFactory(), sharedEventLoopGroup: sharedGroup);
+            Assert.False(host.OwnsEventLoopGroup);
+        }
+        finally
+        {
+            sharedGroup.ShutdownGracefullyAsync().GetAwaiter().GetResult();
+        }
+    }
+
+    [Fact]
+    public void ShutdownIoAsyncCompletesImmediatelyWhenBorrowingSharedGroup()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var sharedGroup = new MultithreadEventLoopGroup(1);
+        try
+        {
+            var host = new TcpChannelHost(loop, new EmptyPipelineFactory(), sharedEventLoopGroup: sharedGroup);
+            var shutdownTask = host.ShutdownIoAsync();
+            Assert.True(shutdownTask.GetAwaiter().IsCompleted);
+        }
+        finally
+        {
+            sharedGroup.ShutdownGracefullyAsync().GetAwaiter().GetResult();
+        }
+    }
+
+    [Fact]
+    public async Task DisposeAsyncClosesChannelWithoutShuttingDownBorrowedGroup()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var sharedGroup = new MultithreadEventLoopGroup(1);
+        try
+        {
+            var host = new TcpChannelHost(loop, new EmptyPipelineFactory(), sharedEventLoopGroup: sharedGroup)
+            {
+                ChannelBecameInactive = () => { }
+            };
+            SetHostChannel(host, new EmbeddedChannel());
+
+            await host.DisposeAsync();
+
+            Assert.False(host.OwnsEventLoopGroup);
+            Assert.False(host.IsConnected);
+        }
+        finally
+        {
+            await sharedGroup.ShutdownGracefullyAsync();
+        }
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using CRpc.Async;
+using DotNetty.Transport.Channels;
 using LordUnion.IntegrationTests.Bots;
 using LordUnion.IntegrationTests.Bots.Pacing;
 using LordUnion.IntegrationTests.Config;
@@ -91,13 +92,53 @@ public sealed class ThreePlayersOneGameScenario
                 $"ThreePlayersOneGameScenario requires at least 3 accounts; got {config.Accounts.Count}.");
         }
 
+        LordUnionSharedIo? sharedIo = null;
+        List<AccountBundle>? bundles = null;
 
-        var factory = ResolveTransportFactory(options);
+        try
+        {
+            if (options.TransportFactory is null && options.UseLiveTransport)
+            {
+                sharedIo = LordUnionSharedIo.FromConfig(config);
+            }
 
-        var bundles = config.Accounts
-            .Take(3)
-            .Select(account => CreateBundle(loop, account, factory))
-            .ToList();
+            var factory = ResolveTransportFactory(options, sharedIo);
+
+            bundles = config.Accounts
+                .Take(3)
+                .Select(account => CreateBundle(loop, account, factory))
+                .ToList();
+
+            return await RunCoreWithBundlesAsync(
+                loop,
+                config,
+                options,
+                cancellationToken,
+                bundles);
+        }
+        finally
+        {
+            if (bundles is not null)
+            {
+                await DisposeBundleTransportsAsync(loop, bundles);
+            }
+
+            if (sharedIo is not null)
+            {
+                await sharedIo.DisposeAsync(loop);
+            }
+        }
+    }
+
+    private async CRpcTask<ScenarioReport> RunCoreWithBundlesAsync(
+        CRpcLoop loop,
+        LordUnionTestConfig config,
+        ScenarioRunOptions options,
+        CancellationToken cancellationToken,
+        List<AccountBundle> bundles)
+
+    {
+        _ = loop;
 
         var profile = LordUnionGameProfiles.FromConfig(config.Match, variant);
 
@@ -266,6 +307,21 @@ public sealed class ThreePlayersOneGameScenario
 
             SignupDiagnostics = CreateSignupDiagnosticSnapshots(postSignupMonitors),
         };
+    }
+
+    private static async CRpcTask DisposeBundleTransportsAsync(
+        CRpcLoop loop,
+        IReadOnlyList<AccountBundle> bundles)
+    {
+        foreach (var bundle in bundles)
+        {
+            await bundle.Transport.DisconnectAsync(loop);
+
+            if (bundle.Transport is IAsyncDisposable disposable)
+            {
+                await disposable.DisposeAsync();
+            }
+        }
     }
 
 
@@ -486,7 +542,9 @@ public sealed class ThreePlayersOneGameScenario
     }
 
 
-    private static IScenarioTransportFactory ResolveTransportFactory(ScenarioRunOptions options)
+    private IScenarioTransportFactory ResolveTransportFactory(
+        ScenarioRunOptions options,
+        LordUnionSharedIo? sharedIo)
 
     {
         if (options.TransportFactory is not null)
@@ -499,7 +557,13 @@ public sealed class ThreePlayersOneGameScenario
         if (options.UseLiveTransport)
 
         {
-            return new LiveScenarioTransportFactory();
+            if (sharedIo is null)
+            {
+                throw new InvalidOperationException(
+                    "Live transport requires a LordUnionSharedIo instance for the scenario run.");
+            }
+
+            return new LiveScenarioTransportFactory(codec, sharedIo.EventLoopGroup);
         }
 
 
@@ -933,12 +997,17 @@ public sealed class LiveScenarioTransportFactory : IScenarioTransportFactory
 
 {
     private readonly ServerProtocolCodec codec;
+    private readonly IEventLoopGroup sharedEventLoopGroup;
 
 
-    public LiveScenarioTransportFactory(ServerProtocolCodec? codec = null)
+    public LiveScenarioTransportFactory(
+        ServerProtocolCodec? codec,
+        IEventLoopGroup sharedEventLoopGroup)
 
     {
         this.codec = codec ?? new ServerProtocolCodec();
+        this.sharedEventLoopGroup = sharedEventLoopGroup
+                                     ?? throw new ArgumentNullException(nameof(sharedEventLoopGroup));
     }
 
 
@@ -947,6 +1016,6 @@ public sealed class LiveScenarioTransportFactory : IScenarioTransportFactory
     {
         _ = account;
 
-        return new GameServerDotNettyTransport(codec);
+        return new GameServerDotNettyTransport(codec, sharedEventLoopGroup);
     }
 }

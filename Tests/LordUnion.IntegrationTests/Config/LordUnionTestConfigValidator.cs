@@ -76,6 +76,11 @@ public static class LordUnionTestConfigValidator
             errors.Add("Output.Directory is required.");
         }
 
+        if (config.Live.IoThreadCount <= 0)
+        {
+            errors.Add($"Live.IoThreadCount must be positive (got {config.Live.IoThreadCount}).");
+        }
+
         ValidateTimeout(errors, nameof(config.Timeouts.ConnectTimeout), config.Timeouts.ConnectTimeout);
         ValidateTimeout(errors, nameof(config.Timeouts.LoginTimeout), config.Timeouts.LoginTimeout);
         ValidateTimeout(errors, nameof(config.Timeouts.SignupTimeout), config.Timeouts.SignupTimeout);

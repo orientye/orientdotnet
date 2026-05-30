@@ -1,3 +1,5 @@
+using CRpc.Transport;
+
 namespace LordUnion.IntegrationTests.Config;
 
 public sealed class LordUnionTestConfig
@@ -15,6 +17,13 @@ public sealed class LordUnionTestConfig
     public BotConfig Bot { get; set; } = new();
 
     public OutputConfig Output { get; set; } = new();
+
+    public LiveConfig Live { get; set; } = new();
+}
+
+public sealed class LiveConfig
+{
+    public int IoThreadCount { get; set; } = TcpChannelHostOptions.DefaultIoThreadCount;
 }
 
 public sealed class BotConfig

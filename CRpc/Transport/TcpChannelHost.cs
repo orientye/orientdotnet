@@ -13,19 +13,26 @@ public sealed class TcpChannelHost : IAsyncDisposable
     private readonly IChannelPipelineFactory pipelineFactory;
     private readonly TcpChannelHostOptions options;
     private readonly IEventLoopGroup group;
+    private readonly bool ownsEventLoopGroup;
     private readonly Bootstrap bootstrap;
     private IChannel? channel;
 
+    /// <param name="sharedEventLoopGroup">
+    /// When set, this host borrows the group and does not shut it down on <see cref="ShutdownIoAsync"/> /
+    /// <see cref="DisposeAsync"/>. <see cref="TcpChannelHostOptions.IoThreadCount"/> is ignored for sizing.
+    /// </param>
     public TcpChannelHost(
         CRpcLoop ownerLoop,
         IChannelPipelineFactory pipelineFactory,
-        TcpChannelHostOptions? options = null)
+        TcpChannelHostOptions? options = null,
+        IEventLoopGroup? sharedEventLoopGroup = null)
     {
         this.ownerLoop = ownerLoop ?? throw new ArgumentNullException(nameof(ownerLoop));
         this.pipelineFactory = pipelineFactory ?? throw new ArgumentNullException(nameof(pipelineFactory));
         this.options = options ?? new TcpChannelHostOptions();
         this.options.Validate();
-        group = new MultithreadEventLoopGroup(this.options.IoThreadCount);
+        ownsEventLoopGroup = sharedEventLoopGroup is null;
+        group = sharedEventLoopGroup ?? new MultithreadEventLoopGroup(this.options.IoThreadCount);
         bootstrap = new Bootstrap()
             .Channel<TcpSocketChannel>()
             .Option(ChannelOption.TcpNodelay, this.options.TcpNoDelay)
@@ -44,6 +51,8 @@ public sealed class TcpChannelHost : IAsyncDisposable
     public IChannelPipelineFactory PipelineFactory => pipelineFactory;
 
     public TcpChannelHostOptions Options => options;
+
+    internal bool OwnsEventLoopGroup => ownsEventLoopGroup;
 
     public bool IsConnected => channel is not null && channel.Active;
 
@@ -110,6 +119,11 @@ public sealed class TcpChannelHost : IAsyncDisposable
     public CRpcTask ShutdownIoAsync()
     {
         EnsureOwnerLoopThread();
+        if (!ownsEventLoopGroup)
+        {
+            return CRpcTask.CompletedTask(ownerLoop);
+        }
+
         return CRpcTask.FromTask(group.ShutdownGracefullyAsync(), ownerLoop);
     }
 
@@ -151,28 +165,29 @@ public sealed class TcpChannelHost : IAsyncDisposable
     {
         EnsureOwnerLoopThread();
 
-        var closeAwaiter = CloseAsync().GetAwaiter();
-        if (!closeAwaiter.IsCompleted)
+        PumpAwaitableOnOwnerLoop(CloseAsync());
+
+        if (ownsEventLoopGroup)
         {
-            throw new InvalidOperationException(
-                "TcpChannelHost.DisposeAsync requires CloseAsync to complete synchronously on the owner loop. " +
-                "Await CloseAsync() while driving the loop, then call ShutdownIoAsync().");
+            PumpAwaitableOnOwnerLoop(ShutdownIoAsync());
         }
 
-        closeAwaiter.GetResult();
+        return ValueTask.CompletedTask;
+    }
 
-        var shutdownAwaiter = ShutdownIoAsync().GetAwaiter();
-        while (!shutdownAwaiter.IsCompleted)
+    private void PumpAwaitableOnOwnerLoop(CRpcTask task)
+    {
+        var awaiter = task.GetAwaiter();
+        while (!awaiter.IsCompleted)
         {
             ownerLoop.Tick();
-            if (!shutdownAwaiter.IsCompleted)
+            if (!awaiter.IsCompleted)
             {
                 ownerLoop.WaitForWorkOrTimer(CancellationToken.None);
             }
         }
 
-        shutdownAwaiter.GetResult();
-        return ValueTask.CompletedTask;
+        awaiter.GetResult();
     }
 
     private void EnsureOwnerLoopThread()
