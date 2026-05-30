@@ -1,6 +1,6 @@
 namespace LordUnion.IntegrationTests.Flows;
 
-public sealed class GameFlowResult
+internal sealed class GameFlowResult
 {
     public bool Success { get; init; }
 

@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using CRpc.Async;
+using LordUnion.IntegrationTests.Bots;
+using LordUnion.IntegrationTests.Bots.Pacing;
 using LordUnion.IntegrationTests.Config;
 using LordUnion.IntegrationTests.Flows;
 using LordUnion.IntegrationTests.Reporting;
@@ -15,6 +17,7 @@ public sealed class LordUnionSessionClient
     private readonly IGameServerTransport transport;
     private readonly ServerProtocolCodec codec;
     private readonly EnterMatchFlow enterMatchFlow;
+    private readonly GameFlow gameFlow;
     private readonly AccountCleanupFlow cleanupFlow;
     private readonly EnterMatchFlowSessionState enterMatchState = new();
     private EnterMatchStartInfo? lastMatchStartInfo;
@@ -23,13 +26,24 @@ public sealed class LordUnionSessionClient
         AccountSession session,
         IGameServerTransport transport,
         ServerProtocolCodec codec,
-        EnterMatchFlow? enterMatchFlow = null,
+        AccountCleanupFlow? cleanupFlow = null)
+        : this(session, transport, codec, enterMatchFlow: null, gameFlow: null, cleanupFlow)
+    {
+    }
+
+    internal LordUnionSessionClient(
+        AccountSession session,
+        IGameServerTransport transport,
+        ServerProtocolCodec codec,
+        EnterMatchFlow? enterMatchFlow,
+        GameFlow? gameFlow = null,
         AccountCleanupFlow? cleanupFlow = null)
     {
         this.session = session ?? throw new ArgumentNullException(nameof(session));
         this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
         this.codec = codec ?? throw new ArgumentNullException(nameof(codec));
         this.enterMatchFlow = enterMatchFlow ?? new EnterMatchFlow(codec);
+        this.gameFlow = gameFlow ?? new GameFlow(codec);
         this.cleanupFlow = cleanupFlow ?? new AccountCleanupFlow(codec);
     }
 
@@ -346,6 +360,29 @@ public sealed class LordUnionSessionClient
         return new EnterRoundStageResult(matchId, tableId, seat);
     }
 
+    public async CRpcTask<GameStageResult> PlayGameAsync(
+        LordUnionGameProfile profile,
+        IBotPolicy policy,
+        IActionScheduler scheduler,
+        TimeSpan gameOverTimeout)
+    {
+        EnsureOnLoopThread();
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(policy);
+        ArgumentNullException.ThrowIfNull(scheduler);
+        ArgumentNullException.ThrowIfNull(profile.Variant);
+
+        var flowResult = await gameFlow.RunUntilFinishedAsync(
+            session,
+            policy,
+            profile.Variant,
+            gameOverTimeout,
+            scheduler,
+            transport);
+
+        return ToGameStageResult(flowResult);
+    }
+
     public EnterTableStageResult ToEnterTableStageResult(
         LordUnionGameProfile profile,
         EnterRoundStageResult enterRound)
@@ -417,6 +454,14 @@ public sealed class LordUnionSessionClient
 
         return (int)Math.Min(timeout.TotalMilliseconds, int.MaxValue);
     }
+
+    private static GameStageResult ToGameStageResult(GameFlowResult result) =>
+        new(
+            result.Success,
+            result.WinSeat,
+            result.EndSignal,
+            result.Scores,
+            result.FailureMessage);
 
     private void EnsureOnLoopThread()
     {

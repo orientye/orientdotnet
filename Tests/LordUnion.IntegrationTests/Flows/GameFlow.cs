@@ -13,7 +13,7 @@ namespace LordUnion.IntegrationTests.Flows;
 /// Drives one account through in-game lord messages until <see cref="GameEventKind.GameFinished"/>.
 /// Decision via <see cref="IBotPolicy"/>; pacing via <see cref="IActionScheduler"/>.
 /// </summary>
-public sealed class GameFlow
+internal sealed class GameFlow
 
 {
     private readonly ServerProtocolCodec codec;

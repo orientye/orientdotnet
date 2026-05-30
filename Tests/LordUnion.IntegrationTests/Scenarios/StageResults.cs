@@ -50,3 +50,10 @@ public sealed record EnterRoundStageResult(
     uint MatchId,
     uint TableId,
     uint Seat);
+
+public sealed record GameStageResult(
+    bool Success,
+    uint? WinSeat,
+    string? EndSignal,
+    IReadOnlyList<int>? Scores = null,
+    string? FailureMessage = null);

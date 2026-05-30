@@ -22,27 +22,16 @@ public sealed class ThreePlayersOneGameScenario
 {
     private readonly ServerProtocolCodec codec;
 
-    private readonly EnterMatchFlow? enterMatchFlow;
-
-    private readonly GameFlow gameFlow;
-
     private readonly ILordGameVariant variant;
 
 
     public ThreePlayersOneGameScenario(
         ServerProtocolCodec? codec = null,
-        ILordGameVariant? variant = null,
-        EnterMatchFlow? enterMatchFlow = null,
-        GameFlow? gameFlow = null)
-
+        ILordGameVariant? variant = null)
     {
         this.codec = codec ?? new ServerProtocolCodec();
 
         this.variant = variant ?? new ClassicLordVariant();
-
-        this.enterMatchFlow = enterMatchFlow;
-
-        this.gameFlow = gameFlow ?? new GameFlow(this.codec);
     }
 
 
@@ -215,7 +204,7 @@ public sealed class ThreePlayersOneGameScenario
 
         var gameResults = await RunPhaseConcurrentOnLoopAsync(
             bundles,
-            bundle => RunGameAsync(bundle, config, options, cancellationToken),
+            bundle => RunGameAsync(bundle, profile, config, options, cancellationToken),
             static (timing, elapsed) => timing.GameDuration = elapsed);
 
 
@@ -538,8 +527,9 @@ public sealed class ThreePlayersOneGameScenario
     }
 
 
-    private async CRpcTask<GameFlowResult> RunGameAsync(
+    private async CRpcTask<GameStageResult> RunGameAsync(
         AccountBundle bundle,
+        LordUnionGameProfile profile,
         LordUnionTestConfig config,
         ScenarioRunOptions options,
         CancellationToken cancellationToken)
@@ -553,25 +543,23 @@ public sealed class ThreePlayersOneGameScenario
         var scheduler = ActionSchedulerFactory.Create(config.Bot, config.Timeouts, options);
 
 
-        if (options.GameFlowOverride is not null)
+        if (options.PlayGameOverride is not null)
 
         {
-            return await options.GameFlowOverride(
-                bundle.Session,
-                bot,
-                variant,
-                bundle.Transport,
+            return await options.PlayGameOverride(
+                bundle.Client,
+                profile,
+                policy,
+                scheduler,
                 config.Timeouts.GameOverTimeout);
         }
 
 
-        return await gameFlow.RunUntilFinishedAsync(
-            bundle.Session,
+        return await bundle.Client.PlayGameAsync(
+            profile,
             policy,
-            variant,
-            config.Timeouts.GameOverTimeout,
             scheduler,
-            bundle.Transport);
+            config.Timeouts.GameOverTimeout);
     }
 
 
@@ -607,7 +595,7 @@ public sealed class ThreePlayersOneGameScenario
 
         var transport = factory.CreateTransport(session, account);
 
-        var client = new LordUnionSessionClient(session, transport, codec, enterMatchFlow);
+        var client = new LordUnionSessionClient(session, transport, codec);
 
 
         return new AccountBundle
@@ -864,7 +852,7 @@ public sealed class ThreePlayersOneGameScenario
 
 
     private static ScenarioFailureDetail? FindFirstGameFailure(
-        IReadOnlyList<PhaseResult<GameFlowResult>> results)
+        IReadOnlyList<PhaseResult<GameStageResult>> results)
 
     {
         foreach (var phaseResult in results)

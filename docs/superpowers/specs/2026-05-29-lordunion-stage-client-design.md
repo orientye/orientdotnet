@@ -1,7 +1,7 @@
 # LordUnion Stage Client Design
 
 **Date:** 2026-05-29  
-**Status:** Implemented (core stages + scenario migration; GameFlow remains scenario-level)
+**Status:** Implemented (full per-account stage pipeline including `PlayGameAsync`)
 
 ## Goal
 

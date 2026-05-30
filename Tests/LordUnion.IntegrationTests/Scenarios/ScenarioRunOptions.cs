@@ -2,7 +2,6 @@ using CRpc.Async;
 using LordUnion.IntegrationTests.Bots;
 using LordUnion.IntegrationTests.Bots.Pacing;
 using LordUnion.IntegrationTests.Config;
-using LordUnion.IntegrationTests.Flows;
 using LordUnion.IntegrationTests.GameVariants;
 using LordUnion.IntegrationTests.Protocol;
 using LordUnion.IntegrationTests.Sessions;
@@ -27,12 +26,12 @@ public sealed class ScenarioRunOptions
     /// Optional override for tests that stub or abbreviate in-game flow.
     /// </summary>
     public Func<
-        AccountSession,
-        MinimalLandlordBot,
-        ILordGameVariant,
-        IGameServerTransport?,
+        LordUnionSessionClient,
+        LordUnionGameProfile,
+        IBotPolicy,
+        IActionScheduler,
         TimeSpan,
-        CRpcTask<GameFlowResult>>? GameFlowOverride { get; init; }
+        CRpcTask<GameStageResult>>? PlayGameOverride { get; init; }
 
     /// <summary>
     /// Optional factory used by fake tests to push StartGameClientAck after enter-match begins waiting.

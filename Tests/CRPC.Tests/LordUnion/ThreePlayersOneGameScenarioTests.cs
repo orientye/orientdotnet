@@ -75,15 +75,14 @@ public class ThreePlayersOneGameScenarioTests : CrpcTestBase
                 MatchPoint,
                 GameId,
                 ticket: $"ticket-{session.Alias}"),
-            GameFlowOverride = (session, _, _, _, _) =>
+            PlayGameOverride = (client, _, _, _, _) =>
                 CRpcTask.FromResult(
-                    new GameFlowResult
-                    {
-                        Success = true,
-                        WinSeat = session.SeatOrder,
-                        Scores = new[] { 1, -1, 0 },
-                    },
-                    session.Loop),
+                    new GameStageResult(
+                        Success: true,
+                        WinSeat: client.Session.SeatOrder,
+                        EndSignal: "stub",
+                        Scores: new[] { 1, -1, 0 }),
+                    client.Session.Loop),
         };
 
         var loop = new CRpcLoop();

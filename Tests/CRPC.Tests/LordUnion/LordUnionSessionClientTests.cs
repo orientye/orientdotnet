@@ -521,6 +521,260 @@ public sealed class LordUnionSessionClientTests : CrpcTestBase
         Assert.Contains(matchId, result.ExitMatchAttemptedMatchIds);
     }
 
+    [Fact]
+    public void EnterTablePipeline_SucceedsWhenMatchStartAndEnterAcksArrive()
+    {
+        const uint userId = 214291552;
+        const uint matchId = 900001;
+        const uint tourneyId = 159740;
+        const uint matchPoint = 2008280;
+        const uint gameId = 1001;
+        const string ticket = "test-ticket";
+        const uint seatOrder = 2;
+
+        var loop = new CRpcLoop();
+        var session = new AccountSession(loop, "player1", codec);
+        var profile = LordUnionEnterMatchWireFixtures.CreateClassicProfile(gameId, tourneyId, matchPoint);
+
+        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            var transport = LordUnionEnterMatchWireFixtures.CreateEnterMatchAutoResponder(
+                session,
+                LordUnionEnterMatchWireFixtures.CreateEnterMatchAck(matchId, tourneyId),
+                LordUnionEnterMatchWireFixtures.CreateEnterRoundAck(userId, seatOrder),
+                LordUnionEnterMatchWireFixtures.CreateInitGameTableAck(
+                    (1, 214291551),
+                    (2, userId),
+                    (3, 214291553)));
+
+            var client = new LordUnionSessionClient(session, transport, codec);
+            await client.ConnectAsync(new ServerConfig(), TimeSpan.FromSeconds(5));
+            session.SetState(AccountSessionState.SignedUp);
+            session.UserId = userId;
+
+            var waitTask = client.WaitForMatchStartAsync(TimeSpan.FromSeconds(5));
+            transport.DeliverIncomingMessage(
+                LordUnionEnterMatchWireFixtures.CreateStartGameClientAck(
+                    userId, matchId, tourneyId, matchPoint, gameId, ticket));
+            var matchStart = await waitTask;
+
+            await client.EnterMatchAsync(profile, matchStart, TimeSpan.FromSeconds(5));
+            var enterRound = await client.EnterRoundAsync(profile, TimeSpan.FromSeconds(5));
+            var table = client.ToEnterTableStageResult(profile, enterRound);
+
+            Assert.Equal(matchId, matchStart.MatchId);
+            Assert.Equal(matchId, enterRound.MatchId);
+            Assert.Equal(seatOrder, enterRound.Seat);
+            Assert.Equal(userId, table.UserId);
+            Assert.Equal(3, table.SeatUserMapping.Count);
+            Assert.Equal(userId, table.SeatUserMapping[seatOrder]);
+            Assert.Equal(AccountSessionState.InGame, session.State);
+            Assert.Equal(matchId, session.MatchId);
+            Assert.Equal(seatOrder, session.SeatOrder);
+            Assert.Equal(2, LordUnionEnterMatchWireFixtures.TransportSentEnterRequestCount(session));
+        });
+    }
+
+    [Fact]
+    public void EnterTablePipeline_SucceedsWhenStartClientExAckArrives()
+    {
+        const uint userId = 214291552;
+        const uint matchId = 900002;
+        const uint tourneyId = 159740;
+        const uint matchPoint = 2008280;
+        const uint gameId = 1001;
+        var ticket = Encoding.UTF8.GetBytes("binary-ticket");
+        const uint seatOrder = 1;
+
+        var loop = new CRpcLoop();
+        var session = new AccountSession(loop, "player1", codec);
+        var profile = LordUnionEnterMatchWireFixtures.CreateClassicProfile(gameId, tourneyId, matchPoint);
+
+        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            var transport = LordUnionEnterMatchWireFixtures.CreateEnterMatchAutoResponder(
+                session,
+                LordUnionEnterMatchWireFixtures.CreateEnterMatchAck(matchId, tourneyId),
+                LordUnionEnterMatchWireFixtures.CreateEnterRoundAck(userId, seatOrder),
+                LordUnionEnterMatchWireFixtures.CreateInitGameTableAck((1, userId), (2, 214291552), (3, 214291553)));
+
+            var client = new LordUnionSessionClient(session, transport, codec);
+            await client.ConnectAsync(new ServerConfig(), TimeSpan.FromSeconds(5));
+            session.SetState(AccountSessionState.SignedUp);
+            session.UserId = userId;
+
+            var waitTask = client.WaitForMatchStartAsync(TimeSpan.FromSeconds(5));
+            transport.DeliverIncomingMessage(
+                LordUnionEnterMatchWireFixtures.CreateStartClientExAck(
+                    userId, matchId, tourneyId, matchPoint, gameId, ticket));
+            var matchStart = await waitTask;
+            await client.EnterMatchAsync(profile, matchStart, TimeSpan.FromSeconds(5));
+            var enterRound = await client.EnterRoundAsync(profile, TimeSpan.FromSeconds(5));
+
+            Assert.Equal(matchId, matchStart.MatchId);
+            Assert.Equal(ticket, session.Ticket);
+            Assert.Equal(seatOrder, enterRound.Seat);
+        });
+    }
+
+    [Fact]
+    public void EnterTablePipeline_TimesOutWhenStartGameClientAckMissing()
+    {
+        var loop = new CRpcLoop();
+        var session = new AccountSession(loop, "player1", codec);
+
+        var exception = CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            var transport = new FakeGameServerTransport();
+            var client = new LordUnionSessionClient(session, transport, codec);
+            await client.ConnectAsync(new ServerConfig(), TimeSpan.FromSeconds(5));
+            session.SetState(AccountSessionState.SignedUp);
+            session.UserId = 12345;
+
+            try
+            {
+                await client.WaitForMatchStartAsync(TimeSpan.FromMilliseconds(50));
+                throw new InvalidOperationException("Expected timeout.");
+            }
+            catch (TimeoutException timeoutException)
+            {
+                return timeoutException;
+            }
+        });
+
+        Assert.Contains("StartGameClientAck or StartClientExAck", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(AccountSessionState.Failed, session.State);
+    }
+
+    [Fact]
+    public void EnterTablePipeline_SucceedsWhenEnterRoundAckArrivesInsteadOfEnterMatchAck()
+    {
+        const uint userId = 214291552;
+        const uint matchId = 900011;
+        const uint tourneyId = 159740;
+        const uint matchPoint = 2008280;
+        const uint gameId = 1001;
+        const string ticket = "test-ticket";
+        const uint seatOrder = 1;
+
+        var loop = new CRpcLoop();
+        var session = new AccountSession(loop, "player1", codec);
+        var profile = LordUnionEnterMatchWireFixtures.CreateClassicProfile(gameId, tourneyId, matchPoint);
+
+        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            var transport = LordUnionEnterMatchWireFixtures.CreateEnterMatchAutoResponder(
+                session,
+                enterMatchAck: null,
+                LordUnionEnterMatchWireFixtures.CreateEnterRoundAck(userId, seatOrder),
+                LordUnionEnterMatchWireFixtures.CreateInitGameTableAck((0, 214291551), (1, userId), (2, 214291553)));
+
+            var client = new LordUnionSessionClient(session, transport, codec);
+            await client.ConnectAsync(new ServerConfig(), TimeSpan.FromSeconds(5));
+            session.SetState(AccountSessionState.SignedUp);
+            session.UserId = userId;
+
+            var waitTask = client.WaitForMatchStartAsync(TimeSpan.FromSeconds(5));
+            transport.DeliverIncomingMessage(
+                LordUnionEnterMatchWireFixtures.CreateStartGameClientAck(
+                    userId, matchId, tourneyId, matchPoint, gameId, ticket));
+            var matchStart = await waitTask;
+            await client.EnterMatchAsync(profile, matchStart, TimeSpan.FromSeconds(5));
+            var enterRound = await client.EnterRoundAsync(profile, TimeSpan.FromSeconds(5));
+
+            Assert.Equal(matchId, enterRound.MatchId);
+            Assert.Equal(seatOrder, enterRound.Seat);
+            Assert.Equal(AccountSessionState.InGame, session.State);
+        });
+    }
+
+    [Fact]
+    public void EnterTablePipeline_SucceedsWhenEnterRoundAckSeatOrderIsZeroAndInitGameTableProvidesSeat()
+    {
+        const uint userId = 214291552;
+        const uint matchId = 900003;
+        const uint tourneyId = 159740;
+        const uint matchPoint = 2008280;
+        const uint gameId = 1001;
+        const string ticket = "test-ticket";
+        const uint seatOrder = 1;
+
+        var loop = new CRpcLoop();
+        var session = new AccountSession(loop, "player1", codec);
+        var profile = LordUnionEnterMatchWireFixtures.CreateClassicProfile(gameId, tourneyId, matchPoint);
+
+        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            var transport = LordUnionEnterMatchWireFixtures.CreateEnterMatchAutoResponder(
+                session,
+                LordUnionEnterMatchWireFixtures.CreateEnterMatchAck(matchId, tourneyId),
+                LordUnionEnterMatchWireFixtures.CreateEnterRoundAck(userId, seatOrder: 0),
+                LordUnionEnterMatchWireFixtures.CreateInitGameTableAck(
+                    (0, 214291551),
+                    (1, userId),
+                    (2, 214291553)));
+
+            var client = new LordUnionSessionClient(session, transport, codec);
+            await client.ConnectAsync(new ServerConfig(), TimeSpan.FromSeconds(5));
+            session.SetState(AccountSessionState.SignedUp);
+            session.UserId = userId;
+
+            var waitTask = client.WaitForMatchStartAsync(TimeSpan.FromSeconds(5));
+            transport.DeliverIncomingMessage(
+                LordUnionEnterMatchWireFixtures.CreateStartGameClientAck(
+                    userId, matchId, tourneyId, matchPoint, gameId, ticket));
+            var matchStart = await waitTask;
+            await client.EnterMatchAsync(profile, matchStart, TimeSpan.FromSeconds(5));
+            var enterRound = await client.EnterRoundAsync(profile, TimeSpan.FromSeconds(5));
+
+            Assert.Equal(seatOrder, enterRound.Seat);
+            Assert.Equal(seatOrder, session.SeatOrder);
+        });
+    }
+
+    [Fact]
+    public void EnterTablePipeline_TimesOutWhenEnterMatchAckMissing()
+    {
+        const uint userId = 214291552;
+        const uint matchId = 900001;
+
+        var loop = new CRpcLoop();
+        var session = new AccountSession(loop, "player1", codec);
+        var profile = LordUnionEnterMatchWireFixtures.CreateClassicProfile();
+
+        var exception = CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        {
+            var transport = LordUnionEnterMatchWireFixtures.CreateEnterMatchAutoResponder(
+                session,
+                enterMatchAck: null,
+                enterRoundAck: null,
+                initGameTableAck: null);
+
+            var client = new LordUnionSessionClient(session, transport, codec);
+            await client.ConnectAsync(new ServerConfig(), TimeSpan.FromSeconds(5));
+            session.SetState(AccountSessionState.SignedUp);
+            session.UserId = userId;
+
+            try
+            {
+                var waitTask = client.WaitForMatchStartAsync(TimeSpan.FromSeconds(5));
+                transport.DeliverIncomingMessage(
+                    LordUnionEnterMatchWireFixtures.CreateStartGameClientAck(
+                        userId, matchId, tourneyId: 159740, matchPoint: 2008280, gameId: 1001, ticket: "abc"));
+                var matchStart = await waitTask;
+                await client.EnterMatchAsync(profile, matchStart, TimeSpan.FromMilliseconds(50));
+                throw new InvalidOperationException("Expected timeout.");
+            }
+            catch (TimeoutException timeoutException)
+            {
+                return timeoutException;
+            }
+        });
+
+        Assert.Contains("EnterMatchAck", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(AccountSessionState.Failed, session.State);
+    }
+
     private static MatchConfig CreateMatchConfig() =>
         new()
         {

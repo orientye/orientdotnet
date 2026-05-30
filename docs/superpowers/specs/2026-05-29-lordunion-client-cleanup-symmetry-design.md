@@ -84,9 +84,9 @@ This change does not:
 - Change the game server wire protocol.
 - Replace `GameServerDotNettyTransport`, `TcpChannelHost`, or `CRpcLoop`.
 - Convert LordUnion traffic into CRPC `serviceId` / `methodId` calls.
-- Inline `EnterMatchFlow` into `LordUnionSessionClient`.
-- Inline `GameFlow` or the bot into `LordUnionSessionClient`.
-- Delete `EnterMatchFlow.RunAsync` or `EnterMatchFlow.EnterTableAsync`.
+- Inline `EnterMatchFlow` into `LordUnionSessionClient` (only internalized; not inlined).
+- ~~Inline `GameFlow` or the bot into `LordUnionSessionClient`.~~ Done — `PlayGameAsync`; see `2026-05-29-lordunion-game-stage-client-design.md`.
+- ~~Delete `EnterMatchFlow.RunAsync` or `EnterMatchFlow.EnterTableAsync`.~~ Done — see enter-match-flow-internalize spec.
 - Rewrite scenario phase plumbing to use only `*StageResult` types.
 - Rename report and diagnostic DTOs such as `LoginFlowResult`, `SignupFlowResult`, or `EnterMatchFlowResult`.
 - Fail an otherwise successful scenario because post-game cleanup failed.
@@ -96,11 +96,11 @@ This change does not:
 
 These are valid follow-ups, but they should not be bundled into this cleanup symmetry change:
 
-- Migrate `EnterMatchFlowTests` to stage-client APIs and then delete or internalize `EnterMatchFlow` legacy APIs.
-- Convert scenario phase result handling from `*FlowResult` to `*StageResult`.
+- ~~Migrate `EnterMatchFlowTests` to stage-client APIs and then delete or internalize `EnterMatchFlow` legacy APIs.~~ Done — see `2026-05-29-lordunion-enter-match-flow-internalize-design.md`.
+- ~~Convert scenario phase result handling from `*FlowResult` to `*StageResult`.~~ Done in scenario slimming pass.
 - Align report and diagnostic DTO names with stage naming.
 - Add a `CleanupStageResult` wrapper or alias if stage result naming becomes important at the report boundary.
-- Wrap `GameFlow` behind a future `Client.PlayGameAsync` only after bot and variant ownership are redesigned.
+- ~~Wrap `GameFlow` behind a future `Client.PlayGameAsync` only after bot and variant ownership are redesigned.~~ Done.
 
 ## Cleanup API Semantics
 

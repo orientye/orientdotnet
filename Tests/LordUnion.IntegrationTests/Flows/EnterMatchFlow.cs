@@ -9,7 +9,7 @@ using LordUnion.IntegrationTests.Sessions;
 
 namespace LordUnion.IntegrationTests.Flows;
 
-public sealed class EnterMatchFlow
+internal sealed class EnterMatchFlow
 {
     private static readonly ProtocolMessageKind[] MatchStartAckKinds =
     [
@@ -22,25 +22,6 @@ public sealed class EnterMatchFlow
     public EnterMatchFlow(ServerProtocolCodec? codec = null)
     {
         this.codec = codec ?? new ServerProtocolCodec();
-    }
-
-    public CRpcTask<EnterMatchFlowResult> RunAsync(
-        AccountSession session,
-        MatchConfig match,
-        TimeSpan matchStartTimeout,
-        TimeSpan enterMatchTimeout,
-        TimeSpan enterRoundTimeout,
-        IGameServerTransport? transport = null)
-    {
-        _ = match;
-        var state = new EnterMatchFlowSessionState();
-        return RunCoreAsync(
-            session,
-            matchStartTimeout,
-            enterMatchTimeout,
-            enterRoundTimeout,
-            transport,
-            state);
     }
 
     public CRpcTask<EnterMatchStartInfo> WaitForMatchStartAsync(
@@ -242,35 +223,6 @@ public sealed class EnterMatchFlow
         }
     }
 
-    public EnterMatchFlowResult CreateSuccessResult(
-        AccountSession session,
-        EnterMatchStartInfo matchStart,
-        uint seatOrder,
-        EnterMatchFlowSessionState? state = null)
-    {
-        ArgumentNullException.ThrowIfNull(session);
-        ArgumentNullException.ThrowIfNull(matchStart);
-        EnsureSignedUpUserId(session, out var userId);
-
-        var tableId = ResolveTableId(matchStart.MatchId, state?.InitGameTableAck);
-        session.TableId = tableId;
-        session.SetState(AccountSessionState.InGame);
-
-        return new EnterMatchFlowResult
-        {
-            Success = true,
-            UserId = userId,
-            MatchId = matchStart.MatchId,
-            Ticket = matchStart.Ticket,
-            TourneyId = matchStart.TourneyId,
-            MatchPoint = matchStart.MatchPoint,
-            GameId = matchStart.GameId,
-            TableId = tableId,
-            SeatOrder = seatOrder,
-            SeatUserMapping = BuildSeatUserMapping(state?.InitGameTableAck),
-        };
-    }
-
     public static EnterTableStageResult CreateEnterTableStageResult(
         AccountSession session,
         LordUnionGameProfile profile,
@@ -290,42 +242,6 @@ public sealed class EnterMatchFlow
             tableId,
             seatOrder,
             BuildSeatUserMapping(state?.InitGameTableAck));
-    }
-
-    public CRpcTask<EnterMatchFlowResult> EnterTableAsync(
-        AccountSession session,
-        EnterMatchStartInfo matchStart,
-        TimeSpan enterMatchTimeout,
-        TimeSpan enterRoundTimeout,
-        IGameServerTransport? transport = null,
-        EnterMatchFlowSessionState? state = null)
-    {
-        ArgumentNullException.ThrowIfNull(matchStart);
-        EnsureSignedUpUserId(session, out var userId);
-
-        var flowState = state ?? new EnterMatchFlowSessionState();
-        return EnterTableCoreAsync(
-            session,
-            userId,
-            matchStart,
-            ToTimeoutMilliseconds(enterMatchTimeout),
-            ToTimeoutMilliseconds(enterRoundTimeout),
-            transport,
-            flowState);
-    }
-
-    private async CRpcTask<EnterMatchFlowResult> RunCoreAsync(
-        AccountSession session,
-        TimeSpan matchStartTimeout,
-        TimeSpan enterMatchTimeout,
-        TimeSpan enterRoundTimeout,
-        IGameServerTransport? transport,
-        EnterMatchFlowSessionState state)
-    {
-        var matchStart = await WaitForMatchStartAsync(session, matchStartTimeout, transport, state);
-        await EnterMatchOnlyAsync(session, matchStart, enterMatchTimeout, transport, state);
-        var seatOrder = await EnterRoundOnlyAsync(session, matchStart, enterRoundTimeout, transport, state);
-        return CreateSuccessResult(session, matchStart, seatOrder, state);
     }
 
     private async CRpcTask<EnterMatchStartInfo> WaitForMatchStartCoreAsync(
@@ -371,44 +287,6 @@ public sealed class EnterMatchFlow
         {
             session.SetState(AccountSessionState.Failed);
             throw CreateMatchStartTimeoutException(session, ex.Message);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            session.SetState(AccountSessionState.Failed);
-            throw;
-        }
-    }
-
-    private async CRpcTask<EnterMatchFlowResult> EnterTableCoreAsync(
-        AccountSession session,
-        uint userId,
-        EnterMatchStartInfo matchStart,
-        int enterMatchTimeoutMs,
-        int enterRoundTimeoutMs,
-        IGameServerTransport? transport,
-        EnterMatchFlowSessionState state)
-    {
-        _ = userId;
-        try
-        {
-            await EnterMatchOnlyAsync(
-                session,
-                matchStart,
-                TimeSpan.FromMilliseconds(enterMatchTimeoutMs),
-                transport,
-                state);
-            var seatOrder = await EnterRoundOnlyAsync(
-                session,
-                matchStart,
-                TimeSpan.FromMilliseconds(enterRoundTimeoutMs),
-                transport,
-                state);
-            return CreateSuccessResult(session, matchStart, seatOrder, state);
-        }
-        catch (TimeoutException)
-        {
-            session.SetState(AccountSessionState.Failed);
-            throw;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -533,32 +411,6 @@ public sealed class EnterMatchFlow
         }
 
         return null;
-    }
-
-    private static EnterMatchFlowResult Fail(
-        AccountSession session,
-        uint userId,
-        uint matchId,
-        byte[] ticketBytes,
-        EnterMatchStartInfo matchStart,
-        uint? tableId,
-        InitGameTableAck? initGameTableAck,
-        string failureMessage)
-    {
-        session.SetState(AccountSessionState.Failed);
-        return new EnterMatchFlowResult
-        {
-            Success = false,
-            UserId = userId,
-            MatchId = matchId,
-            Ticket = ticketBytes,
-            TourneyId = matchStart.TourneyId,
-            MatchPoint = matchStart.MatchPoint,
-            GameId = matchStart.GameId,
-            TableId = tableId,
-            SeatUserMapping = BuildSeatUserMapping(initGameTableAck),
-            FailureMessage = failureMessage,
-        };
     }
 
     private static EnterMatchStartInfo ParseMatchStartMessage(ProtocolMessage message)
