@@ -199,7 +199,7 @@ public sealed class ReportWriter
                 .Select(summary => new AccountGameEndSummaryJson
                 {
                     AccountAlias = summary.AccountAlias,
-                    GameFlowWinSeat = summary.GameFlowWinSeat,
+                    WinSeat = summary.WinSeat,
                     EndSignal = summary.EndSignal,
                 })
                 .ToList(),
@@ -307,7 +307,7 @@ public sealed class ReportWriter
         string.Join(
             " ",
             summaries.Select(summary =>
-                $"{summary.AccountAlias}:seat={FormatWinSeat(summary.GameFlowWinSeat)}/signal={summary.EndSignal ?? "(unknown)"}"));
+                $"{summary.AccountAlias}:seat={FormatWinSeat(summary.WinSeat)}/signal={summary.EndSignal ?? "(unknown)"}"));
 
     private static string FormatCleanupSummaries(IReadOnlyList<AccountCleanupSummary> summaries) =>
         string.Join(
@@ -434,7 +434,7 @@ public sealed class ReportWriter
     {
         public string AccountAlias { get; init; } = string.Empty;
 
-        public uint? GameFlowWinSeat { get; init; }
+        public uint? WinSeat { get; init; }
 
         public string? EndSignal { get; init; }
     }

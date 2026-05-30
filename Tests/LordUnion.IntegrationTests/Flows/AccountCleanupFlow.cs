@@ -10,7 +10,7 @@ namespace LordUnion.IntegrationTests.Flows;
 /// Best-effort pre-signup cleanup: tourney unsignup plus exit from any discovered active match.
 /// Failures are recorded but do not fail the scenario.
 /// </summary>
-public sealed class AccountCleanupFlow
+internal sealed class AccountCleanupFlow
 {
     private const int UnsignupWaitMs = 5000;
     private const int ExitStepWaitMs = 3000;

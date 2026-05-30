@@ -1,6 +1,6 @@
 namespace LordUnion.IntegrationTests.Flows;
 
-public sealed class AccountCleanupFlowResult
+internal sealed class AccountCleanupFlowResult
 {
     public bool UnsignupSent { get; init; }
 

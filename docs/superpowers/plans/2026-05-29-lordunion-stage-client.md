@@ -1,5 +1,7 @@
 # LordUnion Stage Client Implementation Plan
 
+> **Historical plan (2026-05-29).** Current behavior and status: see `docs/superpowers/specs/2026-05-29-lordunion-stage-client-design.md`, `lordunion-game-stage-client-design.md`, `lordunion-enter-match-flow-internalize-design.md`, and `lordunion-cleanup-phases-0-3c-design.md`. Sections referencing `EnterMatchFlowResult`, `GameFlow.RunAsync`, or public `EnterMatchFlow` are outdated.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a stage-oriented LordUnion client so the three-account scenario reads as `Connect`, `Login`, `Signup`, `MatchStart`, `EnterMatch`, `EnterRound`, then `Game`.

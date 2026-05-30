@@ -94,13 +94,12 @@ This change does not:
 
 ## Deferred Work
 
-These are valid follow-ups, but they should not be bundled into this cleanup symmetry change:
+Superseded or completed in follow-up specs (`enter-match-flow-internalize`, `game-stage-client`, `cleanup-phases-0-3c`):
 
-- ~~Migrate `EnterMatchFlowTests` to stage-client APIs and then delete or internalize `EnterMatchFlow` legacy APIs.~~ Done — see `2026-05-29-lordunion-enter-match-flow-internalize-design.md`.
-- ~~Convert scenario phase result handling from `*FlowResult` to `*StageResult`.~~ Done in scenario slimming pass.
-- Align report and diagnostic DTO names with stage naming.
-- Add a `CleanupStageResult` wrapper or alias if stage result naming becomes important at the report boundary.
-- ~~Wrap `GameFlow` behind a future `Client.PlayGameAsync` only after bot and variant ownership are redesigned.~~ Done.
+- ~~Migrate `EnterMatchFlowTests` / internalize `EnterMatchFlow`.~~ Done.
+- ~~`*StageResult` in scenario.~~ Done.
+- ~~`PlayGameAsync`.~~ Done.
+- Align report/DTO names (`WinSeat`, `CleanupStageResult`) — see `cleanup-phases-0-3c-design.md`.
 
 ## Cleanup API Semantics
 

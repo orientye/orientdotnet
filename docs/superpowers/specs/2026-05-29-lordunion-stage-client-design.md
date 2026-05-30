@@ -1,7 +1,7 @@
 # LordUnion Stage Client Design
 
 **Date:** 2026-05-29  
-**Status:** Implemented (full per-account stage pipeline including `PlayGameAsync`)
+**Status:** Implemented (full per-account stage pipeline including `PlayGameAsync`). Live: back-to-back 2026-05-30, matchId `475051269`, ~221s / ~172s. Further cleanup: `2026-05-29-lordunion-cleanup-phases-0-3c-design.md`.
 
 ## Goal
 

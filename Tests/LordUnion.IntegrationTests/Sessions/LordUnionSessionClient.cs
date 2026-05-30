@@ -25,9 +25,8 @@ public sealed class LordUnionSessionClient
     public LordUnionSessionClient(
         AccountSession session,
         IGameServerTransport transport,
-        ServerProtocolCodec codec,
-        AccountCleanupFlow? cleanupFlow = null)
-        : this(session, transport, codec, enterMatchFlow: null, gameFlow: null, cleanupFlow)
+        ServerProtocolCodec codec)
+        : this(session, transport, codec, enterMatchFlow: null, gameFlow: null, cleanupFlow: null)
     {
     }
 
@@ -149,18 +148,20 @@ public sealed class LordUnionSessionClient
         monitor.SeedFlowState(enterMatchState);
     }
 
-    public CRpcTask<AccountCleanupFlowResult> CleanupAsync(
+    public async CRpcTask<CleanupStageResult> CleanupAsync(
         MatchConfig match,
         AccountCleanupRunOptions? options = null)
     {
         EnsureOnLoopThread();
         ArgumentNullException.ThrowIfNull(match);
 
-        return cleanupFlow.RunAsync(
+        var result = await cleanupFlow.RunAsync(
             session,
             match,
             transport,
             options ?? AccountCleanupRunOptions.PreSignup());
+
+        return ToCleanupStageResult(result);
     }
 
     public async CRpcTask<SignupStageResult> SignupAsync(
@@ -360,6 +361,35 @@ public sealed class LordUnionSessionClient
         return new EnterRoundStageResult(matchId, tableId, seat);
     }
 
+    public async CRpcTask<EnterTableStageResult> EnterTableAsync(
+        LordUnionGameProfile profile,
+        TimeoutConfig timeouts)
+    {
+        EnsureOnLoopThread();
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(timeouts);
+
+        var matchStart = await WaitForMatchStartAsync(timeouts.MatchStartTimeout);
+        await EnterMatchAsync(profile, matchStart, timeouts.EnterMatchTimeout);
+        var enterRound = await EnterRoundAsync(profile, timeouts.EnterRoundTimeout);
+        return ToEnterTableStageResult(profile, enterRound);
+    }
+
+    public CRpcTask<GameStageResult> PlayGameAsync(
+        LordUnionGameProfile profile,
+        LordUnionTestConfig config,
+        ScenarioRunOptions? options = null)
+    {
+        EnsureOnLoopThread();
+        ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(config);
+
+        var bot = new MinimalLandlordBot();
+        var policy = options?.PolicyOverride ?? new MinimalLandlordBotPolicy(bot);
+        var scheduler = ActionSchedulerFactory.Create(config.Bot, config.Timeouts, options);
+        return PlayGameAsync(profile, policy, scheduler, config.Timeouts.GameOverTimeout);
+    }
+
     public async CRpcTask<GameStageResult> PlayGameAsync(
         LordUnionGameProfile profile,
         IBotPolicy policy,
@@ -462,6 +492,15 @@ public sealed class LordUnionSessionClient
             result.EndSignal,
             result.Scores,
             result.FailureMessage);
+
+    private static CleanupStageResult ToCleanupStageResult(AccountCleanupFlowResult result) =>
+        new(
+            result.UnsignupSent,
+            result.UnsignupAckReceived,
+            result.UnsignupParam,
+            result.DiscoveredMatchIds,
+            result.ExitGameAttemptedMatchIds,
+            result.ExitMatchAttemptedMatchIds);
 
     private void EnsureOnLoopThread()
     {

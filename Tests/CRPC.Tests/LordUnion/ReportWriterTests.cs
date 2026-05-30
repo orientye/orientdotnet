@@ -38,7 +38,7 @@ public class ReportWriterTests
                 new AccountGameEndSummary
                 {
                     AccountAlias = "player1",
-                    GameFlowWinSeat = 1,
+                    WinSeat = 1,
                     EndSignal = "LordResultAck",
                 },
             ],
@@ -141,9 +141,9 @@ public class ReportWriterTests
             WinSeat = 1,
             GameEndSummaries =
             [
-                new AccountGameEndSummary { AccountAlias = "player1", GameFlowWinSeat = 1, EndSignal = "LordResultAck" },
-                new AccountGameEndSummary { AccountAlias = "player2", GameFlowWinSeat = 1, EndSignal = "LordResultAck" },
-                new AccountGameEndSummary { AccountAlias = "player3", GameFlowWinSeat = 1, EndSignal = "LordResultAck" },
+                new AccountGameEndSummary { AccountAlias = "player1", WinSeat = 1, EndSignal = "LordResultAck" },
+                new AccountGameEndSummary { AccountAlias = "player2", WinSeat = 1, EndSignal = "LordResultAck" },
+                new AccountGameEndSummary { AccountAlias = "player3", WinSeat = 1, EndSignal = "LordResultAck" },
             ],
             SeatUserMapping = new Dictionary<uint, uint>
             {

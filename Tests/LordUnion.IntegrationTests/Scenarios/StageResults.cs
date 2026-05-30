@@ -57,3 +57,11 @@ public sealed record GameStageResult(
     string? EndSignal,
     IReadOnlyList<int>? Scores = null,
     string? FailureMessage = null);
+
+public sealed record CleanupStageResult(
+    bool UnsignupSent,
+    bool UnsignupAckReceived,
+    uint? UnsignupParam,
+    IReadOnlyList<uint> DiscoveredMatchIds,
+    IReadOnlyList<uint> ExitGameAttemptedMatchIds,
+    IReadOnlyList<uint> ExitMatchAttemptedMatchIds);

@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.RegularExpressions;
 using CRpc.Async;
 using LordUnion.IntegrationTests.Bots;
 using LordUnion.IntegrationTests.Bots.Pacing;
@@ -113,7 +112,7 @@ public sealed class ThreePlayersOneGameScenario
 
         var loginResults = await RunPhaseConcurrentOnLoopAsync(
             bundles,
-            bundle => RunLoginAsync(bundle, config, cancellationToken),
+            bundle => RunLoginPhaseAsync(bundle, config, cancellationToken),
             static (timing, elapsed) => timing.LoginDuration = elapsed);
 
 
@@ -136,7 +135,7 @@ public sealed class ThreePlayersOneGameScenario
 
         var signupResults = await RunPhaseConcurrentOnLoopAsync(
             bundles,
-            bundle => RunSignupAsync(bundle, config, profile, cancellationToken),
+            bundle => RunSignupPhaseAsync(bundle, profile, config, cancellationToken),
             static (timing, elapsed) => timing.SignupDuration = elapsed);
 
 
@@ -257,7 +256,7 @@ public sealed class ThreePlayersOneGameScenario
                 .Select(result => new AccountGameEndSummary
                 {
                     AccountAlias = result.Bundle.Session.Alias,
-                    GameFlowWinSeat = result.Result?.WinSeat,
+                    WinSeat = result.Result?.WinSeat,
                     EndSignal = result.Result?.EndSignal,
                 })
                 .ToList(),
@@ -270,18 +269,16 @@ public sealed class ThreePlayersOneGameScenario
     }
 
 
-    private async CRpcTask<LoginStageResult> RunLoginAsync(
+    private async CRpcTask<LoginStageResult> RunLoginPhaseAsync(
         AccountBundle bundle,
         LordUnionTestConfig config,
         CancellationToken cancellationToken)
-
     {
         _ = cancellationToken;
 
         try
         {
             await bundle.Client.ConnectAsync(config.Server, config.Timeouts.ConnectTimeout);
-
             return await bundle.Client.LoginAsync(
                 bundle.Account,
                 config.Protocol,
@@ -289,14 +286,7 @@ public sealed class ThreePlayersOneGameScenario
         }
         catch (InvalidOperationException)
         {
-            var loginErrorCode = (int)(bundle.Session.LoginErrorCode ?? 0);
-            return new LoginStageResult(
-                loginErrorCode,
-                bundle.Session.UserId ?? 0,
-                bundle.Session.SessionId,
-                bundle.Session.Nickname,
-                bundle.Session.AesKey ?? string.Empty,
-                $"Login failed with error code {loginErrorCode}.");
+            return ScenarioStageMapping.FromLoginFailure(bundle.Session);
         }
     }
 
@@ -336,12 +326,11 @@ public sealed class ThreePlayersOneGameScenario
     }
 
 
-    private async CRpcTask<SignupStageResult> RunSignupAsync(
+    private async CRpcTask<SignupStageResult> RunSignupPhaseAsync(
         AccountBundle bundle,
-        LordUnionTestConfig config,
         LordUnionGameProfile profile,
+        LordUnionTestConfig config,
         CancellationToken cancellationToken)
-
     {
         _ = cancellationToken;
 
@@ -351,42 +340,9 @@ public sealed class ThreePlayersOneGameScenario
         }
         catch (InvalidOperationException ex)
         {
-            var signupErrorCode = TryParseSignupErrorCode(ex.Message);
-            return new SignupStageResult(
-                (int)signupErrorCode,
-                signupErrorCode,
-                profile.TourneyId,
-                profile.MatchPoint,
-                profile.GameId,
-                $"Tourney signup failed with error code {signupErrorCode}.");
+            return ScenarioStageMapping.FromSignupFailure(profile, ex);
         }
     }
-
-    private static uint TryParseSignupErrorCode(string message)
-    {
-        var signupAckMatch = Regex.Match(
-            message,
-            @"TourneySignupAck param=(\d+)",
-            RegexOptions.CultureInvariant);
-        if (signupAckMatch.Success
-            && uint.TryParse(signupAckMatch.Groups[1].Value, out var signupAckCode)
-            && signupAckCode != 0)
-        {
-            return signupAckCode;
-        }
-
-        var mobileMatch = Regex.Match(message, @"mobile\.param=(\d+)", RegexOptions.CultureInvariant);
-        if (mobileMatch.Success && uint.TryParse(mobileMatch.Groups[1].Value, out var mobileCode) && mobileCode != 0)
-        {
-            return mobileCode;
-        }
-
-        var match = Regex.Match(message, @"param=(\d+)", RegexOptions.CultureInvariant);
-        return match.Success && uint.TryParse(match.Groups[1].Value, out var errorCode)
-            ? errorCode
-            : 0;
-    }
-
 
     private async CRpcTask<List<PhaseResult<EnterTableStageResult>>> RunEnterMatchPhaseAsync(
         IReadOnlyList<AccountBundle> bundles,
@@ -486,44 +442,21 @@ public sealed class ThreePlayersOneGameScenario
         LordUnionGameProfile profile,
         ScenarioRunOptions options,
         CancellationToken cancellationToken)
-
     {
         _ = cancellationToken;
 
         if (options.MatchStartAckFactory is not null
             && bundle.Transport is FakeGameServerTransport fakeTransport)
-
         {
             var matchStartTask = bundle.Client.WaitForMatchStartAsync(config.Timeouts.MatchStartTimeout);
-
             fakeTransport.DeliverIncomingMessage(options.MatchStartAckFactory(bundle.Session));
-
             var matchStart = await matchStartTask;
-
-            await bundle.Client.EnterMatchAsync(
-                profile,
-                matchStart,
-                config.Timeouts.EnterMatchTimeout);
-
-            var enterRound = await bundle.Client.EnterRoundAsync(
-                profile,
-                config.Timeouts.EnterRoundTimeout);
-
+            await bundle.Client.EnterMatchAsync(profile, matchStart, config.Timeouts.EnterMatchTimeout);
+            var enterRound = await bundle.Client.EnterRoundAsync(profile, config.Timeouts.EnterRoundTimeout);
             return bundle.Client.ToEnterTableStageResult(profile, enterRound);
         }
 
-        var matchStartInfo = await bundle.Client.WaitForMatchStartAsync(config.Timeouts.MatchStartTimeout);
-
-        await bundle.Client.EnterMatchAsync(
-            profile,
-            matchStartInfo,
-            config.Timeouts.EnterMatchTimeout);
-
-        var enterRoundResult = await bundle.Client.EnterRoundAsync(
-            profile,
-            config.Timeouts.EnterRoundTimeout);
-
-        return bundle.Client.ToEnterTableStageResult(profile, enterRoundResult);
+        return await bundle.Client.EnterTableAsync(profile, config.Timeouts);
     }
 
 
@@ -533,19 +466,14 @@ public sealed class ThreePlayersOneGameScenario
         LordUnionTestConfig config,
         ScenarioRunOptions options,
         CancellationToken cancellationToken)
-
     {
         _ = cancellationToken;
 
-        var bot = new MinimalLandlordBot();
-
-        var policy = options.PolicyOverride ?? new MinimalLandlordBotPolicy(bot);
-        var scheduler = ActionSchedulerFactory.Create(config.Bot, config.Timeouts, options);
-
-
         if (options.PlayGameOverride is not null)
-
         {
+            var bot = new MinimalLandlordBot();
+            var policy = options.PolicyOverride ?? new MinimalLandlordBotPolicy(bot);
+            var scheduler = ActionSchedulerFactory.Create(config.Bot, config.Timeouts, options);
             return await options.PlayGameOverride(
                 bundle.Client,
                 profile,
@@ -554,12 +482,7 @@ public sealed class ThreePlayersOneGameScenario
                 config.Timeouts.GameOverTimeout);
         }
 
-
-        return await bundle.Client.PlayGameAsync(
-            profile,
-            policy,
-            scheduler,
-            config.Timeouts.GameOverTimeout);
+        return await bundle.Client.PlayGameAsync(profile, config, options);
     }
 
 

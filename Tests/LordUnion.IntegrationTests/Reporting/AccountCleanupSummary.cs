@@ -1,4 +1,4 @@
-using LordUnion.IntegrationTests.Flows;
+using LordUnion.IntegrationTests.Scenarios;
 
 namespace LordUnion.IntegrationTests.Reporting;
 
@@ -24,7 +24,7 @@ public sealed class AccountCleanupSummary
 
     public static AccountCleanupSummary FromResult(
         string accountAlias,
-        AccountCleanupFlowResult? result,
+        CleanupStageResult? result,
         string? errorMessage)
     {
         return new AccountCleanupSummary
