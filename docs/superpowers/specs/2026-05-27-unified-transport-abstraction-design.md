@@ -299,7 +299,7 @@ If live fails after migration:
 | 3 | `GameServerDotNettyTransport` + default live switch | Transport tests green; scenario unit tests green |
 | 4 | Live verification | New live report `success: true` |
 | 5 | Cleanup | Delete `GameServerTcpTransport`; no remaining references |
-| Future | `CRpcClient` on `TcpChannelHost` | Separate plan after phase 4 stable |
+| Future | `CRpcClient` on `TcpChannelHost` | **Done** — see `2026-05-27-crpc-client-tcp-channel-host-migration-design.md`; LordUnion harness architecture: [Tests/LordUnion.IntegrationTests/Doc/lordunion-integration-tests-architecture.md](../../../Tests/LordUnion.IntegrationTests/Doc/lordunion-integration-tests-architecture.md) |
 
 ## Alternatives Considered
 

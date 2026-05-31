@@ -10,6 +10,8 @@
 
 **Related:** `2026-05-27-unified-transport-abstraction-design.md`, `2026-05-29-lordunion-cleanup-phases-0-3c-design.md`
 
+**Architecture doc:** [Tests/LordUnion.IntegrationTests/Doc/lordunion-integration-tests-architecture.md](../../../Tests/LordUnion.IntegrationTests/Doc/lordunion-integration-tests-architecture.md)
+
 ---
 
 ## Goals

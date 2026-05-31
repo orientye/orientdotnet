@@ -50,6 +50,7 @@
 | [第二部分 · Service 通信](#第二部分--service-通信) | [§5](#5-service-间通信模型) | 同线程 / 跨 loop / 跨进程选型与示例 |
 | [第三部分 · 实现剖析](#第三部分--实现剖析) | [§6](#6-关键类的职责切片)–[§7](#7-完整请求生命周期) | 关键类代码切片、请求时序 |
 | [第四部分 · 现状、目标与演进](#第四部分--现状目标与演进) | §8–§10 | 问题清单、目标架构、重构顺序 |
+| [附录 · 共享传输（TcpChannelHost）](#附录--共享传输tcpchannelhost) | — | `TcpChannelHost`、`IChannelPipelineFactory` |
 
 ---
 
@@ -95,6 +96,8 @@ CRpc 想要的核心模型是 **单线程业务循环 + 异步状态机**：
 | 客户端 | `CRpcClient` | 持有 `pending calls` 表 + DotNetty `Bootstrap`；`CallAsync` 要求显式正数 `timeout` 并在 **owner loop timer** 上注册；连接关闭时 `FailPendingCalls`；response/timeout/断连竞争语义见 [§9.5.8](#958-rpc-timeout-语义) / [§9.5.9](#959-pending-call-生命周期)。 |
 | 客户端 IO 处理器 | `CRpcClientHandler` | DotNetty `ChannelHandlerAdapter`；`ChannelRead` → `OnReceiveResponse` → `Post` 回 owner loop；`ChannelInactive` → `OnChannelInactive` → `Post` 回 owner loop 清理 pending。 |
 | 传输 | DotNetty `MultithreadEventLoopGroup` | boss/worker IO 线程；编解码 `CRpcMessageDecoder` / `CRpcMessage.toFrame`。 |
+| 共享 TCP 宿主 | `TcpChannelHost` | 客户端侧 DotNetty Bootstrap + 单连接 lifecycle；`LoopInboundHandler` 将入站 `Post` 到 owner `CRpcLoop`；可选注入共享 `IEventLoopGroup`（见 [§8.1](#81-io-线程组与业务-loop-的拓扑)）。 |
+| 管道工厂 | `IChannelPipelineFactory` | 按协议装配 pipeline（如 `CRpcClientPipelineFactory`）。 |
 
 ---
 
@@ -420,7 +423,7 @@ public sealed class CRpcServer : IRpcServer
 - **推荐启动形态**（HelloWorld）：在 `CRpcLoopRunner.RunUntilComplete` 中 `loop.RegisterService` → `await crpcServer.StartAsync` + `await httpServer.StartAsync`，再 `CRpcLoopHost.RunUntilCancelled` 常驻驱动，退出时回到 loop 内 `await StopAsync`。
 - `StartAsync` / `StopAsync` 返回 `CRpcTask`，必须在 owner loop 线程调用；DotNetty `BindAsync` / `CloseAsync` / `ShutdownGracefullyAsync` 经 `CRpcTask.FromTask(..., Loop)` 回到 loop 后再修改端点状态。
 - `RunAsync` 也返回 `CRpcTask`，内部完成启动后嵌入 `CRpcLoopHost.RunUntilCancelled`；它保留“退出时 `ClearRegisteredServices`”的 host-helper 语义。
-- DotNetty 仍硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）；见 [§8.1](#81-io-线程组与业务-loop-的拓扑写死)。
+- DotNetty 仍硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）；见 [§8.1](#81-io-线程组与业务-loop-的拓扑)。
 
 ```18:30:CRpc/Rpc/CRpc/Server/CRpcServerHandler.cs
     public override void ChannelRead(IChannelHandlerContext ctx, object msg)
@@ -457,22 +460,24 @@ public sealed class CRpcServer : IRpcServer
 
 注意 `_ = ctx.WriteAndFlushAsync(frame);` 是有意丢弃返回的 `Task` —— 与 `orientdotnet-general.mdc` 里"正常 RPC 响应不要 await 写完成"一致。
 
-#### 6.3 CRpcClient + CRpcClientHandler
+#### 6.3 CRpcClient + TcpChannelHost
 
-```12:25:CRpc/Rpc/CRpc/Client/CRpcClient.cs
+`CRpcClient` 已将 DotNetty Bootstrap / channel lifecycle 委托给 `TcpChannelHost`；RPC 语义（pending calls、seq、timeout）仍留在 `CRpcClient`。
+
+```12:26:CRpc/Rpc/CRpc/Client/CRpcClient.cs
 public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 {
     private readonly Dictionary<long, PendingCall> results = new();
-    private readonly IEventLoopGroup group = new MultithreadEventLoopGroup(1);
+    private readonly TcpChannelHost host;
     private long reqSequence;
     private readonly CRpcLoop ownerLoop;
-    private IChannel? channel;
-
-    public CRpcClient(CRpcLoop loop) { ... ownerLoop = loop; }
+    // ...
+}
 ```
 
 - `results` 是 pending 调用表，**只能在 `ownerLoop` 线程上访问**。
-- `channel` 同样是 **loop-owned 连接状态**：`ConnectAsync` / `CloseAsync` 在 owner loop 线程赋值或清空；DotNetty connect/close 的 `.NET Task` 经 `ownerLoop.Post` / `CRpcTask.FromTask` 回到 loop 后再完成 CRpc 侧状态变更。
+- 连接状态由 `TcpChannelHost` 持有；`ConnectAsync` / `CloseAsync` 在 owner loop 线程调用；DotNetty connect/close 经 `CRpcTask.FromTask` 回到 loop。
+- 入站：`LoopInboundHandler` → `host.PostInboundMessage` → `ownerLoop.Post` → `CRpcClient` 注册的 `InboundMessageReceived` → `OnReceiveResponse`。
 - `ownerLoop` 在构造时显式绑定；`ConnectAsync` / `CloseAsync` / `CallAsync` 均要求 `CRpcLoop.Current` 与 owner 为同一实例。
 - `reqSequence` 用 `Interlocked.Increment` —— 对外是线程安全的，但目前实际只可能从 owner loop 调用。
 
@@ -483,21 +488,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 - `CloseAsync`：清空 `channel` → `FailPendingCalls(ConnectionClosedException)` → DotNetty `CloseAsync`。
 - `FailPendingCalls`：快照 pending、清空 `results`、取消 timer、批量 `TrySetException`；**只在 owner loop 线程执行**。
 
-`CRpcClientHandler` 不在 loop 线程，IO 侧只做 ingress：
-
-```15:33:CRpc/Rpc/CRpc/Client/CRpcClientHandler.cs
-    public override void ChannelRead(IChannelHandlerContext ctx, object msg)
-    {
-        client.OnReceiveResponse(message);
-        ctx.FireChannelRead(msg);
-    }
-
-    public override void ChannelInactive(IChannelHandlerContext context)
-    {
-        client.OnChannelInactive(context.Channel);
-        context.FireChannelInactive();
-    }
-```
+`LoopInboundHandler` 在 IO 线程，只做 ingress；`CRpcClient` 在 loop 线程处理消息与断连：
 
 响应与断连均 marshal 回 owner loop：
 
@@ -621,16 +612,22 @@ sequenceDiagram
 
 > 这一节是"现有代码不一定是好的设计"的具体落点，便于后续重构。
 
-#### 8.1 IO 线程组与业务 loop 的拓扑写死
+#### 8.1 IO 线程组与业务 loop 的拓扑
+
+**已部分落地（2026-05-30）**
+
+- `TcpChannelHost` 支持可选 `sharedEventLoopGroup`：borrowed host 只关 channel，不 shutdown 共享 group；`CRpcClient` 已迁移到 `TcpChannelHost`（默认仍每 client 自有 group）。
+
+**仍为现状 / 待做**
 
 - `CRpcServer` / `HttpServer` 的 `StartAsync` 里仍硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）；`CRpcServer.RunAsync` 同理。
-- `CRpcClient` 构造里硬编码 `MultithreadEventLoopGroup(1)`。
+- `CRpcClient` / `TcpChannelHost` 默认路径仍为每连接一个 group；`CRpcClientOptions` 注入共享 group 尚未暴露给业务 API。
 - 业务 loop 线程来自 `CRpcLoopHost.RunUntilCancelled` 调用线程（推荐）或 `RunAsync` 内嵌驱动（遗留）。
 - 后果：
   - 没有"按业务模块切多个 `CRpcLoop`"的路由能力，整个进程默认可视为单 loop 单线程业务吞吐。
-  - 没法配置 IO 线程数，也没法把同一个 IO group 复用给多个 server/client。
+  - 服务端仍无法配置 IO 线程数或复用同一 IO group 给多个 listener。
 - 方向：
-  - `CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`（options 类型已存在，注入仍待做）。
+  - `CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`（options 类型已存在，CRPC 端注入仍待做）。
   - 服务端 handler 增加 `RouteLoop` 抽象，按 `serviceId` / channel 路由到不同 `CRpcLoop`。
 
 #### 8.2 `CRpcServerHandler` 的 owner loop 选择不灵活
@@ -1071,10 +1068,24 @@ while (!cancellationToken.IsCancellationRequested)
 ### 10. 现状到目标的演进步骤（建议顺序）
 
 1. **`RouteLoop` 钩子**：`CRpcServer` / `HttpServer` 增加 `Func<..., CRpcLoop>? RouteLoop`，支持按消息路由到不同 loop（见 §9.2）。
-2. **IO 线程可配置 / 可复用**：`CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`。
+2. **IO 线程可配置 / 可复用**：`TcpChannelHost` 已支持注入共享 group；`CRpcServerOptions` / `CRpcClientOptions` 对 CRPC 服务端与 Reference 客户端暴露注入仍待做。
 3. **多端口 / 多协议示例变体**：HelloWorld 已演示同一 loop 上 CRpc 7999 + HTTP 8080；补充第二个 CRpc 端口、管理端口等变体示例。
 4. **多 loop 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 loop"的 demo，覆盖跨 loop 调用 / 路由 / 关闭顺序。
 5. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[loop|io|tp]` 来源。
 6. **清理 host helper 语义**：评估是否保留 `CRpcServer.RunAsync` 的“结束时隐式 `ClearRegisteredServices`”；常规端点生命周期使用 `CRpcTask StartAsync` + `CRpcLoopHost` + `CRpcTask StopAsync` 模式。
+
+---
+
+## 附录 · 共享传输（TcpChannelHost）
+
+| 项 | 说明 |
+| --- | --- |
+| 位置 | `CRpc/Transport/TcpChannelHost.cs` |
+| 职责 | 单 TCP 连接的 DotNetty Bootstrap、connect/write/close、可选 IO group 生命周期 |
+| 入站 | `LoopInboundHandler` → `PostInboundMessage` / `PostChannelInactive` → `ownerLoop.Post` |
+| 共享 group | 构造参数 `sharedEventLoopGroup`；`ownsEventLoopGroup == false` 时 dispose 不 shutdown group |
+| 消费者 | `CRpcClient`（默认自有 group）；多连接场景可注入同一 `IEventLoopGroup`，由调用方负责单次 shutdown |
+
+Pipeline 由 `IChannelPipelineFactory` 注入；不同 wire 协议各自实现 factory，共用 `TcpChannelHost` 连接生命周期。
 
 ---
