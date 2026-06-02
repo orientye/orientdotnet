@@ -26,7 +26,7 @@
     "EnterMatchTimeout": "00:01:00",
     "EnterRoundTimeout": "00:01:00",
     "GameActionTimeout": "00:00:30",
-    "GameOverTimeout": "00:10:00"
+    "GameOverTimeout": "00:03:00"
   },
   "Bot": {
     "Pacing": "human-random",

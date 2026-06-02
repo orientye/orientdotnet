@@ -24,11 +24,17 @@ public sealed class ScenarioFailureDetail
 
     public Exception? Exception { get; init; }
 
+    public string? TestRecordId { get; init; }
+
+    public string? FixturePath { get; init; }
+
     public static ScenarioFailureDetail FromSession(
         AccountSession session,
         string message,
         string? timeoutName = null,
-        Exception? exception = null)
+        Exception? exception = null,
+        string? testRecordId = null,
+        string? fixturePath = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(message);
@@ -44,6 +50,8 @@ public sealed class ScenarioFailureDetail
             Message = message,
             TimeoutName = timeoutName,
             Exception = exception,
+            TestRecordId = testRecordId,
+            FixturePath = fixturePath,
         };
     }
 }

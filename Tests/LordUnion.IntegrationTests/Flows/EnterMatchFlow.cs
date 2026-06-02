@@ -214,6 +214,13 @@ internal sealed class EnterMatchFlow
             }
 
             session.SeatOrder = resolvedSeat!.Value;
+            GameFlowTrace.LogSeatResolved(
+                session.Alias,
+                userId,
+                resolvedSeat.Value,
+                TryGetEnterRoundSeat(userId, state?.LastEnterRoundAck, state),
+                TryFindInitGameTableListIndex(userId, state),
+                state?.GetSeatForUser(userId));
             return resolvedSeat.Value;
         }
         catch (TimeoutException)
@@ -394,20 +401,59 @@ internal sealed class EnterMatchFlow
             return seatFromPlayerInfo;
         }
 
-        if (state?.InitGameTableAck is { } initGameTableAck)
+        var initListIndex = TryFindInitGameTableListIndex(userId, state);
+        var roundSeat = TryGetEnterRoundSeat(userId, enterRoundAck, state);
+
+        if (roundSeat is uint seatFromRound && seatFromRound <= 2)
         {
-            for (var seatIndex = 0; seatIndex < initGameTableAck.Playerinfolist.Count; seatIndex++)
+            // EnterRoundAck may use seat 0 as a placeholder before InitGameTable lists the real seat.
+            if (seatFromRound == 0
+                && initListIndex is uint listIndex
+                && listIndex > 0)
             {
-                if (initGameTableAck.Playerinfolist[seatIndex].Userid == userId)
-                {
-                    return (uint)seatIndex;
-                }
+                return listIndex;
             }
+
+            return seatFromRound;
         }
 
+        return initListIndex;
+    }
+
+    private static uint? TryGetEnterRoundSeat(
+        uint userId,
+        EnterRoundAck? enterRoundAck,
+        EnterMatchFlowSessionState? state)
+    {
         if (enterRoundAck is not null && enterRoundAck.Userid == userId)
         {
             return enterRoundAck.Seatorder;
+        }
+
+        if (state?.LastEnterRoundAck is { } lastEnterRound
+            && lastEnterRound.Userid == userId)
+        {
+            return lastEnterRound.Seatorder;
+        }
+
+        return null;
+    }
+
+    private static uint? TryFindInitGameTableListIndex(
+        uint userId,
+        EnterMatchFlowSessionState? state)
+    {
+        if (state?.InitGameTableAck is not { } initGameTableAck)
+        {
+            return null;
+        }
+
+        for (var seatIndex = 0; seatIndex < initGameTableAck.Playerinfolist.Count; seatIndex++)
+        {
+            if (initGameTableAck.Playerinfolist[seatIndex].Userid == userId)
+            {
+                return (uint)seatIndex;
+            }
         }
 
         return null;

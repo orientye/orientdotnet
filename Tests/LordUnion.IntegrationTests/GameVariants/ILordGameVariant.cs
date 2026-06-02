@@ -28,13 +28,16 @@ public interface ILordGameVariant
         uint seat,
         uint nextPlayer,
         byte[] cards,
-        bool isOver = false);
+        bool isOver = false,
+        uint msgCnt = 0);
 
     /// <summary>
     /// Pass is encoded as <see cref="LordTakeoutCardReq"/> with an empty card array
     /// and <see cref="LordTakeoutCardReq.Passplayer"/> set to the passing seat.
     /// </summary>
-    TKMobileReqMsg BuildPassReq(uint matchId, uint seat, uint nextPlayer, uint passPlayer);
+    TKMobileReqMsg BuildPassReq(uint matchId, uint seat, uint nextPlayer, uint passPlayer, uint msgCnt = 0);
+
+    TKMobileReqMsg BuildKickReq(uint matchId, uint seat, bool kick);
 
     /// <summary>
     /// Used when the server forces a declare-landlord prompt. Classic Dou Dizhu supports this.

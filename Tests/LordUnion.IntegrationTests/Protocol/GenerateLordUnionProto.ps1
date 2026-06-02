@@ -1,6 +1,7 @@
 param(
     [string] $CoreProtoRoot = 'C:/TKLobby/uengine/uframework/Assets/JJService/tkgameservice/Editor/Resource/Proto',
     [string] $LordUnionProtoRoot = 'C:/TKLobby/uengine/uframework/Assets/JJGame/lordunion/Editor/Resource/Proto',
+    [string] $TkLordProtoRoot = '',
     [string] $OutputDirectory = (Join-Path $PSScriptRoot 'Generated')
 )
 
@@ -386,6 +387,12 @@ function Get-ProtoFields {
     }
 }
 
+if ([string]::IsNullOrWhiteSpace($TkLordProtoRoot)) {
+    $tkLordProto = Resolve-ProtoPath $LordUnionProtoRoot 'TKLord.proto'
+} else {
+    $tkLordProto = Resolve-ProtoPath $TkLordProtoRoot 'TKLord.proto'
+}
+
 $protoFiles = @(
     Resolve-ProtoPath $CoreProtoRoot 'TKMobile.proto'
     Resolve-ProtoPath $CoreProtoRoot 'TKLobby.proto'
@@ -393,7 +400,7 @@ $protoFiles = @(
     Resolve-ProtoPath $CoreProtoRoot 'TKPartnerRoom.proto'
     Resolve-ProtoPath $CoreProtoRoot 'Partnerroom/TKDefine.proto'
     Resolve-ProtoPath $LordUnionProtoRoot 'TKMobileLordUnion.proto'
-    Resolve-ProtoPath $LordUnionProtoRoot 'TKLord.proto'
+    $tkLordProto
     Resolve-ProtoPath $LordUnionProtoRoot 'TKHLLord.proto'
     Resolve-ProtoPath $LordUnionProtoRoot 'TKLZLord.proto'
     Resolve-ProtoPath $LordUnionProtoRoot 'TKSDLord.proto'

@@ -24,6 +24,8 @@
 
         <PackageReference Include="protobuf-net" Version="3.2.30"/>
 
+        <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0"/>
+
     </ItemGroup>
 
 
@@ -43,6 +45,12 @@
         </None>
 
         <None Update="appsettings.local.json.example">
+
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+
+        </None>
+
+        <None Include="Games\TKLord\Cases\*.xml">
 
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 

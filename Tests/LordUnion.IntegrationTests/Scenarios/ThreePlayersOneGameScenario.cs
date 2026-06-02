@@ -6,6 +6,7 @@ using LordUnion.IntegrationTests.Bots.Pacing;
 using LordUnion.IntegrationTests.Config;
 using LordUnion.IntegrationTests.Flows;
 using LordUnion.IntegrationTests.GameVariants;
+using LordUnion.IntegrationTests.Games.TKLord.Replay;
 using LordUnion.IntegrationTests.Reporting;
 using LordUnion.IntegrationTests.Protocol;
 using LordUnion.IntegrationTests.Sessions;
@@ -242,9 +243,16 @@ public sealed class ThreePlayersOneGameScenario
         }
 
 
+        var xmlReplayCoordinator = options.XmlReplayCoordinator
+            ?? new XmlReplayCoordinator(AppContext.BaseDirectory);
+        var gameOptions = options.XmlReplayCoordinator is null
+            ? CopyOptionsWithXmlReplayCoordinator(options, xmlReplayCoordinator)
+            : options;
+        gameOptions = CopyOptionsWithTableGamePhase(gameOptions, new TableGamePhaseCoordinator());
+
         var gameResults = await RunPhaseConcurrentOnLoopAsync(
             bundles,
-            bundle => RunGameAsync(bundle, profile, config, options, cancellationToken),
+            bundle => RunGameAsync(bundle, profile, config, gameOptions, cancellationToken),
             static (timing, elapsed) => timing.GameDuration = elapsed);
 
 
@@ -538,8 +546,59 @@ public sealed class ThreePlayersOneGameScenario
                 config.Timeouts.GameOverTimeout);
         }
 
+        if (options.XmlReplayCoordinator is { } coordinator)
+        {
+            if (bundle.Client.Session.SeatOrder is not uint seat)
+            {
+                throw new InvalidOperationException(
+                    $"Account '{bundle.Client.Session.Alias}' has no resolved seat before game flow.");
+            }
+
+            var policy = coordinator.CreatePolicy(seat);
+            return await bundle.Client.PlayGameAsync(
+                profile,
+                policy,
+                ImmediateActionScheduler.Instance,
+                config.Timeouts.GameOverTimeout,
+                options.TableGamePhaseCoordinator);
+        }
+
         return await bundle.Client.PlayGameAsync(profile, config, options);
     }
+
+    private static ScenarioRunOptions CopyOptionsWithXmlReplayCoordinator(
+        ScenarioRunOptions options,
+        XmlReplayCoordinator coordinator) =>
+        new()
+        {
+            UseLiveTransport = options.UseLiveTransport,
+            SkipAccountCleanup = options.SkipAccountCleanup,
+            SkipBotPacing = options.SkipBotPacing,
+            PolicyOverride = options.PolicyOverride,
+            SchedulerOverride = options.SchedulerOverride,
+            TransportFactory = options.TransportFactory,
+            PlayGameOverride = options.PlayGameOverride,
+            MatchStartAckFactory = options.MatchStartAckFactory,
+            XmlReplayCoordinator = coordinator,
+            TableGamePhaseCoordinator = options.TableGamePhaseCoordinator,
+        };
+
+    private static ScenarioRunOptions CopyOptionsWithTableGamePhase(
+        ScenarioRunOptions options,
+        TableGamePhaseCoordinator tableGamePhase) =>
+        new()
+        {
+            UseLiveTransport = options.UseLiveTransport,
+            SkipAccountCleanup = options.SkipAccountCleanup,
+            SkipBotPacing = options.SkipBotPacing,
+            PolicyOverride = options.PolicyOverride,
+            SchedulerOverride = options.SchedulerOverride,
+            TransportFactory = options.TransportFactory,
+            PlayGameOverride = options.PlayGameOverride,
+            MatchStartAckFactory = options.MatchStartAckFactory,
+            XmlReplayCoordinator = options.XmlReplayCoordinator,
+            TableGamePhaseCoordinator = tableGamePhase,
+        };
 
 
     private IScenarioTransportFactory ResolveTransportFactory(
@@ -853,6 +912,17 @@ public sealed class ThreePlayersOneGameScenario
                     timeoutException.Message,
                     timeoutName: timeoutException.Message,
                     exception: timeoutException);
+            }
+
+
+            if (phaseResult.Exception is FileNotFoundException fileNotFoundException)
+
+            {
+                return ScenarioFailureDetail.FromSession(
+                    phaseResult.Bundle.Session,
+                    fileNotFoundException.Message,
+                    exception: fileNotFoundException,
+                    fixturePath: fileNotFoundException.FileName);
             }
 
 

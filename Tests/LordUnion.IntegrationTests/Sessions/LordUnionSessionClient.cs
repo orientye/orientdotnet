@@ -387,14 +387,20 @@ public sealed class LordUnionSessionClient
         var bot = new MinimalLandlordBot();
         var policy = options?.PolicyOverride ?? new MinimalLandlordBotPolicy(bot);
         var scheduler = ActionSchedulerFactory.Create(config.Bot, config.Timeouts, options);
-        return PlayGameAsync(profile, policy, scheduler, config.Timeouts.GameOverTimeout);
+        return PlayGameAsync(
+            profile,
+            policy,
+            scheduler,
+            config.Timeouts.GameOverTimeout,
+            options?.TableGamePhaseCoordinator);
     }
 
-    public async CRpcTask<GameStageResult> PlayGameAsync(
+    internal async CRpcTask<GameStageResult> PlayGameAsync(
         LordUnionGameProfile profile,
         IBotPolicy policy,
         IActionScheduler scheduler,
-        TimeSpan gameOverTimeout)
+        TimeSpan gameOverTimeout,
+        TableGamePhaseCoordinator? tableGamePhase = null)
     {
         EnsureOnLoopThread();
         ArgumentNullException.ThrowIfNull(profile);
@@ -408,7 +414,8 @@ public sealed class LordUnionSessionClient
             profile.Variant,
             gameOverTimeout,
             scheduler,
-            transport);
+            transport,
+            tableGamePhase);
 
         return ToGameStageResult(flowResult);
     }

@@ -7,6 +7,7 @@ public enum BotDecisionKind
 {
     Ready,
     Bid,
+    Kick,
     Play,
     Pass,
 }
@@ -28,6 +29,9 @@ public sealed record BotDecision
     public uint? NextPlayer { get; init; }
 
     public int? PassPlayer { get; init; }
+
+    /// <summary>Farmer double (kick); XML replay uses <c>false</c> (no double).</summary>
+    public bool? Kick { get; init; }
 
     public static BotDecision Ready() =>
         new() { Kind = BotDecisionKind.Ready };
@@ -58,7 +62,10 @@ public sealed record BotDecision
             PassPlayer = passPlayer,
         };
 
-    public TKMobileReqMsg ToRequest(ClassicLordVariant variant, uint matchId, uint seat)
+    public static BotDecision DeclineKick() =>
+        new() { Kind = BotDecisionKind.Kick, Kick = false };
+
+    public TKMobileReqMsg ToRequest(ClassicLordVariant variant, uint matchId, uint seat, uint takeoutMsgCnt = 0)
     {
         return Kind switch
         {
@@ -73,12 +80,15 @@ public sealed record BotDecision
                 matchId,
                 seat,
                 NextPlayer ?? seat,
-                Cards ?? Array.Empty<byte>()),
+                Cards ?? Array.Empty<byte>(),
+                msgCnt: takeoutMsgCnt),
             BotDecisionKind.Pass => variant.BuildPassReq(
                 matchId,
                 seat,
                 NextPlayer ?? seat,
-                (uint)(PassPlayer ?? (int)seat)),
+                (uint)(PassPlayer ?? (int)seat),
+                msgCnt: takeoutMsgCnt),
+            BotDecisionKind.Kick => variant.BuildKickReq(matchId, seat, Kick ?? false),
             _ => throw new InvalidOperationException($"Unsupported decision kind: {Kind}"),
         };
     }

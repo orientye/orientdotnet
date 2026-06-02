@@ -99,7 +99,7 @@ public sealed class TimeoutConfig
 
     public TimeSpan GameActionTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
-    public TimeSpan GameOverTimeout { get; set; } = TimeSpan.FromSeconds(180);
+    public TimeSpan GameOverTimeout { get; set; } = TimeSpan.FromMinutes(3);
 }
 
 public sealed class OutputConfig

@@ -3,6 +3,8 @@ using LordUnion.IntegrationTests.Bots;
 using LordUnion.IntegrationTests.Bots.Pacing;
 using LordUnion.IntegrationTests.Config;
 using LordUnion.IntegrationTests.GameVariants;
+using LordUnion.IntegrationTests.Flows;
+using LordUnion.IntegrationTests.Games.TKLord.Replay;
 using LordUnion.IntegrationTests.Protocol;
 using LordUnion.IntegrationTests.Sessions;
 
@@ -37,6 +39,17 @@ public sealed class ScenarioRunOptions
     /// Optional factory used by fake tests to push StartGameClientAck after enter-match begins waiting.
     /// </summary>
     public Func<AccountSession, ProtocolMessage>? MatchStartAckFactory { get; init; }
+
+    /// <summary>
+    /// Shared XML replay coordinator for three-seat testrecordid agreement and fixture loading.
+    /// </summary>
+    public XmlReplayCoordinator? XmlReplayCoordinator { get; init; }
+
+    /// <summary>
+    /// When set, the first seat to receive a game-end signal starts a table grace period;
+    /// other seats complete when grace elapses even without an end signal.
+    /// </summary>
+    internal TableGamePhaseCoordinator? TableGamePhaseCoordinator { get; init; }
 }
 
 public interface IScenarioTransportFactory

@@ -11863,6 +11863,9 @@ public sealed partial class LordInitCardAck
     [ProtoMember(4)]
     public uint Recommendscore { get; set; }
 
+    [ProtoMember(5)]
+    public string? Testrecordid { get; set; }
+
 }
 
 [ProtoContract]

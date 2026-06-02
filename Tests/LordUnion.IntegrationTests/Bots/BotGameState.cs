@@ -25,6 +25,11 @@ public sealed class BotGameState
     public bool LandlordFirstLeadDone { get; set; }
 
     /// <summary>
+    /// Latest <c>LordTakeoutCardAck.msgcnt</c> to echo on the next takeout request (0 = omit).
+    /// </summary>
+    public uint TakeoutMsgCnt { get; set; }
+
+    /// <summary>
     /// Rotates landlord lead shape: single, pair, triple, bomb.
     /// </summary>
     public int LandlordLeadAttempt { get; set; }

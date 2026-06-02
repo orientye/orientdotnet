@@ -158,6 +158,16 @@ public sealed class ReportWriter
             Console.WriteLine($"Exception: {failure.Exception.GetType().Name}: {failure.Exception.Message}");
         }
 
+        if (!string.IsNullOrWhiteSpace(failure.TestRecordId))
+        {
+            Console.WriteLine($"TestRecordId: {failure.TestRecordId}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(failure.FixturePath))
+        {
+            Console.WriteLine($"FixturePath: {failure.FixturePath}");
+        }
+
         WriteMessageLogLine("Last sent", failure.LastSentMessage);
         WriteMessageLogLine("Last recv", failure.LastReceivedMessage);
 
@@ -277,6 +287,8 @@ public sealed class ReportWriter
             TimeoutName = failure.TimeoutName,
             ExceptionType = failure.Exception?.GetType().FullName,
             ExceptionMessage = failure.Exception?.Message,
+            TestRecordId = failure.TestRecordId,
+            FixturePath = failure.FixturePath,
             LastSentMessage = failure.LastSentMessage is null ? null : ToMessageJson(failure.LastSentMessage),
             LastReceivedMessage =
                 failure.LastReceivedMessage is null ? null : ToMessageJson(failure.LastReceivedMessage),
@@ -471,6 +483,10 @@ public sealed class ReportWriter
         public string? ExceptionType { get; init; }
 
         public string? ExceptionMessage { get; init; }
+
+        public string? TestRecordId { get; init; }
+
+        public string? FixturePath { get; init; }
 
         public SessionMessageLogEntryJson? LastSentMessage { get; init; }
 

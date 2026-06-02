@@ -31,7 +31,8 @@ internal sealed class GameFlow
         MinimalLandlordBot bot,
         ILordGameVariant variant,
         TimeSpan gameOverTimeout,
-        IGameServerTransport? transport = null)
+        IGameServerTransport? transport = null,
+        TableGamePhaseCoordinator? tableGamePhase = null)
 
     {
         return RunUntilFinishedAsync(
@@ -40,7 +41,8 @@ internal sealed class GameFlow
             variant,
             gameOverTimeout,
             ImmediateActionScheduler.Instance,
-            transport);
+            transport,
+            tableGamePhase);
     }
 
 
@@ -50,10 +52,11 @@ internal sealed class GameFlow
         ILordGameVariant variant,
         TimeSpan gameOverTimeout,
         IActionScheduler scheduler,
-        IGameServerTransport? transport = null)
+        IGameServerTransport? transport = null,
+        TableGamePhaseCoordinator? tableGamePhase = null)
 
     {
-        return RunCoreAsync(session, policy, variant, gameOverTimeout, scheduler, transport);
+        return RunCoreAsync(session, policy, variant, gameOverTimeout, scheduler, transport, tableGamePhase);
     }
 
 
@@ -63,7 +66,8 @@ internal sealed class GameFlow
         ILordGameVariant variant,
         TimeSpan gameOverTimeout,
         IActionScheduler scheduler,
-        IGameServerTransport? transport)
+        IGameServerTransport? transport,
+        TableGamePhaseCoordinator? tableGamePhase)
 
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -95,6 +99,12 @@ internal sealed class GameFlow
 
         policy.SetSeat(seatOrder);
 
+        GameFlowTrace.LogGameFlowStart(
+            session.Alias,
+            session.UserId,
+            seatOrder,
+            session.MatchId);
+
         transport?.BindIncomingHandler(session, codec);
 
 
@@ -110,17 +120,25 @@ internal sealed class GameFlow
         {
             previousPushHandler?.Invoke(message);
 
-            HandlePushMessage(session, policy, variant, scheduler, transport, message, completionSource);
+            HandlePushMessage(
+                session,
+                policy,
+                variant,
+                scheduler,
+                transport,
+                tableGamePhase,
+                message,
+                completionSource);
         };
 
 
         try
 
         {
-            if (timeoutMs >= 0)
+            if (timeoutMs >= 0 || tableGamePhase is not null)
 
             {
-                _ = ArmOverallTimeoutAsync(session, timeoutMs, completionSource);
+                _ = ArmOverallTimeoutAsync(session, timeoutMs, tableGamePhase, completionSource);
             }
 
 
@@ -161,11 +179,17 @@ internal sealed class GameFlow
         ILordGameVariant variant,
         IActionScheduler scheduler,
         IGameServerTransport? transport,
+        TableGamePhaseCoordinator? tableGamePhase,
         ProtocolMessage message,
         CRpcTaskCompletionSource<GameFlowResult> completionSource)
 
     {
-        if (TryCompleteOnMatchOver(message, completionSource))
+        if (TryCompleteOnTableGrace(session, tableGamePhase, completionSource))
+        {
+            return;
+        }
+
+        if (TryCompleteOnGameEnd(session, tableGamePhase, message, completionSource))
 
         {
             return;
@@ -192,21 +216,77 @@ internal sealed class GameFlow
 
         policy.ApplyGameEvent(gameEvent);
 
+        if (gameEvent.Kind == GameEventKind.CardsDealt)
+        {
+            GameFlowTrace.LogCardsDealt(
+                session.Alias,
+                session.UserId,
+                policy.State.MySeat,
+                gameEvent.TestRecordId,
+                gameEvent.FirstCallSeat);
+        }
+
+        if (gameEvent.Kind == GameEventKind.LandlordDeclared)
+        {
+            GameFlowTrace.LogSendDecision(
+                session.Alias,
+                session.UserId,
+                policy.State.MySeat,
+                "LandlordDeclared",
+                "ack",
+                gameEvent.LordSeat,
+                playIndex: null,
+                xmlCards: null,
+                encodedCount: null);
+        }
+
+        if (gameEvent.Kind == GameEventKind.TurnStarted)
+        {
+            GameFlowTrace.LogOperateStart(
+                session.Alias,
+                session.UserId,
+                policy.State.MySeat,
+                gameEvent.OperateTypes,
+                gameEvent.SeatList);
+        }
+
+        if (gameEvent.Kind == GameEventKind.KickAck)
+        {
+            GameFlowTrace.LogKickAck(
+                session.Alias,
+                session.UserId,
+                gameEvent.Seat ?? policy.State.MySeat,
+                gameEvent.Kick ?? false);
+        }
+
+        if (gameEvent.Kind is GameEventKind.CardsPlayed or GameEventKind.PassPlayed)
+        {
+            GameFlowTrace.LogTakeoutAck(
+                session.Alias,
+                session.UserId,
+                policy.State.MySeat,
+                gameEvent.Kind,
+                gameEvent.Seat,
+                gameEvent.NextPlayer,
+                gameEvent.TakeoutMsgCnt,
+                gameEvent.Cards?.Length ?? 0,
+                gameEvent.NextAutoPass,
+                gameEvent.NextAutoGo,
+                gameEvent.PassPlayer);
+        }
 
         if (gameEvent.Kind == GameEventKind.GameFinished)
 
         {
+            tableGamePhase?.NotifyFirstGameEnded();
             completionSource.TrySetResult(new GameFlowResult
-
             {
                 Success = true,
-
                 WinSeat = gameEvent.WinSeat,
-
                 EndSignal = "GameFinished",
-
                 Scores = gameEvent.Scores,
             });
+            GameFlowTrace.LogGameEnd(session.Alias, "GameFinished", gameEvent.WinSeat);
 
             return;
         }
@@ -216,31 +296,73 @@ internal sealed class GameFlow
     }
 
 
-    private static bool TryCompleteOnMatchOver(
-        ProtocolMessage message,
+    private static bool TryCompleteOnTableGrace(
+        AccountSession session,
+        TableGamePhaseCoordinator? tableGamePhase,
         CRpcTaskCompletionSource<GameFlowResult> completionSource)
-
     {
-        if (message.LordAcknowledgement?.LordresultAckMsg is not { } resultAck)
-
+        if (tableGamePhase is null || !tableGamePhase.IsGraceExpired)
         {
             return false;
         }
 
-
-        completionSource.TrySetResult(new GameFlowResult
-
+        if (completionSource.TrySetResult(CreateTableGraceExpiredResult()))
         {
-            Success = true,
+            GameFlowTrace.LogGameEnd(session.Alias, "TableGracePeriod", winSeat: null);
+            return true;
+        }
 
-            WinSeat = resultAck.Winseat,
+        return completionSource.Task.GetAwaiter().IsCompleted;
+    }
 
-            EndSignal = "LordResultAck",
+    private static bool TryCompleteOnGameEnd(
+        AccountSession session,
+        TableGamePhaseCoordinator? tableGamePhase,
+        ProtocolMessage message,
+        CRpcTaskCompletionSource<GameFlowResult> completionSource)
 
-            Scores = resultAck.Score.ToList(),
-        });
+    {
+        if (message.LordAcknowledgement?.LordresultAckMsg is { } resultAck)
+        {
+            tableGamePhase?.NotifyFirstGameEnded();
+            completionSource.TrySetResult(new GameFlowResult
+            {
+                Success = true,
+                WinSeat = resultAck.Winseat,
+                EndSignal = "LordResultAck",
+                Scores = resultAck.Score.ToList(),
+            });
+            GameFlowTrace.LogGameEnd(session.Alias, "LordResultAck", resultAck.Winseat);
+            return true;
+        }
 
-        return true;
+        if (message.OverGameAcknowledgement is not null
+            || message.Acknowledgement?.MatchAckMsg?.OvergameAckMsg is not null)
+        {
+            tableGamePhase?.NotifyFirstGameEnded();
+            completionSource.TrySetResult(new GameFlowResult
+            {
+                Success = true,
+                EndSignal = "OverGameAck",
+            });
+            GameFlowTrace.LogGameEnd(session.Alias, "OverGameAck", winSeat: null);
+            return true;
+        }
+
+        if (message.HandOverAcknowledgement is not null
+            || message.Acknowledgement?.MatchAckMsg?.HandoverAckMsg is not null)
+        {
+            tableGamePhase?.NotifyFirstGameEnded();
+            completionSource.TrySetResult(new GameFlowResult
+            {
+                Success = true,
+                EndSignal = "HandOverAck",
+            });
+            GameFlowTrace.LogGameEnd(session.Alias, "HandOverAck", winSeat: null);
+            return true;
+        }
+
+        return false;
     }
 
 
@@ -269,6 +391,13 @@ internal sealed class GameFlow
             return;
         }
 
+        LogOutgoingDecision(
+            session,
+            seat,
+            gameEvent.Kind,
+            decision,
+            policy.State.LordSeat,
+            policy.State.TakeoutMsgCnt);
 
         var sendContext = new BotSendContext(
             session,
@@ -281,7 +410,7 @@ internal sealed class GameFlow
         await scheduler.WaitBeforeSendAsync(sendContext, session.Loop);
 
 
-        var request = BuildRequest(variant, decision, matchId, seat);
+        var request = BuildRequest(variant, decision, matchId, seat, policy.State.TakeoutMsgCnt);
 
         await SendRequestAsync(session, transport, request);
     }
@@ -291,7 +420,8 @@ internal sealed class GameFlow
         ILordGameVariant variant,
         BotDecision decision,
         uint matchId,
-        uint seat)
+        uint seat,
+        uint takeoutMsgCnt)
 
     {
         return decision.Kind switch
@@ -310,13 +440,17 @@ internal sealed class GameFlow
                 matchId,
                 seat,
                 decision.NextPlayer ?? seat,
-                decision.Cards ?? Array.Empty<byte>()),
+                decision.Cards ?? Array.Empty<byte>(),
+                msgCnt: takeoutMsgCnt),
 
             BotDecisionKind.Pass => variant.BuildPassReq(
                 matchId,
                 seat,
                 decision.NextPlayer ?? seat,
-                (uint)(decision.PassPlayer ?? (int)seat)),
+                (uint)(decision.PassPlayer ?? (int)seat),
+                msgCnt: takeoutMsgCnt),
+
+            BotDecisionKind.Kick => variant.BuildKickReq(matchId, seat, decision.Kick ?? false),
 
             _ => throw new InvalidOperationException($"Unsupported decision kind: {decision.Kind}"),
         };
@@ -326,21 +460,31 @@ internal sealed class GameFlow
     private async CRpcTask ArmOverallTimeoutAsync(
         AccountSession session,
         int timeoutMs,
+        TableGamePhaseCoordinator? tableGamePhase,
         CRpcTaskCompletionSource<GameFlowResult> completionSource)
 
     {
-        await CRpcTask.Delay(timeoutMs, session.Loop);
+        var loop = session.Loop;
+        var deadlineUtc = timeoutMs < 0
+            ? DateTimeOffset.MaxValue
+            : DateTimeOffset.UtcNow.AddMilliseconds(timeoutMs);
 
-
-        if (completionSource.Task.GetAwaiter().IsCompleted)
-
+        while (!completionSource.Task.GetAwaiter().IsCompleted)
         {
-            return;
+            if (TryCompleteOnTableGrace(session, tableGamePhase, completionSource))
+            {
+                return;
+            }
+
+            if (DateTimeOffset.UtcNow >= deadlineUtc)
+            {
+                completionSource.TrySetException(new TimeoutException(
+                    $"Timed out waiting for game end (LordResultAck, OverGameAck, HandOverAck, GameFinished, or table grace) on account '{session.Alias}' in state {session.State} (phase {session.CurrentPhase})."));
+                return;
+            }
+
+            await CRpcTask.Delay(250, loop);
         }
-
-
-        completionSource.TrySetException(new TimeoutException(
-            $"Timed out waiting for GameFinished on account '{session.Alias}' in state {session.State} (phase {session.CurrentPhase})."));
     }
 
 
@@ -360,6 +504,14 @@ internal sealed class GameFlow
     }
 
 
+    private static GameFlowResult CreateTableGraceExpiredResult() =>
+        new()
+        {
+            Success = true,
+            EndSignal = "TableGracePeriod",
+            FailureMessage = "Table grace period expired before this account received a game end signal.",
+        };
+
     private static int ToTimeoutMilliseconds(TimeSpan timeout)
 
     {
@@ -373,6 +525,35 @@ internal sealed class GameFlow
         return (int)Math.Min(timeout.TotalMilliseconds, int.MaxValue);
     }
 
+
+    private static void LogOutgoingDecision(
+        AccountSession session,
+        uint reqSeat,
+        GameEventKind trigger,
+        BotDecision decision,
+        uint? lordSeat,
+        uint takeoutMsgCnt)
+    {
+        var xmlCards = decision.Kind is BotDecisionKind.Play or BotDecisionKind.Pass
+            ? FormatCardBytes(decision.Cards)
+            : null;
+        GameFlowTrace.LogSendDecision(
+            session.Alias,
+            session.UserId,
+            reqSeat,
+            decision.Kind.ToString(),
+            trigger.ToString(),
+            lordSeat,
+            playIndex: null,
+            xmlCards,
+            decision.Cards?.Length,
+            takeoutMsgCnt > 0 ? takeoutMsgCnt : null);
+    }
+
+    private static string FormatCardBytes(byte[]? cards) =>
+        cards is null || cards.Length == 0
+            ? "<pass>"
+            : string.Join(",", cards);
 
     private static void EnsureOnLoopThread(AccountSession session)
 
