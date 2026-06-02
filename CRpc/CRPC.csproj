@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="CRPC.Tests" />
-    <InternalsVisibleTo Include="LordUnion.IntegrationTests.Tests" />
   </ItemGroup>
 
   <PropertyGroup>
