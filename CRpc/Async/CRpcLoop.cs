@@ -72,9 +72,9 @@ public sealed class CRpcLoop
 
 #if DEBUG
     /// <summary>
-    /// Clears DEBUG thread binding state. For tests only (via <c>CRPC.Tests.CrpcTestBase</c>).
+    /// Clears DEBUG thread binding state. For test harnesses only (e.g. <c>CRpc.TestHelper.CrpcTestBase</c>).
     /// </summary>
-    internal static void ResetDebugThreadBindingForTests()
+    public static void ResetDebugThreadBindingForTests()
     {
         if (boundLoopOnThread is not null
             && boundLoopOnThread.threadId == Environment.CurrentManagedThreadId)
