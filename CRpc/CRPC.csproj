@@ -2,7 +2,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="CRPC.Tests" />
-    <InternalsVisibleTo Include="GateWayServer" />
+    <InternalsVisibleTo Include="GateWay.Core" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -1,6 +1,6 @@
 # CRpc Gateway Design
 
-**Status:** Draft — Phase 1 scope approved for implementation; full production routing in Phase 2+  
+**Status:** Phase 1 implemented (2026-06-01); full production routing in Phase 2+  
 **Date:** 2026-06-01  
 **Scope:** Production-oriented CRpc Gateway: client long connections, transparent `(serviceId, methodId)` forwarding, backend push relay, and phased evolution toward multi-replica routing (policy C).
 

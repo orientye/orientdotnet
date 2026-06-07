@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\CRPC\CRPC.csproj" />
     <ProjectReference Include="..\..\CRPC.TestHelper\CRPC.TestHelper.csproj" />
+    <ProjectReference Include="..\..\Example\GateWay\GateWay.Core\GateWay.Core.csproj" />
     <ProjectReference Include="..\..\Tool\crpc-protobuf-plugin\CRpcProtobufPlugin\CRpcProtobufPlugin.csproj" Aliases="CRPC_PLUGIN" />
   </ItemGroup>
 
