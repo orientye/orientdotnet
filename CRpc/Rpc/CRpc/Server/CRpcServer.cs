@@ -142,7 +142,8 @@ public sealed class CRpcServer : IRpcServer
                 pipeline.AddLast(
                     "encoder",
                     new CRpcMessageEncoder(startOptions.HashLength, startOptions.CompressThreshold));
-                pipeline.AddLast("handler", new CRpcServerHandler(this));
+                var handler = options.HandlerFactory?.Invoke(this) ?? new CRpcServerHandler(this);
+                pipeline.AddLast("handler", handler);
             }));
 
         try

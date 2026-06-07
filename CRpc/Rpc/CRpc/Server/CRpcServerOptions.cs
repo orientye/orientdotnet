@@ -1,4 +1,5 @@
 using System.Net;
+using DotNetty.Transport.Channels;
 
 namespace CRpc.Rpc.CRpc.Server;
 
@@ -33,4 +34,10 @@ public sealed class CRpcServerOptions
     public int WorkerThreadCount { get; init; } = DefaultWorkerThreadCount;
 
     public int SoBacklog { get; init; } = DefaultSoBacklog;
+
+    /// <summary>
+    /// Optional factory for creating the channel handler added to each child channel's pipeline.
+    /// Defaults to <see cref="CRpcServerHandler"/> when null.
+    /// </summary>
+    public Func<CRpcServer, IChannelHandler>? HandlerFactory { get; init; }
 }
