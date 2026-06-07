@@ -6,18 +6,19 @@ namespace GateWay;
 
 public sealed class GateWayBackendLink : IAsyncDisposable
 {
-    private readonly GateWayOptions options;
     private readonly IBackendConnector connector;
 
     public GateWayBackendLink(
         CRpcConnection inbound,
         CRpcClient backendClient,
-        GateWayOptions options,
+        ushort serviceId,
+        BackendEndpoint endpoint,
         IBackendConnector connector)
     {
         Inbound = inbound ?? throw new ArgumentNullException(nameof(inbound));
         BackendClient = backendClient ?? throw new ArgumentNullException(nameof(backendClient));
-        this.options = options ?? throw new ArgumentNullException(nameof(options));
+        ServiceId = serviceId;
+        Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
         this.connector = connector ?? throw new ArgumentNullException(nameof(connector));
     }
 
@@ -25,10 +26,14 @@ public sealed class GateWayBackendLink : IAsyncDisposable
 
     public CRpcClient BackendClient { get; }
 
+    public ushort ServiceId { get; }
+
+    public BackendEndpoint Endpoint { get; }
+
     public async CRpcTask ReconnectAsync()
     {
         await BackendClient.CloseAsync();
-        await connector.ConnectAsync(BackendClient, options);
+        await connector.ConnectAsync(BackendClient, Endpoint);
     }
 
     public async ValueTask DisposeAsync()

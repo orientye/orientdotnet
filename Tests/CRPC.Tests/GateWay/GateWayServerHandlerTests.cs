@@ -15,7 +15,9 @@ public class GateWayServerHandlerTests : CrpcTestBase
     {
         var loop = new CRpcLoop();
         loop.BindToCurrentThread();
-        var sessions = CreateSessionTable();
+        var sessions = GateWayTestHelpers.CreateSessionTable(
+            new global::GateWay.DefaultBackendClientFactory(),
+            new NoOpBackendConnector());
         var server = new CRpcServer(loop);
         var channel = CreateHandlerChannel(server, sessions, fallbackServiceId: 0);
 
@@ -33,7 +35,9 @@ public class GateWayServerHandlerTests : CrpcTestBase
     {
         var loop = new CRpcLoop();
         loop.BindToCurrentThread();
-        var sessions = CreateSessionTable();
+        var sessions = GateWayTestHelpers.CreateSessionTable(
+            new global::GateWay.DefaultBackendClientFactory(),
+            new NoOpBackendConnector());
         var server = new CRpcServer(loop);
         var channel = CreateHandlerChannel(server, sessions, fallbackServiceId: 0);
 
@@ -50,7 +54,9 @@ public class GateWayServerHandlerTests : CrpcTestBase
     {
         var loop = new CRpcLoop();
         loop.BindToCurrentThread();
-        var sessions = CreateSessionTable();
+        var sessions = GateWayTestHelpers.CreateSessionTable(
+            new global::GateWay.DefaultBackendClientFactory(),
+            new NoOpBackendConnector());
         var forwarder = new RecordingForwarderService(fallbackServiceId: 0);
         var server = new CRpcServer(loop);
         RegisterOnLoop(loop, forwarder);
@@ -64,14 +70,6 @@ public class GateWayServerHandlerTests : CrpcTestBase
         var response = ReadOutboundCrpcMessage(channel);
         Assert.True(response.getHeader().hasState(CRpcMessageState.STATE_RESPONSE));
         Assert.Equal(-1, response.getHeader().getResultCode());
-    }
-
-    private static global::GateWay.GateWaySessionTable CreateSessionTable()
-    {
-        return new global::GateWay.GateWaySessionTable(
-            new global::GateWay.DefaultBackendClientFactory(),
-            new NoOpBackendConnector(),
-            new global::GateWay.GateWayPushRelay());
     }
 
     private static EmbeddedChannel CreateHandlerChannel(
@@ -140,7 +138,7 @@ public class GateWayServerHandlerTests : CrpcTestBase
 
     private sealed class NoOpBackendConnector : global::GateWay.IBackendConnector
     {
-        public CRpcTask ConnectAsync(CRpc.Rpc.CRpc.Client.CRpcClient client, global::GateWay.GateWayOptions options)
+        public CRpcTask ConnectAsync(CRpc.Rpc.CRpc.Client.CRpcClient client, global::GateWay.BackendEndpoint endpoint)
         {
             return CRpcTask.CompletedTask(CRpcLoop.Current);
         }

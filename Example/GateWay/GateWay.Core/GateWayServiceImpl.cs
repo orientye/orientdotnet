@@ -8,15 +8,13 @@ namespace GateWay;
 public sealed class GateWayServiceImpl : IRpcService
 {
     private readonly GateWayRouter router;
-    private readonly GateWayOptions options;
 
-    public GateWayServiceImpl(GateWayRouter router, GateWayOptions options)
+    public GateWayServiceImpl(GateWayRouter router)
     {
         this.router = router ?? throw new ArgumentNullException(nameof(router));
-        this.options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
-    public ushort GetServiceId() => options.FallbackServiceId;
+    public ushort GetServiceId() => router.Config.FallbackServiceId;
 
     public async CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
     {
@@ -46,18 +44,23 @@ public sealed class GateWayServiceImpl : IRpcService
         }
         catch (Exception exception) when (IsReconnectable(exception))
         {
+            MarkEndpointUnhealthy(link);
             try
             {
                 await link.ReconnectAsync();
-                return await CallBackendAsync(link, serviceId, methodId, body);
+                var result = await CallBackendAsync(link, serviceId, methodId, body);
+                MarkEndpointHealthy(link);
+                return result;
             }
             catch
             {
+                MarkEndpointUnhealthy(link);
                 return (-1, Array.Empty<byte>());
             }
         }
         catch
         {
+            MarkEndpointUnhealthy(link);
             return (-1, Array.Empty<byte>());
         }
     }
@@ -68,8 +71,28 @@ public sealed class GateWayServiceImpl : IRpcService
         ushort methodId,
         byte[] body)
     {
-        var response = await link.BackendClient.CallAsync(serviceId, methodId, body, options.DefaultTimeoutMs);
+        var response = await link.BackendClient.CallAsync(
+            serviceId,
+            methodId,
+            body,
+            router.Config.DefaultTimeoutMs);
         return (response.getHeader().getResultCode(), response.getBody());
+    }
+
+    private void MarkEndpointUnhealthy(GateWayBackendLink link)
+    {
+        if (router.PoolRegistry.TryGetPool(link.ServiceId, out var pool))
+        {
+            pool.MarkUnhealthy(link.Endpoint);
+        }
+    }
+
+    private void MarkEndpointHealthy(GateWayBackendLink link)
+    {
+        if (router.PoolRegistry.TryGetPool(link.ServiceId, out var pool))
+        {
+            pool.MarkHealthy(link.Endpoint);
+        }
     }
 
     private static bool IsReconnectable(Exception exception)

@@ -9,12 +9,15 @@ public sealed class GateWaySessionTable
     private readonly IBackendClientFactory backendClientFactory;
     private readonly IBackendConnector backendConnector;
     private readonly GateWayPushRelay pushRelay;
+    private readonly BackendPoolRegistry poolRegistry;
 
     public GateWaySessionTable(
+        BackendPoolRegistry poolRegistry,
         IBackendClientFactory backendClientFactory,
         IBackendConnector backendConnector,
         GateWayPushRelay pushRelay)
     {
+        this.poolRegistry = poolRegistry ?? throw new ArgumentNullException(nameof(poolRegistry));
         this.backendClientFactory = backendClientFactory ?? throw new ArgumentNullException(nameof(backendClientFactory));
         this.backendConnector = backendConnector ?? throw new ArgumentNullException(nameof(backendConnector));
         this.pushRelay = pushRelay ?? throw new ArgumentNullException(nameof(pushRelay));
@@ -27,7 +30,7 @@ public sealed class GateWaySessionTable
 
     public async CRpcTask<GateWayBackendLink?> GetOrCreateAsync(
         CRpcConnection inbound,
-        GateWayOptions options,
+        ushort serviceId,
         CRpcLoop loop)
     {
         if (links.TryGetValue(inbound.ConnectionId, out var existing))
@@ -35,17 +38,29 @@ public sealed class GateWaySessionTable
             return existing;
         }
 
-        var client = backendClientFactory.Create(loop);
-        try
-        {
-            await backendConnector.ConnectAsync(client, options);
-        }
-        catch
+        if (!poolRegistry.TryGetPool(serviceId, out var pool))
         {
             return null;
         }
 
-        var link = new GateWayBackendLink(inbound, client, options, backendConnector);
+        var endpoint = pool.Pick();
+        if (endpoint is null)
+        {
+            return null;
+        }
+
+        var client = backendClientFactory.Create(loop);
+        try
+        {
+            await backendConnector.ConnectAsync(client, endpoint);
+        }
+        catch
+        {
+            pool.MarkUnhealthy(endpoint);
+            return null;
+        }
+
+        var link = new GateWayBackendLink(inbound, client, serviceId, endpoint, backendConnector);
         pushRelay.Attach(link);
         links[inbound.ConnectionId] = link;
         return link;

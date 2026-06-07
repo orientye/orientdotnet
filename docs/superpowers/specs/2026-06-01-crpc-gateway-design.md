@@ -118,7 +118,7 @@ Policy **C (hybrid):** random/round-robin before login; `userId` sticky after lo
 | Phase | Content |
 |-------|---------|
 | **1** | P0/P1 fixes, per-inbound backend link, push relay, lifecycle, tests |
-| **2** | `BackendPool`, health, config file, **stateless** demo with 2 HelloWorld ports (round-robin). **Not** for stateful game traffic without Phase 3 stickiness. |
+| **2** | `BackendPool`, health, config file, **stateless** demo with 2 HelloWorld ports (round-robin). **Implemented** — see `2026-06-02-crpc-gateway-phase2-design.md`. **Not** for stateful game traffic without Phase 3 stickiness. |
 | **3** | `SessionRegistry`, `userId` sticky, `(serviceId, methodId)` overrides (policy C) |
 | **4** | Optional: CRpc handler dedup; promote `GateWay.Core` to top-level package if needed |
 

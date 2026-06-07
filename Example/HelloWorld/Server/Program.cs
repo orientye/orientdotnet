@@ -13,8 +13,11 @@ Console.CancelKeyPress += (_, e) =>
     cts.Cancel();
 };
 
-var crpcServer = new CRpcServer(loop, new CRpcServerOptions { Port = 7999 });
-var httpServer = new HttpServer(loop, new HttpServerOptions { Port = 8080 });
+var crpcPort = ParsePort(args, defaultPort: 7999);
+var httpPort = crpcPort == 7999 ? 8080 : crpcPort + 1000;
+
+var crpcServer = new CRpcServer(loop, new CRpcServerOptions { Port = crpcPort });
+var httpServer = new HttpServer(loop, new HttpServerOptions { Port = httpPort });
 
 CRpcLoopRunner.RunUntilComplete(loop, async () =>
 {
@@ -23,8 +26,8 @@ CRpcLoopRunner.RunUntilComplete(loop, async () =>
     await httpServer.StartAsync(cts.Token);
 });
 
-Console.WriteLine("CRpc listening on 7999, HTTP JSON on 8080");
-Console.WriteLine("POST http://127.0.0.1:8080/1000/1 with application/json body");
+Console.WriteLine($"CRpc listening on {crpcPort}, HTTP JSON on {httpPort}");
+Console.WriteLine($"POST http://127.0.0.1:{httpPort}/1000/1 with application/json body");
 
 try
 {
@@ -37,4 +40,17 @@ finally
         await httpServer.StopAsync();
         await crpcServer.StopAsync();
     });
+}
+
+static int ParsePort(string[] args, int defaultPort)
+{
+    for (var i = 0; i < args.Length; i++)
+    {
+        if (args[i] == "--port" && i + 1 < args.Length && int.TryParse(args[i + 1], out var port) && port > 0)
+        {
+            return port;
+        }
+    }
+
+    return defaultPort;
 }

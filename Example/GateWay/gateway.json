@@ -1,0 +1,15 @@
+{
+  "listenPort": 7000,
+  "defaultTimeoutMs": 5000,
+  "fallbackServiceId": 0,
+  "pools": [
+    {
+      "serviceId": 1000,
+      "pickPolicy": "roundRobin",
+      "endpoints": [
+        { "host": "127.0.0.1", "port": 7999 },
+        { "host": "127.0.0.1", "port": 8001 }
+      ]
+    }
+  ]
+}

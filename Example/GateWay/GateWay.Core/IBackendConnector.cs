@@ -5,13 +5,14 @@ namespace GateWay;
 
 public interface IBackendConnector
 {
-    CRpcTask ConnectAsync(CRpcClient client, GateWayOptions options);
+    CRpcTask ConnectAsync(CRpcClient client, BackendEndpoint endpoint);
 }
 
 public sealed class TcpBackendConnector : IBackendConnector
 {
-    public async CRpcTask ConnectAsync(CRpcClient client, GateWayOptions options)
+    public async CRpcTask ConnectAsync(CRpcClient client, BackendEndpoint endpoint)
     {
-        await client.ConnectAsync(options.BackendHost, options.BackendPort);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        await client.ConnectAsync(endpoint.Host, endpoint.Port);
     }
 }

@@ -11,4 +11,10 @@
     <ProjectReference Include="..\GateWay.Core\GateWay.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\gateway.json" Link="gateway.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
