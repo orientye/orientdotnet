@@ -1,41 +1,35 @@
-﻿using System;
-using System.Text;
+﻿using System.Text;
 using Google.Protobuf;
 using Google.Protobuf.Compiler;
 
-namespace CRpcProtobufPlugin
+namespace CRpcProtobufPlugin;
+
+internal static class Program
 {
-    internal class Program
+    private static void Main()
     {
-        private static void Main(string[] args)
+        Console.OutputEncoding = Encoding.UTF8;
+        var response = new CodeGeneratorResponse();
+        try
         {
-            Console.OutputEncoding = Encoding.UTF8;
-            var response = new CodeGeneratorResponse();
-            try
+            CodeGeneratorRequest request;
+            using (var inStream = Console.OpenStandardInput())
             {
-                CodeGeneratorRequest request;
-                using (var inStream = Console.OpenStandardInput())
-                {
-                    request = CodeGeneratorRequest.Parser.ParseFrom(inStream);
-                }
-
-                ParseCode(request, response);
-            }
-            catch (Exception e)
-            {
-                response.Error += e.ToString();
+                request = CodeGeneratorRequest.Parser.ParseFrom(inStream);
             }
 
-            using (var output = Console.OpenStandardOutput())
-            {
-                response.WriteTo(output);
-                output.Flush();
-            }
+            CRpcGen.Generate(request, response);
+        }
+        catch (Exception e)
+        {
+            response.Error += e.ToString();
         }
 
-        private static void ParseCode(CodeGeneratorRequest request, CodeGeneratorResponse response)
+        using (var output = Console.OpenStandardOutput())
         {
-            CRpcGen.Generate(request, response);
+            var bytes = response.ToByteArray();
+            output.Write(bytes, 0, bytes.Length);
+            output.Flush();
         }
     }
 }

@@ -1,2 +1,2 @@
-echo Copying output file %1\protoc-gen-crpc.exe to %1\..\..\.copy
-copy %1\protoc-gen-crpc.exe %1\..\..\..\..\crpc-protobuf-plugin-tool\*
+echo Copying plugin output from %1 to crpc-protobuf-plugin-tool
+copy /Y %1\* %1\..\..\..\..\..\crpc-protobuf-plugin-tool\*

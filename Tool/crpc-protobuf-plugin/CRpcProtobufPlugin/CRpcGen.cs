@@ -1,14 +1,12 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using System.Text;
+﻿using System.Text;
+using CRpcOptions;
 using Google.Protobuf.Compiler;
 using Google.Protobuf.Reflection;
 
-namespace CRpcProtobufPlugin
+namespace CRpcProtobufPlugin;
+
+public static class CRpcGen
 {
-    public static class CRpcGen
-    {
         public static void Generate(CodeGeneratorRequest request, CodeGeneratorResponse response)
         {
             foreach (var fileDescriptorProto in request.ProtoFile)
@@ -110,11 +108,7 @@ namespace CRpcProtobufPlugin
 
         private static void GenerateServiceForClient(ServiceDescriptorProto service, StringBuilder sb)
         {
-            var hasServiceId = service.Options.CustomOptions.TryGetInt32(CRpcOptions.ServiceId, out int serviceId);
-            if (!hasServiceId || serviceId <= 0)
-                throw new Exception("Service=" + service.Name + " ServiceId NOT FOUND");
-            if (serviceId >= ushort.MaxValue)
-                throw new Exception("Service=" + service.Name + "ServiceId too large");
+            var serviceId = GetServiceId(service);
 
             sb.AppendLine($"public abstract class {service.Name}ClientBase : ICRpcGeneratedClient");
             sb.AppendLine("{");
@@ -132,11 +126,7 @@ namespace CRpcProtobufPlugin
                 }
 
                 ValidateServerPushMethod(service, method);
-                var hasMsgId = method.Options.CustomOptions.TryGetInt32(CRpcOptions.MethodId, out int msgId);
-                if (!hasMsgId || msgId <= 0)
-                    throw new Exception("Service" + service.Name + "." + method.Name + " ' MessageId NOT FOUND");
-                if (msgId >= ushort.MaxValue)
-                    throw new Exception("Service" + service.Name + "." + method.Name + " is too large");
+                var msgId = GetMethodId(service, method);
 
                 sb.AppendLine($"        client.RegisterPushHandler({serviceId}, {msgId}, __OnPush{method.Name}Async);");
             }
@@ -146,11 +136,7 @@ namespace CRpcProtobufPlugin
 
             foreach (var method in service.Method)
             {
-                var hasMsgId = method.Options.CustomOptions.TryGetInt32(CRpcOptions.MethodId, out int msgId);
-                if (!hasMsgId || msgId <= 0)
-                    throw new Exception("Service" + service.Name + "." + method.Name + " ' MessageId NOT FOUND");
-                if (msgId >= ushort.MaxValue)
-                    throw new Exception("Service" + service.Name + "." + method.Name + " is too large");
+                var msgId = GetMethodId(service, method);
 
                 var outType = GetTypeName(method.OutputType);
                 var inType = GetTypeName(method.InputType);
@@ -192,20 +178,13 @@ namespace CRpcProtobufPlugin
 
         private static void GenerateServiceForServer(ServiceDescriptorProto service, StringBuilder sb)
         {
-            var hasServiceId = service.Options.CustomOptions.TryGetInt32(CRpcOptions.ServiceId, out int serviceId);
-            if (!hasServiceId || serviceId <= 0)
-                throw new Exception("Service=" + service.Name + " ServiceId NOT FOUND");
-            if (serviceId >= ushort.MaxValue) throw new Exception("Service=" + service.Name + "ServiceId too large");
+            var serviceId = GetServiceId(service);
 
             var sbMethodParsers = new StringBuilder();
             var sbPushHelpers = new StringBuilder();
             foreach (var method in service.Method)
             {
-                var hasMethodId = method.Options.CustomOptions.TryGetInt32(CRpcOptions.MethodId, out int methodId);
-                if (!hasMethodId || methodId <= 0)
-                    throw new Exception("Service" + service.Name + "." + method.Name + " ' MethodId NOT FOUND");
-                if (methodId >= ushort.MaxValue)
-                    throw new Exception("Service" + service.Name + "." + method.Name + " is too large");
+                var methodId = GetMethodId(service, method);
 
                 var outType = GetTypeName(method.OutputType);
                 var inType = GetTypeName(method.InputType);
@@ -240,11 +219,7 @@ namespace CRpcProtobufPlugin
             var sbMethodAbstract = new StringBuilder();
             foreach (var method in service.Method)
             {
-                var hasMethodId = method.Options.CustomOptions.TryGetInt32(CRpcOptions.MethodId, out int methodId);
-                if (!hasMethodId || methodId <= 0)
-                    throw new Exception("Service" + service.Name + "." + method.Name + " ' MethodId NOT FOUND");
-                if (methodId >= ushort.MaxValue)
-                    throw new Exception("Service" + service.Name + "." + method.Name + " is too large");
+                var methodId = GetMethodId(service, method);
 
                 if (IsServerPush(method))
                 {
@@ -299,9 +274,29 @@ namespace CRpcProtobufPlugin
             sb.AppendLine("}");
         }
 
+        private static int GetServiceId(ServiceDescriptorProto service)
+        {
+            if (!CrpcOptionReader.TryGetServiceId(service.Options, out var serviceId) || serviceId <= 0)
+                throw new Exception("Service=" + service.Name + " ServiceId NOT FOUND");
+            if (serviceId >= ushort.MaxValue)
+                throw new Exception("Service=" + service.Name + "ServiceId too large");
+
+            return serviceId;
+        }
+
+        private static int GetMethodId(ServiceDescriptorProto service, MethodDescriptorProto method)
+        {
+            if (!CrpcOptionReader.TryGetMethodId(method.Options, out var methodId) || methodId <= 0)
+                throw new Exception("Service" + service.Name + "." + method.Name + " ' MethodId NOT FOUND");
+            if (methodId >= ushort.MaxValue)
+                throw new Exception("Service" + service.Name + "." + method.Name + " is too large");
+
+            return methodId;
+        }
+
         private static bool IsServerPush(MethodDescriptorProto method)
         {
-            return method.Options.CustomOptions.TryGetBool(CRpcOptions.ServerPush, out var serverPush) && serverPush;
+            return CrpcOptionReader.TryGetServerPush(method.Options, out var serverPush) && serverPush;
         }
 
         private static void ValidateServerPushMethod(ServiceDescriptorProto service, MethodDescriptorProto method)
@@ -342,5 +337,4 @@ namespace CRpcProtobufPlugin
             string str = typeFullName.Substring(1, 1).ToUpper() + typeFullName.Substring(2);
             return str;
         }
-    }
 }
