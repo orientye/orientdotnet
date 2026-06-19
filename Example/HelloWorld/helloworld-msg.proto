@@ -10,6 +10,6 @@ message HelloReply {
    string msg = 1;
 }
 
-message ServerNoticePush {
+message ServerHelloPush {
   string msg = 1;
 }

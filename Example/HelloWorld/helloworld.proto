@@ -14,7 +14,7 @@ import "google/protobuf/empty.proto";
 service Greeter {
     option (crpc.service_id) = 1000;
     rpc SayHello (HelloRequest) returns (HelloReply) { option (crpc.method_id) = 1; }
-    rpc ServerNotice (ServerNoticePush) returns (google.protobuf.Empty) {
+    rpc ServerPushHello (ServerHelloPush) returns (google.protobuf.Empty) {
         option (crpc.method_id) = 2;
         option (crpc.server_push) = true;
     }

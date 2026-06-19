@@ -5,9 +5,9 @@ namespace Example;
 
 public sealed class GreeterClient : GreeterClientBase
 {
-    protected override CRpcTask OnPushServerNoticeAsync(
+    protected override CRpcTask OnPushServerPushHelloAsync(
         CRpcPushContext context,
-        ServerNoticePush message)
+        ServerHelloPush message)
     {
         Console.WriteLine($"server push: {message.Msg}");
         return CRpcTask.CompletedTask(context.Loop);

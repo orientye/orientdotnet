@@ -43,7 +43,7 @@ public abstract class GreeterServiceBase : IRpcService, IRpcHttpJsonCodec
         return (result, bytes);
     }
 
-    protected CRpcTask<bool> PushServerNoticeAsync(CRpcConnection connection, Example.ServerNoticePush message)
+    protected CRpcTask<bool> PushServerPushHelloAsync(CRpcConnection connection, Example.ServerHelloPush message)
     {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(message);

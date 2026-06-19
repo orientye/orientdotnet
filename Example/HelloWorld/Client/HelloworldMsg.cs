@@ -25,14 +25,14 @@ namespace Example {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
             "ChRoZWxsb3dvcmxkLW1zZy5wcm90bxIHZXhhbXBsZSIbCgxIZWxsb1JlcXVl",
-            "c3QSCwoDbXNnGAEgASgJIhkKCkhlbGxvUmVwbHkSCwoDbXNnGAEgASgJIh8K",
-            "EFNlcnZlck5vdGljZVB1c2gSCwoDbXNnGAEgASgJYgZwcm90bzM="));
+            "c3QSCwoDbXNnGAEgASgJIhkKCkhlbGxvUmVwbHkSCwoDbXNnGAEgASgJIh4K",
+            "D1NlcnZlckhlbGxvUHVzaBILCgNtc2cYASABKAliBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Example.HelloRequest), global::Example.HelloRequest.Parser, new[]{ "Msg" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Example.HelloReply), global::Example.HelloReply.Parser, new[]{ "Msg" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Example.ServerNoticePush), global::Example.ServerNoticePush.Parser, new[]{ "Msg" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Example.ServerHelloPush), global::Example.ServerHelloPush.Parser, new[]{ "Msg" }, null, null, null, null)
           }));
     }
     #endregion
@@ -436,16 +436,16 @@ namespace Example {
   }
 
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class ServerNoticePush : pb::IMessage<ServerNoticePush>
+  public sealed partial class ServerHelloPush : pb::IMessage<ServerHelloPush>
   #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       , pb::IBufferMessage
   #endif
   {
-    private static readonly pb::MessageParser<ServerNoticePush> _parser = new pb::MessageParser<ServerNoticePush>(() => new ServerNoticePush());
+    private static readonly pb::MessageParser<ServerHelloPush> _parser = new pb::MessageParser<ServerHelloPush>(() => new ServerHelloPush());
     private pb::UnknownFieldSet _unknownFields;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<ServerNoticePush> Parser { get { return _parser; } }
+    public static pb::MessageParser<ServerHelloPush> Parser { get { return _parser; } }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -461,7 +461,7 @@ namespace Example {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public ServerNoticePush() {
+    public ServerHelloPush() {
       OnConstruction();
     }
 
@@ -469,15 +469,15 @@ namespace Example {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public ServerNoticePush(ServerNoticePush other) : this() {
+    public ServerHelloPush(ServerHelloPush other) : this() {
       msg_ = other.msg_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public ServerNoticePush Clone() {
-      return new ServerNoticePush(this);
+    public ServerHelloPush Clone() {
+      return new ServerHelloPush(this);
     }
 
     /// <summary>Field number for the "msg" field.</summary>
@@ -495,12 +495,12 @@ namespace Example {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
-      return Equals(other as ServerNoticePush);
+      return Equals(other as ServerHelloPush);
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(ServerNoticePush other) {
+    public bool Equals(ServerHelloPush other) {
       if (ReferenceEquals(other, null)) {
         return false;
       }
@@ -573,7 +573,7 @@ namespace Example {
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(ServerNoticePush other) {
+    public void MergeFrom(ServerHelloPush other) {
       if (other == null) {
         return;
       }

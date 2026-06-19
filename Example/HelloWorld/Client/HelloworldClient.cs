@@ -18,7 +18,7 @@ public abstract class GreeterClientBase : ICRpcGeneratedClient
     public void BindRpcClient(IRpcClient client)
     {
         __client = client ?? throw new ArgumentNullException(nameof(client));
-        client.RegisterPushHandler(1000, 2, __OnPushServerNoticeAsync);
+        client.RegisterPushHandler(1000, 2, __OnPushServerPushHelloAsync);
     }
 
     public async CRpcTask<(int, Example.HelloReply)> SayHelloAsync(Example.HelloRequest request, int timeOut = 5000)
@@ -34,12 +34,12 @@ public abstract class GreeterClientBase : ICRpcGeneratedClient
         return (-1, null);
     }
 
-    private async CRpcTask __OnPushServerNoticeAsync(CRpcPushContext context, byte[] body)
+    private async CRpcTask __OnPushServerPushHelloAsync(CRpcPushContext context, byte[] body)
     {
-        await OnPushServerNoticeAsync(context, Example.ServerNoticePush.Parser.ParseFrom(body));
+        await OnPushServerPushHelloAsync(context, Example.ServerHelloPush.Parser.ParseFrom(body));
     }
 
-    protected virtual CRpcTask OnPushServerNoticeAsync(CRpcPushContext context, Example.ServerNoticePush message)
+    protected virtual CRpcTask OnPushServerPushHelloAsync(CRpcPushContext context, Example.ServerHelloPush message)
     {
         return CRpcTask.CompletedTask(context.Loop);
     }

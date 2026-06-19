@@ -9,9 +9,9 @@ public class HelloworldServiceImpl : GreeterServiceBase
         CRpcContext context,
         HelloRequest request)
     {
-        _ = PushServerNoticeAsync(
+        _ = PushServerPushHelloAsync(
             context.Connection,
-            new ServerNoticePush { Msg = $"server saw: {request.Msg}" });
+            new ServerHelloPush { Msg = $"server saw: {request.Msg}" });
 
         return CRpcTask.FromResult(
             (0, new HelloReply { Msg = $"Hello {request.Msg}" }),
