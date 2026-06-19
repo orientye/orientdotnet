@@ -276,7 +276,7 @@ public static class CRpcGen
 
         private static int GetServiceId(ServiceDescriptorProto service)
         {
-            if (!CrpcOptionReader.TryGetServiceId(service.Options, out var serviceId) || serviceId <= 0)
+            if (!CRpcOptionsReader.TryGetServiceId(service.Options, out var serviceId) || serviceId <= 0)
                 throw new Exception("Service=" + service.Name + " ServiceId NOT FOUND");
             if (serviceId >= ushort.MaxValue)
                 throw new Exception("Service=" + service.Name + "ServiceId too large");
@@ -286,7 +286,7 @@ public static class CRpcGen
 
         private static int GetMethodId(ServiceDescriptorProto service, MethodDescriptorProto method)
         {
-            if (!CrpcOptionReader.TryGetMethodId(method.Options, out var methodId) || methodId <= 0)
+            if (!CRpcOptionsReader.TryGetMethodId(method.Options, out var methodId) || methodId <= 0)
                 throw new Exception("Service" + service.Name + "." + method.Name + " ' MethodId NOT FOUND");
             if (methodId >= ushort.MaxValue)
                 throw new Exception("Service" + service.Name + "." + method.Name + " is too large");
@@ -296,7 +296,7 @@ public static class CRpcGen
 
         private static bool IsServerPush(MethodDescriptorProto method)
         {
-            return CrpcOptionReader.TryGetServerPush(method.Options, out var serverPush) && serverPush;
+            return CRpcOptionsReader.TryGetServerPush(method.Options, out var serverPush) && serverPush;
         }
 
         private static void ValidateServerPushMethod(ServiceDescriptorProto service, MethodDescriptorProto method)

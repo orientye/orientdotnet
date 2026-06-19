@@ -4,7 +4,7 @@ using Google.Protobuf.Reflection;
 
 namespace CRpcProtobufPlugin;
 
-internal static class CrpcOptionReader
+internal static class CRpcOptionsReader
 {
     internal const int ServiceIdFieldNumber = 60001;
     internal const int MethodIdFieldNumber = 60002;
