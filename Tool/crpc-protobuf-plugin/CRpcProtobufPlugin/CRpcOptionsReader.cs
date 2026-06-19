@@ -6,9 +6,9 @@ namespace CRpcProtobufPlugin;
 
 internal static class CRpcOptionsReader
 {
-    internal const int ServiceIdFieldNumber = 60001;
-    internal const int MethodIdFieldNumber = 60002;
-    internal const int ServerPushFieldNumber = 60003;
+    private const int ServiceIdFieldNumber = 60001;
+    private const int MethodIdFieldNumber = 60002;
+    private const int ServerPushFieldNumber = 60003;
 
     public static bool TryGetServiceId(ServiceOptions options, out int serviceId)
     {
