@@ -1,14 +1,14 @@
-# CRpc v2 Codec Implementation Plan
+# CRpc Binary Codec Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the v1 CRpc binary wire codec with a fixed 22-byte header, `'CRPC'` magic, explicit `CrpcMessageType` routing, and no application-layer checksum — as a breaking change across server, client, gateway, and tests.
+**Goal:** Replace the draft CRpc binary wire codec with a fixed 22-byte header, `'CRPC'` magic, explicit `CrpcMessageType` routing, and no application-layer checksum — as a breaking change across server, client, gateway, and tests.
 
-**Architecture:** Rewrite codec types in place (`CRpcMessage`, `CRpcMessageHeader`, encoder, decoder). Delete v1 `CRpcMessageState`, `ChecksumsUtil`, and `encryptAndCompress`. Route inbound messages by `MessageType` (Request / Response / Push) instead of state bitmasks. Reserve `flags` + `bodyOriginLen` for future compression; v2.0 always writes `flags = 0`.
+**Architecture:** Rewrite codec types in place (`CRpcMessage`, `CRpcMessageHeader`, encoder, decoder). Delete draft-era `CRpcMessageState`, `ChecksumsUtil`, and `encryptAndCompress`. Route inbound messages by `MessageType` (Request / Response / Push) instead of state bitmasks. Reserve `flags` + `bodyOriginLen` for future compression; current release always writes `flags = 0`.
 
 **Tech Stack:** C# / .NET, DotNetty (`LengthFieldBasedFrameDecoder`, `MessageToByteEncoder`), xUnit, `dotnet test`.
 
-**Spec reference:** `docs/superpowers/specs/2026-06-19-crpc-v2-codec-design.md`
+**Spec reference:** `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md`
 
 **Repository rule:** Do not create commits unless the user explicitly requests them.
 
@@ -23,7 +23,7 @@
 | `CRpc/Rpc/CRpc/Codec/CRpcMessageHeader.cs` | Rewritten fixed 22-byte header with `ServiceId`, `MethodId`, `MessageType`. |
 | `CRpc/Rpc/CRpc/Codec/CRpcMessage.cs` | Rewritten frame constants, `ReadFrom`/`WriteTo`, `CreateResponse`. |
 | `CRpc/Rpc/CRpc/Codec/CRpcMessageEncoder.cs` | Parameterless encoder; no compress path. |
-| `CRpc/Rpc/CRpc/Codec/CRpcMessageDecoder.cs` | v2 framing; no checksum validation. |
+| `CRpc/Rpc/CRpc/Codec/CRpcMessageDecoder.cs` | Binary framing; no checksum validation. |
 | `CRpc/Rpc/CRpc/Codec/CRpcMessageState.cs` | **Delete.** |
 | `CRpc/Rpc/CRpc/Codec/ChecksumsUtil.cs` | **Delete.** |
 | `CRpc/Rpc/CRpc/Server/CRpcServerOptions.cs` | Remove `HashLength`, `CompressThreshold`. |
@@ -33,16 +33,16 @@
 | `CRpc/Rpc/CRpc/Client/CRpcClient.cs` | Route by `MessageType`; build Request frames. |
 | `CRpc/Rpc/CRpc/Server/CRpcConnection.cs` | Build Push frames with `MessageType.Push`. |
 | `CRpc/Rpc/CRpc/Server/CRpcServerHandler.cs` | Ignore non-Request inbound messages. |
-| `CRpc/Rpc/CRpc/Server/HttpServerHandler.cs` | Build internal Request messages with v2 header. |
-| `Tests/CRPC.Tests/CRpcV2CodecTests.cs` | New focused wire round-trip and layout tests. |
-| `Tests/CRPC.Tests/CRpcMessageEncoderTests.cs` | Rewrite for v2 magic and frame length. |
+| `CRpc/Rpc/CRpc/Server/HttpServerHandler.cs` | Build internal Request messages with binary header. |
+| `Tests/CRPC.Tests/CRpcCodecTests.cs` | New focused wire round-trip and layout tests. |
+| `Tests/CRPC.Tests/CRpcMessageEncoderTests.cs` | Rewrite for `'CRPC'` magic and frame length. |
 | `Tests/CRPC.Tests/CRpcClientTests.cs` | Update `CreatePush` / `CreateResponse` helpers. |
 | `Tests/CRPC.Tests/CRpcServerHandlerTests.cs` | Update request builders and response assertions. |
 | `Tests/CRPC.Tests/CRpcConnectionTests.cs` | Assert `MessageType.Push` instead of state flags. |
 | `Tests/CRPC.Tests/GateWay/GateWayServerHandlerTests.cs` | Update helpers and `MessageType.Response` asserts. |
 | `Tests/CRPC.Tests/RpcServiceInvokerTests.cs` | Update request builder. |
 | `Tests/CRPC.Tests/CRpcTransportOptionsTests.cs` | Remove hash/compress default asserts. |
-| `Doc/protocol.md` | Document v2 wire format summary. |
+| `Doc/protocol.md` | Document binary wire format summary. |
 
 HTTP code generation and `IRpcHttpJsonCodec` are unchanged.
 
@@ -99,11 +99,11 @@ Expected: PASS (no test changes yet).
 
 **Files:**
 - Modify: `CRpc/Rpc/CRpc/Codec/CRpcMessageHeader.cs` (full rewrite)
-- Create: `Tests/CRPC.Tests/CRpcV2CodecTests.cs`
+- Create: `Tests/CRPC.Tests/CRpcCodecTests.cs`
 
 - [ ] **Step 1: Write failing header layout test**
 
-Create `Tests/CRPC.Tests/CRpcV2CodecTests.cs`:
+Create `Tests/CRPC.Tests/CRpcCodecTests.cs`:
 
 ```csharp
 using CRpc.Rpc.CRpc.Codec;
@@ -111,7 +111,7 @@ using DotNetty.Buffers;
 
 namespace CRPC.Tests;
 
-public class CRpcV2CodecTests
+public class CRpcCodecTests
 {
     [Fact]
     public void HeaderWriteProducesTwentyTwoBytesWithExpectedOffsets()
@@ -183,7 +183,7 @@ public class CRpcV2CodecTests
 Run:
 
 ```bash
-dotnet test Tests/CRPC.Tests/CRPC.Tests.csproj --filter CRPC.Tests.CRpcV2CodecTests
+dotnet test Tests/CRPC.Tests/CRPC.Tests.csproj --filter CRPC.Tests.CRpcCodecTests
 ```
 
 Expected: FAIL — `Create` / `ReadFrom` / `FixedLength` do not exist on `CRpcMessageHeader`.
@@ -309,7 +309,7 @@ public sealed class CRpcMessageHeader
 Run:
 
 ```bash
-dotnet test Tests/CRPC.Tests/CRPC.Tests.csproj --filter CRPC.Tests.CRpcV2CodecTests
+dotnet test Tests/CRPC.Tests/CRPC.Tests.csproj --filter CRPC.Tests.CRpcCodecTests
 ```
 
 Expected: PASS for the two header tests (frame tests not added yet).
@@ -320,11 +320,11 @@ Expected: PASS for the two header tests (frame tests not added yet).
 
 **Files:**
 - Modify: `CRpc/Rpc/CRpc/Codec/CRpcMessage.cs` (full rewrite)
-- Modify: `Tests/CRPC.Tests/CRpcV2CodecTests.cs`
+- Modify: `Tests/CRPC.Tests/CRpcCodecTests.cs`
 
 - [ ] **Step 1: Write failing frame tests**
 
-Append to `Tests/CRPC.Tests/CRpcV2CodecTests.cs`:
+Append to `Tests/CRPC.Tests/CRpcCodecTests.cs`:
 
 ```csharp
     [Fact]
@@ -408,7 +408,7 @@ Append to `Tests/CRPC.Tests/CRpcV2CodecTests.cs`:
 Run:
 
 ```bash
-dotnet test Tests/CRPC.Tests/CRPC.Tests.csproj --filter CRPC.Tests.CRpcV2CodecTests
+dotnet test Tests/CRPC.Tests/CRPC.Tests.csproj --filter CRPC.Tests.CRpcCodecTests
 ```
 
 Expected: FAIL — `CRpcMessage.Create` / `WriteTo` / `ReadFrom` missing.
@@ -539,10 +539,10 @@ public sealed class CRpcMessage : IRpcMessage
 Run:
 
 ```bash
-dotnet test Tests/CRPC.Tests/CRPC.Tests.csproj --filter CRPC.Tests.CRpcV2CodecTests
+dotnet test Tests/CRPC.Tests/CRPC.Tests.csproj --filter CRPC.Tests.CRpcCodecTests
 ```
 
-Expected: PASS for all tests in `CRpcV2CodecTests`.
+Expected: PASS for all tests in `CRpcCodecTests`.
 
 ---
 
@@ -633,7 +633,7 @@ Run:
 dotnet test Tests/CRPC.Tests/CRPC.Tests.csproj --filter CRPC.Tests.CRpcMessageEncoderTests
 ```
 
-Expected: FAIL — encoder constructor still requires v1 parameters.
+Expected: FAIL — encoder constructor still requires draft-era parameters.
 
 - [ ] **Step 3: Rewrite encoder**
 
@@ -715,20 +715,20 @@ public sealed class CRpcMessageDecoder : LengthFieldBasedFrameDecoder
 Run:
 
 ```bash
-dotnet test Tests/CRPC.Tests/CRPC.Tests.csproj --filter "CRPC.Tests.CRpcMessageEncoderTests|CRPC.Tests.CRpcV2CodecTests"
+dotnet test Tests/CRPC.Tests/CRPC.Tests.csproj --filter "CRPC.Tests.CRpcMessageEncoderTests|CRPC.Tests.CRpcCodecTests"
 ```
 
 Expected: PASS.
 
 ---
 
-## Task 5: Delete v1 Dead Code
+## Task 5: Delete Draft-Era Dead Code
 
 **Files:**
 - Delete: `CRpc/Rpc/CRpc/Codec/CRpcMessageState.cs`
 - Delete: `CRpc/Rpc/CRpc/Codec/ChecksumsUtil.cs`
 
-- [ ] **Step 1: Delete v1 codec helpers**
+- [ ] **Step 1: Delete draft-era codec helpers**
 
 Remove both files listed above.
 
@@ -833,7 +833,7 @@ Expected: PASS for CRpc project; test project still fails until Task 8.
 **Files:**
 - Create: `Tests/CRPC.Tests/CrpcTestMessages.cs`
 
-- [ ] **Step 1: Add centralized v2 message builders**
+- [ ] **Step 1: Add centralized binary message builders**
 
 Create `Tests/CRPC.Tests/CrpcTestMessages.cs`:
 
@@ -977,7 +977,7 @@ if (message.MessageType != CrpcMessageType.Request)
 
 - [ ] **Step 5: Update HTTP internal request builder**
 
-In `HttpServerHandler` where it builds a `CRpcMessage` for loop dispatch, replace v1 header code with:
+In `HttpServerHandler` where it builds a `CRpcMessage` for loop dispatch, replace draft-era header code with:
 
 ```csharp
 var message = CRpcMessage.Create(
@@ -1012,7 +1012,7 @@ Expected: PASS.
 - Modify: `Tests/CRPC.Tests/CRpcServerHandlerTests.cs` (pipeline factory args)
 - Modify: any other test files surfaced by `dotnet build`
 
-- [ ] **Step 1: Replace v1 helpers in `CRpcClientTests`**
+- [ ] **Step 1: Replace draft-era helpers in `CRpcClientTests`**
 
 Delete local `CreatePush` / `CreateResponse` and use `CrpcTestMessages` instead.
 
@@ -1148,32 +1148,32 @@ Expected: PASS.
 **Files:**
 - Modify: `Doc/protocol.md`
 
-- [ ] **Step 1: Write v2 protocol summary**
+- [ ] **Step 1: Write binary protocol summary**
 
 Replace `Doc/protocol.md` with:
 
 ```markdown
-# CRpc Binary Protocol (v2)
+# CRpc Binary Protocol
 
-Full design: `docs/superpowers/specs/2026-06-19-crpc-v2-codec-design.md`
+Full design: `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md`
 
 ## Frame
 
 ```text
-magic(4) + payloadLen(4) + header(22) + body(N)
+magic(4) + payloadLen(4) + header(24) + body(N)
 ```
 
 - `magic` = `0x43525043` (`'CRPC'`, little-endian)
-- `payloadLen` = `22 + body.Length` (header + body only)
+- `payloadLen` = `24 + body.Length` (header + body only)
 - All integers little-endian
 
-## Header (22 bytes)
+## Header (24 bytes)
 
 | Offset | Field |
 | --- | --- |
 | 0 | `version` = 1 |
 | 1 | `messageType` — 0 Request, 1 Response, 2 Push |
-| 2 | `flags` — 0 in v2.0 (`0x01` = compressed, reserved) |
+| 2 | `flags` — current release: `0` (`0x01` = compressed, reserved) |
 | 3 | `reserved` = 0 |
 | 4 | `serviceId` u16 |
 | 6 | `methodId` u16 |
@@ -1183,7 +1183,7 @@ magic(4) + payloadLen(4) + header(22) + body(N)
 
 ## Body
 
-Raw protobuf bytes. No application-layer checksum in v2.0.
+Raw protobuf bytes. No application-layer checksum. No compression in current release (`flags = 0`).
 
 ## Message conventions
 
@@ -1218,7 +1218,7 @@ dotnet build Example/HelloWorld/Client/HelloWorldClient.csproj
 dotnet build Example/GateWay/GateWayServer/GateWayServer.csproj
 ```
 
-Expected: PASS with no references to deleted v1 codec symbols.
+Expected: PASS with no references to deleted draft-era codec symbols.
 
 - [ ] **Step 3: Manual smoke (optional)**
 
@@ -1232,7 +1232,7 @@ Expected: PASS with no references to deleted v1 codec symbols.
 
 | Spec requirement | Task |
 | --- | --- |
-| Breaking change, no v1 compat | Tasks 3–5 |
+| Breaking change, no draft wire compat | Tasks 3–5 |
 | Fixed 22-byte header | Tasks 2–3 |
 | `messageType` enum routing | Tasks 1, 8 |
 | `serviceId` / `methodId` naming | Tasks 2–3, 8, 10 |
@@ -1250,7 +1250,7 @@ No placeholder steps remain. Type names (`CrpcMessageType`, `CRpcMessage.Create`
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-06-19-crpc-v2-codec.md`. Two execution options:
+Plan complete and saved to `docs/superpowers/plans/2026-06-19-crpc-binary-codec.md`. Two execution options:
 
 **1. Subagent-Driven (recommended)** — dispatch a fresh subagent per task, review between tasks, fast iteration.
 

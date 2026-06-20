@@ -37,7 +37,7 @@
 | `Example/HelloWorld/Server/Http/PortUnificationHandler.cs` | Sniff CRPC vs HTTP; assemble pipeline. |
 | `Doc/architecture-draft.md` | Note HTTP removed from core. |
 | `docs/superpowers/specs/2026-05-19-multi-endpoint-crpc-http-design.md` | Superseded header. |
-| `docs/superpowers/specs/2026-06-19-crpc-v2-codec-design.md` | Note HTTP outside core. |
+| `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md` | Note HTTP outside core. |
 
 ---
 
@@ -846,7 +846,7 @@ Expected: same JSON envelope as Task 9.
 **Files:**
 - Modify: `Doc/architecture-draft.md`
 - Modify: `docs/superpowers/specs/2026-05-19-multi-endpoint-crpc-http-design.md`
-- Modify: `docs/superpowers/specs/2026-06-19-crpc-v2-codec-design.md`
+- Modify: `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md`
 - Modify: `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
 
 - [ ] **Step 1: Add superseded note to `2026-05-19-multi-endpoint-crpc-http-design.md`**
@@ -857,12 +857,12 @@ At top after title:
 > **Superseded (HTTP-in-core):** `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md` — `HttpServer` and `IRpcHttpJsonCodec` removed from core.
 ```
 
-- [ ] **Step 2: Update `2026-06-19-crpc-v2-codec-design.md`**
+- [ ] **Step 2: Update `2026-06-19-crpc-binary-codec-design.md`**
 
 Replace the line `HTTP handler (HttpServerHandler, IRpcHttpJsonCodec) unchanged.` with:
 
 ```markdown
-HTTP/JSON is an application concern; core no longer includes `HttpServerHandler` or `IRpcHttpJsonCodec`. Binary v2 codec is unaffected.
+HTTP/JSON is an application concern; core no longer includes `HttpServerHandler` or `IRpcHttpJsonCodec`. Binary codec is unaffected.
 ```
 
 - [ ] **Step 3: Update `Doc/architecture-draft.md`**

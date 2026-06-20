@@ -1,6 +1,6 @@
-# CRpc Binary Protocol (v2)
+# CRpc Binary Protocol
 
-Full design: `docs/superpowers/specs/2026-06-19-crpc-v2-codec-design.md`
+Full design: `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md`
 
 ## Frame
 
@@ -18,7 +18,7 @@ magic(4) + payloadLen(4) + header(24) + body(N)
 | --- | --- |
 | 0 | `version` = 1 |
 | 1 | `messageType` — 0 Request, 1 Response, 2 Push |
-| 2 | `flags` — 0 in v2.0 (`0x01` = compressed, reserved) |
+| 2 | `flags` — current release: `0` (`0x01` = compressed, reserved) |
 | 3 | `reserved` = 0 |
 | 4 | `serviceId` u16 |
 | 6 | `methodId` u16 |
@@ -28,7 +28,7 @@ magic(4) + payloadLen(4) + header(24) + body(N)
 
 ## Body
 
-Raw protobuf bytes. No application-layer checksum in v2.0.
+Raw protobuf bytes. No application-layer checksum. No compression in current release (`flags = 0`).
 
 ## Message conventions
 

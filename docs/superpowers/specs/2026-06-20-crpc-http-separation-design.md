@@ -3,7 +3,7 @@
 **Date:** 2026-06-20  
 **Status:** Approved  
 **Supersedes:** `docs/superpowers/specs/2026-05-19-multi-endpoint-crpc-http-design.md` (HTTP-in-core portions)  
-**Related:** `Doc/protocol.md`, `docs/superpowers/specs/2026-06-19-crpc-v2-codec-design.md`, `docs/superpowers/specs/2026-05-28-crpc-server-push-design.md`
+**Related:** `Doc/protocol.md`, `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md`, `docs/superpowers/specs/2026-05-28-crpc-server-push-design.md`
 
 ---
 
@@ -11,7 +11,7 @@
 
 Separate **CRpc binary runtime** from **HTTP concerns**:
 
-1. **`CRpc.dll`** — `CRpcLoop`, `IRpcService`, `CRpcServer`, v2 wire codec only. No HTTP server, no JSON routing, no HTTP codec interfaces.
+1. **`CRpc.dll`** — `CRpcLoop`, `IRpcService`, `CRpcServer`, binary wire codec only. No HTTP server, no JSON routing, no HTTP codec interfaces.
 2. **`crpc-protobuf-plugin`** — generates `{Service}ServiceBase` and `{Service}ClientBase` for CRpc only. No `IRpcHttpJsonCodec`, no `TryGetHttpMethodParsers`.
 3. **HTTP** — application-owned (or a future optional package). Custom URL routes, JSON handling, optional Port Unification on the same TCP port as CRpc.
 
@@ -25,7 +25,7 @@ CRpc and HTTP may share **one `CRpcLoop`**, **one service registry**, and **one 
 - HTTP code generator or `POST /{serviceId}/{methodId}` contract in core.
 - Kestrel / ASP.NET Core integration.
 - TLS / ALPN negotiation.
-- Changing CRpc v2 wire format or `crpc.service_id` / `crpc.method_id` proto options.
+- Changing CRpc binary wire format or `crpc.service_id` / `crpc.method_id` proto options.
 - Obsolete period for removed HTTP APIs — **delete directly** from core.
 
 ---
@@ -61,7 +61,7 @@ This mixes transport responsibilities onto `ServiceBase`, duplicates method meta
 
 Remove `DotNetty.Codecs.Http` from `CRpc/CRPC.csproj` if no remaining core code references it.
 
-**`OnMessageAsync` is the CRpc binary entry only.** TCP clients send v2 frames → `CRpcServerHandler` → `loop.Post` → `OnMessageAsync`.
+**`OnMessageAsync` is the CRpc binary entry only.** TCP clients send binary frames → `CRpcServerHandler` → `loop.Post` → `OnMessageAsync`.
 
 ### 2. Codegen scope
 
@@ -116,7 +116,7 @@ Applications may listen on **one TCP port** and sniff the first bytes per connec
 
 | First bytes | Branch |
 | --- | --- |
-| `0x43 0x52 0x50 0x43` (`'CRPC'` LE) | CRpc v2 pipeline (`CRpcMessageDecoder` → `CRpcServerHandler`) |
+| `0x43 0x52 0x50 0x43` (`'CRPC'` LE) | CRpc binary pipeline (`CRpcMessageDecoder` → `CRpcServerHandler`) |
 | HTTP methods (`GET`, `POST`, `HEAD`, …) | App HTTP pipeline |
 
 Pattern (Netty Port Unification):
@@ -245,7 +245,7 @@ CRpc binary errors remain in `CRpcMessage` `resultCode` / frame semantics per `D
 | `Doc/architecture-draft.md` | Mark `HttpServer` as removed from core; HTTP is app concern |
 | `Doc/gateway.md` (if HTTP section exists) | Remove core `POST /{serviceId}/{methodId}` as framework contract |
 | `docs/superpowers/specs/2026-05-19-multi-endpoint-crpc-http-design.md` | Add header note: superseded by this spec for HTTP-in-core |
-| `docs/superpowers/specs/2026-06-19-crpc-v2-codec-design.md` | Clarify HTTP is outside core (no change to v2 wire) |
+| `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md` | Clarify HTTP is outside core (no change to binary wire) |
 
 ---
 
@@ -275,7 +275,7 @@ P1–P3 are required for a complete breaking change. P4–P5 demonstrate the new
 ## Spec Self-Review
 
 - [x] No TBD / placeholder sections.
-- [x] Consistent with CRpc v2 codec (binary path unchanged).
+- [x] Consistent with CRpc binary codec (binary path unchanged).
 - [x] Scope fits one implementation plan (phases P1–P6).
 - [x] Explicit: HTTP does not call `OnMessageAsync` by default; CRpc does.
 - [x] Explicit: delete HTTP from core, no Obsolete period.
