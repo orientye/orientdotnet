@@ -214,21 +214,24 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     private void CompleteReceiveResponse(CRpcMessage message)
     {
-        var header = message.getHeader();
-        if (header.hasState(CRpcMessageState.STATE_PUSH))
+        switch (message.MessageType)
         {
-            DispatchPush(message);
-            return;
+            case CRpcMessageType.Push:
+                DispatchPush(message);
+                return;
+            case CRpcMessageType.Response:
+                CompletePendingCall(message);
+                return;
+            default:
+                Console.WriteLine(
+                    $"CRpcClient ignored inbound message type {message.MessageType}: serviceId={message.ServiceId}, methodId={message.MethodId}");
+                return;
         }
+    }
 
-        if (!header.hasState(CRpcMessageState.STATE_RESPONSE))
-        {
-            Console.WriteLine(
-                $"CRpcClient ignored inbound message without response or push state: serviceId={message.getServiceId()}, methodId={message.getMethodId()}");
-            return;
-        }
-
-        var reqSequence = message.getReqSequence();
+    private void CompletePendingCall(CRpcMessage message)
+    {
+        var reqSequence = message.ReqSequence;
         if (results.Remove(reqSequence, out var pendingCall))
         {
             pendingCall.TimeoutTimer?.Cancel();
@@ -238,8 +241,8 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     private void DispatchPush(CRpcMessage message)
     {
-        var serviceId = message.getServiceId();
-        var methodId = message.getMethodId();
+        var serviceId = message.ServiceId;
+        var methodId = message.MethodId;
         var context = new CRpcPushContext(ownerLoop, serviceId, methodId);
 
         if (!pushHandlers.TryGetValue((serviceId, methodId), out var handler))
@@ -258,7 +261,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
         try
         {
-            var task = handler(context, message.getBody());
+            var task = handler(context, message.Body);
             ObservePushHandler(task, context);
         }
         catch (Exception exception)
@@ -305,9 +308,13 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     private void __Send(long reqSeq, ushort serviceId, ushort methodId, byte[] bytes)
     {
-        CRpcMessageHeader header = CRpcMessageHeader.valueOf(CRpcMessageState.STATE_NONE, 0, reqSeq, serviceId, methodId);
-        header.addState(CRpcMessageState.NONE_ENCRYPT);
-        CRpcMessage req = CRpcMessage.valueOf(header, bytes);
+        var req = CRpcMessage.Create(
+            CRpcMessageType.Request,
+            serviceId,
+            methodId,
+            reqSeq,
+            resultCode: 0,
+            bytes);
         Console.WriteLine($"*********CallAsync send");
         var writeTask = host.WriteAndFlushAsync(req);
         var awaiter = writeTask.GetAwaiter();

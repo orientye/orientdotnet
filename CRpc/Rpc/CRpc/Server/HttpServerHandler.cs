@@ -61,37 +61,39 @@ public sealed class HttpServerHandler : SimpleChannelInboundHandler<IFullHttpReq
 
     protected override void ChannelRead0(IChannelHandlerContext ctx, IFullHttpRequest request)
     {
+        var keepAlive = HttpUtil.IsKeepAlive(request);
+
         if (!DotNetty.Codecs.Http.HttpMethod.Post.Equals(request.Method))
         {
-            WriteJsonResponse(ctx, request, HttpResponseStatus.MethodNotAllowed, """{"error":"method not allowed"}""");
+            WriteJsonResponse(ctx, keepAlive, HttpResponseStatus.MethodNotAllowed, """{"error":"method not allowed"}""");
             return;
         }
 
         if (!IsJsonContentType(request))
         {
-            WriteJsonResponse(ctx, request, HttpResponseStatus.UnsupportedMediaType, """{"error":"content type must be application/json"}""");
+            WriteJsonResponse(ctx, keepAlive, HttpResponseStatus.UnsupportedMediaType, """{"error":"content type must be application/json"}""");
             return;
         }
 
         if (!TryParseRoute(request.Uri, out var serviceId, out var methodId))
         {
-            WriteJsonResponse(ctx, request, HttpResponseStatus.NotFound, """{"error":"route not found"}""");
+            WriteJsonResponse(ctx, keepAlive, HttpResponseStatus.NotFound, """{"error":"route not found"}""");
             return;
         }
 
         var jsonBody = request.Content.ToString(Encoding.UTF8);
         if (loop.IsInLoopThread)
         {
-            ProcessOnLoop(ctx, request, serviceId, methodId, jsonBody);
+            ProcessOnLoop(ctx, keepAlive, serviceId, methodId, jsonBody);
             return;
         }
 
-        loop.Post(() => ProcessOnLoop(ctx, request, serviceId, methodId, jsonBody));
+        loop.Post(() => ProcessOnLoop(ctx, keepAlive, serviceId, methodId, jsonBody));
     }
 
     private void ProcessOnLoop(
         IChannelHandlerContext ctx,
-        IFullHttpRequest httpRequest,
+        bool keepAlive,
         ushort serviceId,
         ushort methodId,
         string jsonBody)
@@ -100,14 +102,14 @@ public sealed class HttpServerHandler : SimpleChannelInboundHandler<IFullHttpReq
         {
             if (!loop.TryGetService(serviceId, out var service))
             {
-                WriteJsonResponse(ctx, httpRequest, HttpResponseStatus.NotFound, """{"error":"service not found"}""");
+                WriteJsonResponse(ctx, keepAlive, HttpResponseStatus.NotFound, """{"error":"service not found"}""");
                 return;
             }
 
             if (service is not IRpcHttpJsonCodec codec
                 || !codec.TryGetHttpMethodParsers(methodId, out var requestParser, out var responseParser))
             {
-                WriteJsonResponse(ctx, httpRequest, HttpResponseStatus.NotFound, """{"error":"method not found"}""");
+                WriteJsonResponse(ctx, keepAlive, HttpResponseStatus.NotFound, """{"error":"method not found"}""");
                 return;
             }
 
@@ -119,7 +121,7 @@ public sealed class HttpServerHandler : SimpleChannelInboundHandler<IFullHttpReq
             }
             catch (Exception)
             {
-                WriteJsonResponse(ctx, httpRequest, HttpResponseStatus.BadRequest, """{"error":"invalid json body"}""");
+                WriteJsonResponse(ctx, keepAlive, HttpResponseStatus.BadRequest, """{"error":"invalid json body"}""");
                 return;
             }
 
@@ -127,7 +129,7 @@ public sealed class HttpServerHandler : SimpleChannelInboundHandler<IFullHttpReq
             var rpcRequest = CreateRpcRequest(serviceId, methodId, requestBytes, sn);
             if (!connections.TryGetByChannel(ctx.Channel, out var connection))
             {
-                WriteJsonResponse(ctx, httpRequest, HttpResponseStatus.ServiceUnavailable, """{"error":"connection not ready"}""");
+                WriteJsonResponse(ctx, keepAlive, HttpResponseStatus.ServiceUnavailable, """{"error":"connection not ready"}""");
                 return;
             }
 
@@ -135,15 +137,15 @@ public sealed class HttpServerHandler : SimpleChannelInboundHandler<IFullHttpReq
             var awaiter = invokeTask.GetAwaiter();
             if (awaiter.IsCompleted)
             {
-                CompleteInvoke(awaiter, ctx, httpRequest, responseParser);
+                CompleteInvoke(awaiter, ctx, keepAlive, responseParser);
                 return;
             }
 
-            awaiter.OnCompleted(() => CompleteInvoke(awaiter, ctx, httpRequest, responseParser));
+            awaiter.OnCompleted(() => CompleteInvoke(awaiter, ctx, keepAlive, responseParser));
         }
         catch (Exception exception)
         {
-            WriteJsonResponse(ctx, httpRequest, HttpResponseStatus.InternalServerError, """{"error":"internal server error"}""");
+            WriteJsonResponse(ctx, keepAlive, HttpResponseStatus.InternalServerError, """{"error":"internal server error"}""");
             Console.Error.WriteLine($"HttpServerHandler: {exception}");
         }
     }
@@ -151,24 +153,24 @@ public sealed class HttpServerHandler : SimpleChannelInboundHandler<IFullHttpReq
     private static void CompleteInvoke(
         CRpcTask<(int code, byte[] body)>.Awaiter awaiter,
         IChannelHandlerContext ctx,
-        IFullHttpRequest httpRequest,
+        bool keepAlive,
         MessageParser responseParser)
     {
         try
         {
             var (code, responseBytes) = awaiter.GetResult();
-            WriteOkResponse(ctx, httpRequest, responseParser, code, responseBytes);
+            WriteOkResponse(ctx, keepAlive, responseParser, code, responseBytes);
         }
         catch (Exception exception)
         {
-            WriteJsonResponse(ctx, httpRequest, HttpResponseStatus.InternalServerError, """{"error":"internal server error"}""");
+            WriteJsonResponse(ctx, keepAlive, HttpResponseStatus.InternalServerError, """{"error":"internal server error"}""");
             Console.Error.WriteLine($"HttpServerHandler: {exception}");
         }
     }
 
     private static void WriteOkResponse(
         IChannelHandlerContext ctx,
-        IFullHttpRequest httpRequest,
+        bool keepAlive,
         MessageParser responseParser,
         int code,
         byte[] responseBytes)
@@ -185,14 +187,18 @@ public sealed class HttpServerHandler : SimpleChannelInboundHandler<IFullHttpReq
         }
 
         var payload = $"{{\"code\":{code},\"body\":{replyJson}}}";
-        WriteJsonResponse(ctx, httpRequest, HttpResponseStatus.OK, payload);
+        WriteJsonResponse(ctx, keepAlive, HttpResponseStatus.OK, payload);
     }
 
     private static CRpcMessage CreateRpcRequest(ushort serviceId, ushort methodId, byte[] body, long sn)
     {
-        var header = CRpcMessageHeader.valueOf(CRpcMessageState.STATE_NONE, 0, sn, serviceId, methodId);
-        header.addState(CRpcMessageState.NONE_ENCRYPT);
-        return CRpcMessage.valueOf(header, body);
+        return CRpcMessage.Create(
+            CRpcMessageType.Request,
+            serviceId,
+            methodId,
+            sn,
+            resultCode: 0,
+            body);
     }
 
     private static bool TryParseRoute(string uri, out ushort serviceId, out ushort methodId)
@@ -224,7 +230,7 @@ public sealed class HttpServerHandler : SimpleChannelInboundHandler<IFullHttpReq
 
     private static void WriteJsonResponse(
         IChannelHandlerContext ctx,
-        IFullHttpRequest request,
+        bool keepAlive,
         HttpResponseStatus status,
         string json)
     {
@@ -236,12 +242,6 @@ public sealed class HttpServerHandler : SimpleChannelInboundHandler<IFullHttpReq
         response.Headers.Set(HttpHeaderNames.ContentType, "application/json; charset=utf-8");
         response.Headers.Set(HttpHeaderNames.ContentLength, bytes.Length);
 
-        if (status.Code != 200)
-        {
-            ReferenceCountUtil.Release(request);
-        }
-
-        var keepAlive = HttpUtil.IsKeepAlive(request);
         if (keepAlive && status.Code == 200)
         {
             response.Headers.Set(HttpHeaderNames.Connection, HttpHeaderValues.KeepAlive);

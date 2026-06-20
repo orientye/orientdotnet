@@ -19,8 +19,8 @@ public sealed class GateWayServiceImpl : IRpcService
     public async CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
     {
         var msg = (CRpcMessage)req;
-        var targetServiceId = msg.getServiceId();
-        var targetMethodId = msg.getMethodId();
+        var targetServiceId = msg.ServiceId;
+        var targetMethodId = msg.MethodId;
         var connection = ((CRpcContext)context).Connection;
 
         var link = await router.GetOrCreateLinkAsync(connection, targetServiceId);
@@ -29,7 +29,7 @@ public sealed class GateWayServiceImpl : IRpcService
             return (-1, Array.Empty<byte>());
         }
 
-        return await ForwardAsync(link, targetServiceId, targetMethodId, msg.getBody());
+        return await ForwardAsync(link, targetServiceId, targetMethodId, msg.Body);
     }
 
     private async CRpcTask<(int, byte[])> ForwardAsync(
@@ -76,7 +76,7 @@ public sealed class GateWayServiceImpl : IRpcService
             methodId,
             body,
             router.Config.DefaultTimeoutMs);
-        return (response.getHeader().getResultCode(), response.getBody());
+        return (response.ResultCode, response.Body);
     }
 
     private void MarkEndpointUnhealthy(GateWayBackendLink link)

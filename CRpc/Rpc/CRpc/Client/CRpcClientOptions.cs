@@ -4,10 +4,6 @@ public sealed class CRpcClientOptions
 {
     public const int DefaultMaxFrameLength = 32768;
 
-    public const int DefaultHashLength = 16;
-
-    public const int DefaultCompressThreshold = 512;
-
     public const int DefaultHeartbeatIdleSeconds = 60;
 
     public const int DefaultConnectTimeoutSeconds = 10;
@@ -23,10 +19,6 @@ public sealed class CRpcClientOptions
     public int HeartbeatIdleSeconds { get; init; } = DefaultHeartbeatIdleSeconds;
 
     public int MaxFrameLength { get; init; } = DefaultMaxFrameLength;
-
-    public int HashLength { get; init; } = DefaultHashLength;
-
-    public int CompressThreshold { get; init; } = DefaultCompressThreshold;
 
     public int CallTimeoutMilliseconds { get; init; } = DefaultCallTimeoutMilliseconds;
 }

@@ -65,6 +65,37 @@ public class HttpServerHandlerTests : CrpcTestBase
         Assert.Equal(415, response.Status.Code);
     }
 
+    [Fact]
+    public void PostJsonViaLoopPostInvokesServiceAndReturnsEnvelope()
+    {
+        var loop = new CRpcLoop();
+        var service = new TestJsonEchoService();
+        loop.Post(() => loop.RegisterService(service));
+        loop.Tick();
+
+        var connections = new CRpcConnectionRegistry(loop);
+        var channel = new EmbeddedChannel(new HttpServerHandler(loop, connections));
+        channel.Pipeline.FireChannelActive();
+
+        var request = new DefaultFullHttpRequest(
+            DotNetty.Codecs.Http.HttpVersion.Http11,
+            DotNetty.Codecs.Http.HttpMethod.Post,
+            "/1000/1");
+        request.Headers.Set(HttpHeaderNames.ContentType, "application/json; charset=utf-8");
+        request.Content.WriteBytes(Encoding.UTF8.GetBytes("{}"));
+
+        Assert.False(channel.WriteInbound(request));
+
+        loop.Tick();
+
+        var response = ReadHttpResponse(channel);
+        Assert.NotNull(response);
+        Assert.Equal(200, response.Status.Code);
+        var json = response.Content.ToString(Encoding.UTF8);
+        Assert.Contains("\"code\":0", json);
+        Assert.Contains("\"body\":", json);
+    }
+
     private static IFullHttpResponse? ReadHttpResponse(EmbeddedChannel channel)
     {
         var message = channel.ReadOutbound<object>();
@@ -102,7 +133,7 @@ public class HttpServerHandlerTests : CrpcTestBase
 
         public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
         {
-            _ = Empty.Parser.ParseFrom(((CRpcMessage)req).getBody());
+            _ = Empty.Parser.ParseFrom(((CRpcMessage)req).Body);
             return CRpcTask.FromResult((0, Array.Empty<byte>()), CRpcLoop.Current);
         }
     }

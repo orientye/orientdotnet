@@ -24,10 +24,10 @@ internal sealed class CRpcClientPipelineFactory : IChannelPipelineFactory
             new IdleStateHandler(0, 0, options.HeartbeatIdleSeconds));
         pipeline.AddLast(
             "decoder",
-            new CRpcMessageDecoder(options.MaxFrameLength, options.HashLength));
+            new CRpcMessageDecoder(options.MaxFrameLength));
         pipeline.AddLast(
             "encoder",
-            new CRpcMessageEncoder(options.HashLength, options.CompressThreshold));
+            new CRpcMessageEncoder());
         pipeline.AddLast("handler", new LoopInboundHandler(host));
     }
 }

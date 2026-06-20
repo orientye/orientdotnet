@@ -52,8 +52,6 @@ public sealed class CRpcServer : IRpcServer
             Address = address,
             Port = port,
             MaxFrameLength = options.MaxFrameLength,
-            HashLength = options.HashLength,
-            CompressThreshold = options.CompressThreshold,
             BossThreadCount = options.BossThreadCount,
             WorkerThreadCount = options.WorkerThreadCount,
             SoBacklog = options.SoBacklog,
@@ -138,10 +136,10 @@ public sealed class CRpcServer : IRpcServer
                 var pipeline = channel.Pipeline;
                 pipeline.AddLast(
                     "decoder",
-                    new CRpcMessageDecoder(startOptions.MaxFrameLength, startOptions.HashLength));
+                    new CRpcMessageDecoder(startOptions.MaxFrameLength));
                 pipeline.AddLast(
                     "encoder",
-                    new CRpcMessageEncoder(startOptions.HashLength, startOptions.CompressThreshold));
+                    new CRpcMessageEncoder());
                 var handler = options.HandlerFactory?.Invoke(this) ?? new CRpcServerHandler(this);
                 pipeline.AddLast("handler", handler);
             }));

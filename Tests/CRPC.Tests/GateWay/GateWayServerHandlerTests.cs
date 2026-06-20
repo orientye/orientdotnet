@@ -22,12 +22,12 @@ public class GateWayServerHandlerTests : CrpcTestBase
         var channel = CreateHandlerChannel(server, sessions, fallbackServiceId: 0);
 
         ActivateChannel(loop, channel);
-        Assert.False(channel.WriteInbound(CreateRequest(serviceId: 1000)));
+        Assert.False(channel.WriteInbound(CRpcTestMessages.CreateRequest(serviceId: 1000)));
         loop.Tick();
 
         var response = ReadOutboundCrpcMessage(channel);
-        Assert.True(response.getHeader().hasState(CRpcMessageState.STATE_RESPONSE));
-        Assert.Equal(-1, response.getHeader().getResultCode());
+        Assert.Equal(CRpcMessageType.Response, response.MessageType);
+        Assert.Equal(-1, response.ResultCode);
     }
 
     [Fact]
@@ -41,12 +41,12 @@ public class GateWayServerHandlerTests : CrpcTestBase
         var server = new CRpcServer(loop);
         var channel = CreateHandlerChannel(server, sessions, fallbackServiceId: 0);
 
-        Assert.False(channel.WriteInbound(CreateRequest(serviceId: 1000)));
+        Assert.False(channel.WriteInbound(CRpcTestMessages.CreateRequest(serviceId: 1000)));
         loop.Tick();
 
         var response = ReadOutboundCrpcMessage(channel);
-        Assert.True(response.getHeader().hasState(CRpcMessageState.STATE_RESPONSE));
-        Assert.Equal(-1, response.getHeader().getResultCode());
+        Assert.Equal(CRpcMessageType.Response, response.MessageType);
+        Assert.Equal(-1, response.ResultCode);
     }
 
     [Fact]
@@ -63,13 +63,13 @@ public class GateWayServerHandlerTests : CrpcTestBase
         var channel = CreateHandlerChannel(server, sessions, fallbackServiceId: 0);
 
         ActivateChannel(loop, channel);
-        Assert.False(channel.WriteInbound(CreateRequest(serviceId: 1000)));
+        Assert.False(channel.WriteInbound(CRpcTestMessages.CreateRequest(serviceId: 1000)));
         loop.Tick();
 
         Assert.Equal(1, forwarder.CallCount);
         var response = ReadOutboundCrpcMessage(channel);
-        Assert.True(response.getHeader().hasState(CRpcMessageState.STATE_RESPONSE));
-        Assert.Equal(-1, response.getHeader().getResultCode());
+        Assert.Equal(CRpcMessageType.Response, response.MessageType);
+        Assert.Equal(-1, response.ResultCode);
     }
 
     private static EmbeddedChannel CreateHandlerChannel(
@@ -78,9 +78,7 @@ public class GateWayServerHandlerTests : CrpcTestBase
         ushort fallbackServiceId)
     {
         return new EmbeddedChannel(
-            new CRpcMessageEncoder(
-                CRpcServerOptions.DefaultHashLength,
-                CRpcServerOptions.DefaultCompressThreshold),
+            new CRpcMessageEncoder(),
             new global::GateWay.GateWayServerHandler(server, sessions, fallbackServiceId));
     }
 
@@ -88,20 +86,8 @@ public class GateWayServerHandlerTests : CrpcTestBase
     {
         var outbound = channel.ReadOutbound<object>();
         return outbound is IByteBuffer buffer
-            ? CRpcMessage.valueOf(buffer)
+            ? CRpcMessage.ReadFrom(buffer)
             : (CRpcMessage)outbound!;
-    }
-
-    private static CRpcMessage CreateRequest(ushort serviceId)
-    {
-        var header = CRpcMessageHeader.valueOf(
-            CRpcMessageState.STATE_NONE,
-            resultCode: 0,
-            sn: 1,
-            module: serviceId,
-            command: 1);
-        header.addState(CRpcMessageState.NONE_ENCRYPT);
-        return CRpcMessage.valueOf(header, Array.Empty<byte>());
     }
 
     private static void RegisterOnLoop(CRpcLoop loop, IRpcService service)

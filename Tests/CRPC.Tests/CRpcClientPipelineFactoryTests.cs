@@ -16,8 +16,6 @@ public sealed class CRpcClientPipelineFactoryTests : CrpcTestBase
         {
             HeartbeatIdleSeconds = 17,
             MaxFrameLength = 4096,
-            HashLength = 16,
-            CompressThreshold = 128,
         };
         var loop = new CRpcLoop();
         var host = new TcpChannelHost(loop, new CRpcClientPipelineFactory(options));

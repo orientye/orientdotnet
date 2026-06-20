@@ -3,94 +3,53 @@ using DotNetty.Codecs;
 using DotNetty.Common.Utilities;
 using DotNetty.Transport.Channels;
 
-namespace CRpc.Rpc.CRpc.Codec
+namespace CRpc.Rpc.CRpc.Codec;
+
+public sealed class CRpcMessageDecoder : LengthFieldBasedFrameDecoder
 {
-    public class CRpcMessageDecoder : LengthFieldBasedFrameDecoder
+    public CRpcMessageDecoder(int maxFrameLength)
+        : base(maxFrameLength, lengthFieldOffset: 4, lengthFieldLength: 4, lengthAdjustment: 0, initialBytesToStrip: 8)
     {
-        private readonly int _hashLength;
+    }
 
-        public CRpcMessageDecoder(int maxFrameLength, int hashLength):
-            base(maxFrameLength, 4, 4, -8, 0)
+    protected override object Decode(IChannelHandlerContext context, IByteBuffer input)
+    {
+        if (input.ReadableBytes < CRpcMessage.FramePrefixLength)
         {
-            _hashLength = hashLength;
+            return null;
         }
 
-        protected override object Decode(IChannelHandlerContext context, IByteBuffer input)
+        if (input.GetInt(input.ReaderIndex) != CRpcMessage.Magic)
         {
-            if (input.ReadableBytes < 8)
-            {
-                return null;
-            }
-            
-            IChannel channel = context.Channel;
+            Console.WriteLine(
+                $"{context.Channel} CRpc decode failed, closing connection: invalid magic 0x{input.GetInt(input.ReaderIndex):X8}.");
+            _ = context.CloseAsync();
+            return null;
+        }
 
-            // extract frame & fast fail
-            IByteBuffer frame = null;
-            try
+        IByteBuffer frame = null;
+        try
+        {
+            frame = (IByteBuffer)base.Decode(context, input);
+            if (frame is null)
             {
-                frame = (IByteBuffer)base.Decode(context, input);
-                if (null == frame)
-                {
-                    Console.WriteLine("{0}数据包不完整...", channel);
-                    return null;
-                }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("{0}解码异常, 断开连接: {1}", channel, e.Message);
-                _ = context.CloseAsync();
-                return null;
-            }
-            
-            int identity = frame.GetInt(frame.ReaderIndex);
-            if (identity != CRpcMessage.MAGIC_NUM) {
-                Console.WriteLine("{0}无效的数据包标识[{1}], 断开连接...", channel, identity);
-                _ = context.CloseAsync();
-                ReferenceCountUtil.Release(frame);
                 return null;
             }
 
-            // frame to message
-            try
-            {
-                return decodeMessage(context, frame);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("{0}解码异常{1}, 断开连接...", channel, e);
-                _ = context.CloseAsync();
-                return null;
-            }
-            finally
+            return CRpcMessage.ReadFromPayload(frame, frame.ReadableBytes);
+        }
+        catch (Exception exception)
+        {
+            Console.WriteLine($"{context.Channel} CRpc decode failed, closing connection: {exception.Message}");
+            _ = context.CloseAsync();
+            return null;
+        }
+        finally
+        {
+            if (frame is not null)
             {
                 ReferenceCountUtil.Release(frame);
             }
-        }
-
-        private CRpcMessage decodeMessage(IChannelHandlerContext ctx, IByteBuffer frame)
-        {
-            // checksum
-            CRpcMessage message = CRpcMessage.valueOf(frame);
-            int checksum = frame.ReadInt();
-            int bodyLength = message.getBody().Length;
-            if (bodyLength > 0)
-            {
-                int hashsum = (int)ChecksumsUtil.BPHashPartly(message.getBody(), _hashLength);
-                if (checksum != hashsum)
-                {
-                    Console.WriteLine("{0}消息校验码{1}与实际{2}不符, 断开连接...", ctx.Channel, checksum, hashsum);
-                    _ = ctx.CloseAsync();
-                    throw new Exception("decodeMessage checksum failed");
-                }
-            }
-
-            // compress state
-            if (message.getHeader().hasState(CRpcMessageState.STATE_COMPRESS))
-            {
-                Console.WriteLine("{0}请求消息包含压缩状态", ctx.Channel);
-                // return null;
-            }
-            return message;
         }
     }
 }

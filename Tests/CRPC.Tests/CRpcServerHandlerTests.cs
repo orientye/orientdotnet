@@ -17,9 +17,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
         IChannelHandler[]? headHandlers = null,
         IChannelHandler[]? tailHandlers = null)
     {
-        var encoder = new CRpcMessageEncoder(
-            CRpcServerOptions.DefaultHashLength,
-            CRpcServerOptions.DefaultCompressThreshold);
+        var encoder = new CRpcMessageEncoder();
         var handlers = new List<IChannelHandler>((headHandlers?.Length ?? 0) + (tailHandlers?.Length ?? 0) + 2)
         {
             encoder,
@@ -199,8 +197,8 @@ public class CRpcServerHandlerTests : CrpcTestBase
 
         loop.Tick();
 
-        Assert.False(request.getHeader().hasState(CRpcMessageState.STATE_RESPONSE));
-        Assert.Empty(request.getBody());
+        Assert.Equal(CRpcMessageType.Request, request.MessageType);
+        Assert.Empty(request.Body);
     }
 
     [Fact]
@@ -248,14 +246,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
 
     private static CRpcMessage CreateRequest(ushort serviceId)
     {
-        var header = CRpcMessageHeader.valueOf(
-            CRpcMessageState.STATE_NONE,
-            resultCode: 0,
-            sn: 1,
-            module: serviceId,
-            command: 1);
-        header.addState(CRpcMessageState.NONE_ENCRYPT);
-        return CRpcMessage.valueOf(header, Array.Empty<byte>());
+        return CRpcTestMessages.CreateRequest(serviceId, methodId: 1, reqSequence: 1);
     }
 
     private static void RegisterOnLoop(CRpcLoop loop, IRpcService service)

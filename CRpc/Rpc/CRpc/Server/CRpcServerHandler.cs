@@ -26,8 +26,15 @@ public class CRpcServerHandler : ChannelHandlerAdapter
     {
         var message = (CRpcMessage)msg;
 
-        var serviceId = message.getServiceId();
-        var methodId = message.getMethodId();
+        if (message.MessageType != CRpcMessageType.Request)
+        {
+            Console.WriteLine(
+                $"CRpcServerHandler ignored inbound message type {message.MessageType}: serviceId={message.ServiceId}, methodId={message.MethodId}");
+            return;
+        }
+
+        var serviceId = message.ServiceId;
+        var methodId = message.MethodId;
         server.Loop.Post(() =>
         {
             if (server.Loop.TryGetService(serviceId, out var rpcService))

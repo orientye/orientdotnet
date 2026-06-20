@@ -18,47 +18,32 @@ public class CRpcServerPushIntegrationTests : CrpcTestBase
         var server = new CRpcServer(loop);
         loop.RegisterService(service);
         var channel = new EmbeddedChannel(
-            new CRpcMessageEncoder(
-                CRpcServerOptions.DefaultHashLength,
-                CRpcServerOptions.DefaultCompressThreshold),
+            new CRpcMessageEncoder(),
             new CRpcServerHandler(server));
 
         channel.Pipeline.FireChannelActive();
         loop.Tick();
 
-        Assert.False(channel.WriteInbound(CreateRequest(PushOnRequestService.ServiceId)));
+        Assert.False(channel.WriteInbound(CRpcTestMessages.CreateRequest(PushOnRequestService.ServiceId)));
         loop.Tick();
         loop.Tick();
 
         var push = ReadOutboundCrpcMessage(channel);
         var response = ReadOutboundCrpcMessage(channel);
 
-        Assert.True(response.getHeader().hasState(CRpcMessageState.STATE_RESPONSE));
-        Assert.True(push.getHeader().hasState(CRpcMessageState.STATE_PUSH));
-        Assert.False(push.getHeader().hasState(CRpcMessageState.STATE_RESPONSE));
-        Assert.Equal(PushOnRequestService.ServiceId, push.getServiceId());
-        Assert.Equal(PushOnRequestService.PushMethodId, push.getMethodId());
-        Assert.Equal([7, 8, 9], push.getBody());
+        Assert.Equal(CRpcMessageType.Response, response.MessageType);
+        Assert.Equal(CRpcMessageType.Push, push.MessageType);
+        Assert.Equal(PushOnRequestService.ServiceId, push.ServiceId);
+        Assert.Equal(PushOnRequestService.PushMethodId, push.MethodId);
+        Assert.Equal([7, 8, 9], push.Body);
     }
 
     private static CRpcMessage ReadOutboundCrpcMessage(EmbeddedChannel channel)
     {
         var outbound = channel.ReadOutbound<object>();
         return outbound is IByteBuffer buffer
-            ? CRpcMessage.valueOf(buffer)
+            ? CRpcMessage.ReadFrom(buffer)
             : (CRpcMessage)outbound!;
-    }
-
-    private static CRpcMessage CreateRequest(ushort serviceId)
-    {
-        var header = CRpcMessageHeader.valueOf(
-            CRpcMessageState.STATE_NONE,
-            resultCode: 0,
-            sn: 1,
-            module: serviceId,
-            command: 1);
-        header.addState(CRpcMessageState.NONE_ENCRYPT);
-        return CRpcMessage.valueOf(header, Array.Empty<byte>());
     }
 
     private sealed class PushOnRequestService : IRpcService

@@ -22,13 +22,11 @@ public class CRpcConnectionTests : CrpcTestBase
         Assert.True(awaiter.GetResult());
 
         var outbound = Assert.IsType<CRpcMessage>(channel.ReadOutbound<object>());
-        Assert.True(outbound.getHeader().hasState(CRpcMessageState.STATE_PUSH));
-        Assert.True(outbound.getHeader().hasState(CRpcMessageState.NONE_ENCRYPT));
-        Assert.False(outbound.getHeader().hasState(CRpcMessageState.STATE_RESPONSE));
-        Assert.Equal(0, outbound.getReqSequence());
-        Assert.Equal(1000, outbound.getServiceId());
-        Assert.Equal(2, outbound.getMethodId());
-        Assert.Equal([1, 2, 3], outbound.getBody());
+        Assert.Equal(CRpcMessageType.Push, outbound.MessageType);
+        Assert.Equal(0, outbound.ReqSequence);
+        Assert.Equal(1000, outbound.ServiceId);
+        Assert.Equal(2, outbound.MethodId);
+        Assert.Equal([1, 2, 3], outbound.Body);
     }
 
     [Fact]

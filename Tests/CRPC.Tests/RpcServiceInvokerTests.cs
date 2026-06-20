@@ -17,7 +17,7 @@ public class RpcServiceInvokerTests : CrpcTestBase
         loop.RegisterService(service);
 
         (int code, byte[] body)? result = null;
-        var request = CreateRequest(1000, 1);
+        var request = CRpcTestMessages.CreateRequest(1000, methodId: 1, reqSequence: 1);
         var registry = new CRpcConnectionRegistry(loop);
         var connection = registry.Register(new EmbeddedChannel());
         var task = RpcServiceInvoker.InvokeAsync(service, new CRpcContext(connection), request);
@@ -34,11 +34,15 @@ public class RpcServiceInvokerTests : CrpcTestBase
         Assert.Equal(new byte[] { 9 }, result.Value.body);
     }
 
-    private static CRpcMessage CreateRequest(ushort serviceId, ushort methodId)
+    [Fact]
+    public void BuildCrpcResponseSetsMessageTypeResponse()
     {
-        var header = CRpcMessageHeader.valueOf(CRpcMessageState.STATE_NONE, 0, 1, serviceId, methodId);
-        header.addState(CRpcMessageState.NONE_ENCRYPT);
-        return CRpcMessage.valueOf(header, Array.Empty<byte>());
+        var request = CRpcTestMessages.CreateRequest(1000, methodId: 1, reqSequence: 1);
+        var expectedBody = new byte[] { 9 };
+        var response = RpcServiceInvoker.BuildCrpcResponse(request, code: 0, body: expectedBody);
+
+        Assert.Equal(CRpcMessageType.Response, response.MessageType);
+        Assert.Equal(expectedBody, response.Body);
     }
 
     private sealed class ByteReturnService : IRpcService

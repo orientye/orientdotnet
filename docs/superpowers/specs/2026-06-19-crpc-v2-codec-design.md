@@ -53,9 +53,9 @@ All binary endpoints switch to v2 together:
 
 No v1 fallback listener. Old magic `0x5F3759DF` is retired.
 
-### 2. Fixed 22-byte message header
+### 2. Fixed 24-byte message header
 
-Every frame uses the same header size. No conditional ext-header or compress-size fields. Decoder reads exactly 22 bytes after the frame prefix, then `body.Length = payloadLen - 22`.
+Every frame uses the same header size. No conditional ext-header or compress-size fields. Decoder reads exactly 24 bytes after the frame prefix, then `body.Length = payloadLen - 24`.
 
 ### 3. Explicit `messageType` byte — not a state bitmask
 
@@ -106,7 +106,7 @@ All multi-byte integers are **little-endian**.
 
 ```text
 ┌──────────┬─────────────┬────────────────────┬──────────────┐
-│ magic    │ payloadLen  │ fixed header (22B) │ protobuf body│
+│ magic    │ payloadLen  │ fixed header (24B) │ protobuf body│
 │ 4 bytes  │ 4 bytes     │                    │ N bytes      │
 └──────────┴─────────────┴────────────────────┴──────────────┘
 ```
@@ -114,13 +114,13 @@ All multi-byte integers are **little-endian**.
 | Field | Size | Value / rule |
 | --- | --- | --- |
 | `magic` | 4 | `0x43525043` — ASCII `'CRPC'` (bytes on wire: `43 52 50 43`) |
-| `payloadLen` | 4 | `22 + body.Length`. Does **not** include `magic` or `payloadLen`. |
-| header | 22 | Fixed layout below |
+| `payloadLen` | 4 | `24 + body.Length`. Does **not** include `magic` or `payloadLen`. |
+| header | 24 | Fixed layout below |
 | body | N | Raw protobuf in v2.0 |
 
-Minimum frame size: `4 + 4 + 22 = 30` bytes (empty body).
+Minimum frame size: `4 + 4 + 24 = 32` bytes (empty body).
 
-### Fixed header (22 bytes)
+### Fixed header (24 bytes)
 
 | Offset | Size | Field | v2.0 rule |
 | --- | --- | --- | --- |
@@ -153,7 +153,7 @@ Minimum frame size: `4 + 4 + 22 = 30` bytes (empty body).
 | Tail checksum | `BPHashPartly` 4 bytes | None |
 | Ext header | Optional, variable | None |
 | Compress metadata | Variable (+4 when compressed) | Fixed `bodyOriginLen`; `flags` bit |
-| Header size | 18 + optional ext + optional compress | Fixed 22 |
+| Header size | 18 + optional ext + optional compress | Fixed 24 |
 
 ---
 
@@ -170,7 +170,7 @@ Use `LengthFieldBasedFrameDecoder` with:
 | `lengthAdjustment` | 0 |
 | `initialBytesToStrip` | 8 (strip `magic` + `payloadLen`) |
 
-After strip: read 22-byte header, then `payloadLen - 22` body bytes.
+After strip: read 24-byte header, then `payloadLen - 24` body bytes.
 
 ### Encoder steps
 
@@ -185,7 +185,7 @@ After strip: read 22-byte header, then `payloadLen - 22` body bytes.
 1. Validate `magic == 0x43525043`.
 2. Validate `version == 1`.
 3. Validate `messageType` in `0..2`.
-4. Validate `payloadLen >= 22` and `<= maxFrameLength`.
+4. Validate `payloadLen >= 24` and `<= maxFrameLength`.
 5. Parse fixed header; read body.
 6. v2.0: if `flags != 0`, treat as protocol error (future: decompress when `COMPRESSED`).
 7. Construct `CRpcMessage` (or renamed type) for handler pipeline.
@@ -206,7 +206,7 @@ After strip: read 22-byte header, then `payloadLen - 22` body bytes.
 | v1 | v2 |
 | --- | --- |
 | `CRpcMessageHeader` with `module`, `command`, `state` | `CRpcFrameHeader` (or refactored `CRpcMessageHeader`) with `ServiceId`, `MethodId`, `MessageType`, `Flags`, `BodyOriginLen` |
-| `CRpcMessageState` constants | `CrpcMessageType` enum + `CrpcFrameFlags` for reserved compress bit |
+| `CRpcMessageState` constants | `CRpcMessageType` enum + `CRpcFrameFlags` for reserved compress bit |
 | `getModule()` / `getCommand()` | `ServiceId` / `MethodId` only |
 | `hasState(STATE_PUSH)` etc. | `MessageType == Push` |
 | `ChecksumsUtil` | Remove |
@@ -217,7 +217,7 @@ After strip: read 22-byte header, then `payloadLen - 22` body bytes.
 Keep the dispatch-facing surface:
 
 ```csharp
-CrpcMessageType MessageType { get; }
+CRpcMessageType MessageType { get; }
 ushort ServiceId { get; }
 ushort MethodId { get; }
 long ReqSequence { get; }
@@ -266,7 +266,7 @@ Algorithm: zstd (consistent with v1 commented intent). Only body is compressed; 
 
 - [ ] Implement v2 codec types and encoder/decoder
 - [ ] Remove v1 checksum and compress/encrypt dead code
-- [ ] Update server/client/gateway handlers for `CrpcMessageType`
+- [ ] Update server/client/gateway handlers for `CRpcMessageType`
 - [ ] Update all tests and test helpers (`CreateRequest`, etc.)
 - [ ] Fill `Doc/protocol.md` with v2 summary
 - [ ] Verify HelloWorld + Gateway examples end-to-end

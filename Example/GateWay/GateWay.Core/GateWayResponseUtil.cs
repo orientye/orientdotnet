@@ -8,7 +8,7 @@ internal static class GateWayResponseUtil
 {
     public static void WriteResponse(IChannelHandlerContext ctx, CRpcMessage request, int resultCode, byte[] body)
     {
-        var response = request.createResponse(resultCode, body);
+        var response = request.CreateResponse(resultCode, body);
         ChannelWriteUtil.WriteAndFlushFireAndForget(ctx, response);
     }
 

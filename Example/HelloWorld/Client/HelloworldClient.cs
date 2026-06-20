@@ -24,10 +24,10 @@ public abstract class GreeterClientBase : ICRpcGeneratedClient
     public async CRpcTask<(int, Example.HelloReply)> SayHelloAsync(Example.HelloRequest request, int timeOut = 5000)
     {
         CRpcMessage message = await __client.CallAsync(1000, 1, request.ToByteArray(), timeOut);
-        var result = message.getHeader().getResultCode();
+        var result = message.ResultCode;
         if (0 == result)
         {
-            byte[] data = message.getBody();
+            byte[] data = message.Body;
             return (0, Example.HelloReply.Parser.ParseFrom(data));
         }
 

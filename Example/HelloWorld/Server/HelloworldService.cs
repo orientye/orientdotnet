@@ -22,7 +22,7 @@ public abstract class GreeterServiceBase : IRpcService, IRpcHttpJsonCodec
     {
         var rpcContext = (CRpcContext)context;
         var rpcReq = (CRpcMessage)req;
-        var methodId = rpcReq.getMethodId();
+        var methodId = rpcReq.MethodId;
         if (methodId == 1) { return this.__OnMessageSayHelloAsync(rpcContext, rpcReq); }
         return CRpcTask.FromResult((-1, Array.Empty<byte>()));
     }
@@ -37,7 +37,7 @@ public abstract class GreeterServiceBase : IRpcService, IRpcHttpJsonCodec
 
     private async CRpcTask<(int, byte[])> __OnMessageSayHelloAsync(CRpcContext context, CRpcMessage req)
     {
-        var request = Example.HelloRequest.Parser.ParseFrom(req.getBody());
+        var request = Example.HelloRequest.Parser.ParseFrom(req.Body);
         var (result, data) = await SayHelloAsync(context, request);
         var bytes = data.ToByteArray();
         return (result, bytes);

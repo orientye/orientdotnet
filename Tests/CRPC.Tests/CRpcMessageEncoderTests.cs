@@ -1,5 +1,4 @@
 using CRpc.Rpc.CRpc.Codec;
-using CRpc.Rpc.CRpc.Server;
 using DotNetty.Buffers;
 using DotNetty.Transport.Channels.Embedded;
 
@@ -8,20 +7,17 @@ namespace CRPC.Tests;
 public class CRpcMessageEncoderTests
 {
     [Fact]
-    public void EncodeWritesCrpcFrameWithMagicNumber()
+    public void EncodeWritesCrpcMagicAndPayloadLength()
     {
-        var encoder = new CRpcMessageEncoder(
-            CRpcServerOptions.DefaultHashLength,
-            CRpcServerOptions.DefaultCompressThreshold);
+        var encoder = new CRpcMessageEncoder();
         var channel = new EmbeddedChannel(encoder);
-        var header = CRpcMessageHeader.valueOf(
-            CRpcMessageState.STATE_NONE,
+        var message = CRpcMessage.Create(
+            CRpcMessageType.Request,
+            serviceId: 7,
+            methodId: 3,
+            reqSequence: 42,
             resultCode: 0,
-            sn: 42,
-            module: 7,
-            command: 3);
-        header.addState(CRpcMessageState.NONE_ENCRYPT);
-        var message = CRpcMessage.valueOf(header, new byte[] { 1, 2, 3 });
+            body: new byte[] { 1, 2, 3 });
 
         Assert.True(channel.WriteOutbound(message));
 
@@ -29,8 +25,10 @@ public class CRpcMessageEncoderTests
         Assert.NotNull(frame);
         try
         {
-            Assert.Equal(CRpcMessage.MAGIC_NUM, frame.GetInt(frame.ReaderIndex));
-            Assert.Equal(message.getSize(), frame.GetInt(frame.ReaderIndex + CRpcMessage.MAGIC));
+            Assert.Equal(CRpcMessage.Magic, frame.GetInt(frame.ReaderIndex));
+            Assert.Equal(
+                CRpcMessageHeader.FixedLength + 3,
+                frame.GetInt(frame.ReaderIndex + sizeof(int)));
         }
         finally
         {
@@ -39,20 +37,17 @@ public class CRpcMessageEncoderTests
     }
 
     [Fact]
-    public void EncodePreSizesBufferToFrameLength()
+    public void EncodeProducesExactFrameLength()
     {
-        var encoder = new CRpcMessageEncoder(
-            CRpcServerOptions.DefaultHashLength,
-            CRpcServerOptions.DefaultCompressThreshold);
+        var encoder = new CRpcMessageEncoder();
         var channel = new EmbeddedChannel(encoder);
-        var header = CRpcMessageHeader.valueOf(
-            CRpcMessageState.STATE_NONE,
+        var message = CRpcMessage.Create(
+            CRpcMessageType.Request,
+            serviceId: 1,
+            methodId: 1,
+            reqSequence: 1,
             resultCode: 0,
-            sn: 1,
-            module: 1,
-            command: 1);
-        header.addState(CRpcMessageState.NONE_ENCRYPT);
-        var message = CRpcMessage.valueOf(header, new byte[] { 9, 8, 7 });
+            body: new byte[] { 9, 8, 7 });
 
         Assert.True(channel.WriteOutbound(message));
 
@@ -60,7 +55,7 @@ public class CRpcMessageEncoderTests
         Assert.NotNull(frame);
         try
         {
-            Assert.Equal(message.getSize(), frame.ReadableBytes);
+            Assert.Equal(message.GetFrameLength(), frame.ReadableBytes);
         }
         finally
         {

@@ -31,14 +31,13 @@ public sealed class CRpcConnection
             return CRpcTask.FromResult(false, ownerLoop);
         }
 
-        var header = CRpcMessageHeader.valueOf(
-            CRpcMessageState.STATE_PUSH,
+        var message = CRpcMessage.Create(
+            CRpcMessageType.Push,
+            serviceId,
+            methodId,
+            reqSequence: 0,
             resultCode: 0,
-            sn: 0,
-            module: serviceId,
-            command: methodId);
-        header.addState(CRpcMessageState.NONE_ENCRYPT);
-        var message = CRpcMessage.valueOf(header, body);
+            body);
 
         try
         {

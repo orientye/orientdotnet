@@ -17,6 +17,6 @@ internal static class RpcServiceInvoker
 
     public static CRpcMessage BuildCrpcResponse(CRpcMessage request, int code, byte[] body)
     {
-        return request.createResponse(code, body);
+        return request.CreateResponse(code, body);
     }
 }

@@ -32,7 +32,7 @@ public class GateWayServerHandler : ChannelHandlerAdapter
         var message = (CRpcMessage)msg;
         server.Loop.Post(() =>
         {
-            if (server.Loop.TryGetService(message.getServiceId(), out var rpcService))
+            if (server.Loop.TryGetService(message.ServiceId, out var rpcService))
             {
                 ProcessMessage(rpcService, ctx, message);
             }
@@ -75,7 +75,7 @@ public class GateWayServerHandler : ChannelHandlerAdapter
         var rpcContext = new CRpcContext(connection);
         var request = (CRpcMessage)msg;
         var (resultCode, bytes) = await rpcService.OnMessageAsync(rpcContext, request);
-        var rsp = request.createResponse(resultCode, bytes);
+        var rsp = request.CreateResponse(resultCode, bytes);
         ChannelWriteUtil.WriteAndFlushFireAndForget(ctx, rsp);
     }
 

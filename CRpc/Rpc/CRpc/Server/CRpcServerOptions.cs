@@ -9,10 +9,6 @@ public sealed class CRpcServerOptions
 
     public const int DefaultMaxFrameLength = 32768;
 
-    public const int DefaultHashLength = 16;
-
-    public const int DefaultCompressThreshold = 512;
-
     public const int DefaultBossThreadCount = 1;
 
     public const int DefaultWorkerThreadCount = 1;
@@ -24,10 +20,6 @@ public sealed class CRpcServerOptions
     public int Port { get; init; } = DefaultPort;
 
     public int MaxFrameLength { get; init; } = DefaultMaxFrameLength;
-
-    public int HashLength { get; init; } = DefaultHashLength;
-
-    public int CompressThreshold { get; init; } = DefaultCompressThreshold;
 
     public int BossThreadCount { get; init; } = DefaultBossThreadCount;
 

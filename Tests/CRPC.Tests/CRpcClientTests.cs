@@ -125,13 +125,7 @@ public class CRpcClientTests : CrpcTestBase
             continuationThreadId = Environment.CurrentManagedThreadId;
         });
 
-        var responseHeader = CRpcMessageHeader.valueOf(
-            CRpcMessageState.STATE_RESPONSE,
-            resultCode: 0,
-            sn: 1,
-            module: 7,
-            command: 8);
-        var response = CRpcMessage.valueOf(responseHeader, Array.Empty<byte>());
+        var response = CRpcTestMessages.CreateResponse(7, 8, reqSequence: 1);
 
         var worker = new Thread(() => client.OnReceiveResponse(response));
         worker.Start();
@@ -164,8 +158,8 @@ public class CRpcClientTests : CrpcTestBase
         firstAwaiter.OnCompleted(() => firstResult = firstAwaiter.GetResult());
         secondAwaiter.OnCompleted(() => secondResult = secondAwaiter.GetResult());
 
-        var firstResponse = CreateResponse(reqSequence: 1);
-        var secondResponse = CreateResponse(reqSequence: 2);
+        var firstResponse = CRpcTestMessages.CreateResponse(7, 8, reqSequence: 1);
+        var secondResponse = CRpcTestMessages.CreateResponse(7, 8, reqSequence: 2);
 
         var worker = new Thread(() =>
         {
@@ -199,7 +193,7 @@ public class CRpcClientTests : CrpcTestBase
 
         Thread.Sleep(20);
 
-        var response = CreateResponse(reqSequence: 1);
+        var response = CRpcTestMessages.CreateResponse(7, 8, reqSequence: 1);
         client.OnReceiveResponse(response);
 
         loop.Tick();
@@ -224,7 +218,7 @@ public class CRpcClientTests : CrpcTestBase
 
         Assert.Throws<TimeoutException>(() => awaiter.GetResult());
 
-        var lateResponse = CreateResponse(reqSequence: 1);
+        var lateResponse = CRpcTestMessages.CreateResponse(7, 8, reqSequence: 1);
         client.OnReceiveResponse(lateResponse);
         loop.Tick();
 
@@ -418,7 +412,7 @@ public class CRpcClientTests : CrpcTestBase
         CRpcMessage? result = null;
         awaiter.OnCompleted(() => result = awaiter.GetResult());
 
-        GetClientHost(client).PostInboundMessage(CreateResponse(reqSequence: 1));
+        GetClientHost(client).PostInboundMessage(CRpcTestMessages.CreateResponse(7, 8, reqSequence: 1));
         loop.Tick();
 
         Assert.True(awaiter.IsCompleted);
@@ -493,7 +487,7 @@ public class CRpcClientTests : CrpcTestBase
                 return CRpcTask.CompletedTask(context.Loop);
             });
 
-        var push = CreatePush(serviceId: 10, methodId: 20, body: [1, 2, 3]);
+        var push = CRpcTestMessages.CreatePush(10, 20, [1, 2, 3]);
         var worker = new Thread(() => client.OnReceiveResponse(push));
         worker.Start();
         worker.Join();
@@ -520,7 +514,7 @@ public class CRpcClientTests : CrpcTestBase
         var task = client.CallAsync(10, 20, Array.Empty<byte>(), timeout: 5000);
         var awaiter = task.GetAwaiter();
 
-        client.OnReceiveResponse(CreatePush(10, 20, Array.Empty<byte>(), reqSequence: 1));
+        client.OnReceiveResponse(CRpcTestMessages.CreatePush(10, 20, Array.Empty<byte>()));
         loop.Tick();
 
         Assert.False(awaiter.IsCompleted);
@@ -536,7 +530,7 @@ public class CRpcClientTests : CrpcTestBase
         CRpcPushContext? unhandled = null;
         client.OnUnhandledPush = context => unhandled = context;
 
-        client.OnReceiveResponse(CreatePush(77, 88, [9]));
+        client.OnReceiveResponse(CRpcTestMessages.CreatePush(77, 88, [9]));
         loop.Tick();
 
         Assert.NotNull(unhandled);
@@ -564,7 +558,7 @@ public class CRpcClientTests : CrpcTestBase
             captured = exception;
         };
 
-        client.OnReceiveResponse(CreatePush(1, 2, Array.Empty<byte>()));
+        client.OnReceiveResponse(CRpcTestMessages.CreatePush(1, 2, Array.Empty<byte>()));
         loop.Tick();
 
         Assert.Same(expected, captured);
@@ -572,32 +566,6 @@ public class CRpcClientTests : CrpcTestBase
         Assert.Equal(2, capturedContext.MethodId);
     }
 
-    private static CRpcMessage CreatePush(
-        ushort serviceId,
-        ushort methodId,
-        byte[] body,
-        long reqSequence = 0)
-    {
-        var header = CRpcMessageHeader.valueOf(
-            CRpcMessageState.STATE_PUSH,
-            resultCode: 0,
-            sn: reqSequence,
-            module: serviceId,
-            command: methodId);
-        header.addState(CRpcMessageState.NONE_ENCRYPT);
-        return CRpcMessage.valueOf(header, body);
-    }
-
-    private static CRpcMessage CreateResponse(long reqSequence)
-    {
-        var responseHeader = CRpcMessageHeader.valueOf(
-            CRpcMessageState.STATE_RESPONSE,
-            resultCode: 0,
-            sn: reqSequence,
-            module: 7,
-            command: 8);
-        return CRpcMessage.valueOf(responseHeader, Array.Empty<byte>());
-    }
 
     private static int GetPendingCallCount(CRpcClient client)
     {

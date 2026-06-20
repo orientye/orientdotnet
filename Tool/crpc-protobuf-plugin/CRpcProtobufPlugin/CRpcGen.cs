@@ -160,10 +160,10 @@ public static class CRpcGen
                 sb.AppendLine($"    public async CRpcTask<(int, {outType})> {method.Name}Async({inType} request, int timeOut = 5000)");
                 sb.AppendLine("    {");
                 sb.AppendLine($"        CRpcMessage message = await __client.CallAsync({serviceId}, {msgId}, request.ToByteArray(), timeOut);");
-                sb.AppendLine("        var result = message.getHeader().getResultCode();");
+                sb.AppendLine("        var result = message.ResultCode;");
                 sb.AppendLine("        if (0 == result)");
                 sb.AppendLine("        {");
-                sb.AppendLine("            byte[] data = message.getBody();");
+                sb.AppendLine("            byte[] data = message.Body;");
                 sb.AppendLine($"            return (0, {outType}.Parser.ParseFrom(data));");
                 sb.AppendLine("        }");
                 sb.AppendLine();
@@ -231,7 +231,7 @@ public static class CRpcGen
 
                 sbMethodInner.AppendLine($"    private async CRpcTask<(int, byte[])> __OnMessage{method.Name}Async(CRpcContext context, CRpcMessage req)");
                 sbMethodInner.AppendLine("    {");
-                sbMethodInner.AppendLine($"        var request = {inType}.Parser.ParseFrom(req.getBody());");
+                sbMethodInner.AppendLine($"        var request = {inType}.Parser.ParseFrom(req.Body);");
                 sbMethodInner.AppendLine($"        var (result, data) = await {method.Name}Async(context, request);");
                 sbMethodInner.AppendLine($"        var bytes = data.ToByteArray();");
                 sbMethodInner.AppendLine($"        return (result, bytes);");
@@ -247,7 +247,7 @@ public static class CRpcGen
             sb.AppendLine("    {");
             sb.AppendLine("        var rpcContext = (CRpcContext)context;");
             sb.AppendLine("        var rpcReq = (CRpcMessage)req;");
-            sb.AppendLine("        var methodId = rpcReq.getMethodId();");
+            sb.AppendLine("        var methodId = rpcReq.MethodId;");
             sb.Append(sbMethodCase);
             sb.AppendLine("        return CRpcTask.FromResult((-1, Array.Empty<byte>()));");
             sb.AppendLine("    }");
