@@ -1,6 +1,6 @@
 # CRpc Binary Protocol
 
-Full design: `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md`
+Normative wire format for CRpc TCP clients and servers. Full design: `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md`
 
 ## Frame
 
@@ -37,3 +37,81 @@ Raw protobuf bytes. No application-layer checksum. No compression in current rel
 | Request | > 0 | 0 |
 | Response | matches request | service result |
 | Push | 0 | 0 |
+
+---
+
+# Multi-Protocol Endpoint & HTTP
+
+How to expose CRpc and HTTP on the same service. **HTTP is application-owned** — routes, JSON shape, and status codes are not defined by `CRpc.dll`.
+
+Reference implementation: `Example/HelloWorld/Server/Http/`  
+Architecture decisions: `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
+
+## Deployment modes
+
+| Mode | Start flags | Ports | Description |
+| --- | --- | --- | --- |
+| CRpc only | (default) | `7999` (`--port` overrides) | Binary CRpc only |
+| CRpc + HTTP | `--http` | CRpc: `7999`, HTTP: `8080` (or `crpcPort + 1000`) | Two TCP listeners |
+| Unified | `--unified` | Single port (default `7999`) | Port Unification sniffs and branches per connection |
+
+Example:
+
+```bash
+dotnet run --project Example/HelloWorld/Server
+dotnet run --project Example/HelloWorld/Server -- --http
+dotnet run --project Example/HelloWorld/Server -- --unified
+dotnet run --project Example/HelloWorld/Server -- --port 9000 --unified
+```
+
+## Port Unification (same TCP port)
+
+Optional application-layer pattern: read the first bytes of each new connection, then install the matching DotNetty pipeline.
+
+| First bytes | Branch |
+| --- | --- |
+| `0x43 0x52 0x50 0x43` (`'CRPC'` LE) | CRpc: `CRpcMessageDecoder` → `CRpcServerHandler` |
+| Otherwise (e.g. `GET`, `POST`, `HEAD` HTTP prefixes) | HTTP: `HttpServerCodec` → app router |
+
+Rules:
+
+1. Sniff once per connection; remove the sniff handler after branching.
+2. Share one `CRpcLoop`, one service registry, and one `CRpcConnectionRegistry` on a unified server.
+3. Not part of `CRpc.dll` — see `PortUnificationHandler.cs` and `UnifiedServer.cs` in the HelloWorld example.
+
+## HelloWorld HTTP reference (not a framework contract)
+
+The routes below are **example only**. Production apps may define their own URLs and response envelopes.
+
+### `POST /api/greeter/say-hello`
+
+| Item | Value |
+| --- | --- |
+| Method | `POST` |
+| Content-Type | `application/json` |
+| Request body | `HelloRequest` as protobuf JSON (e.g. `{"name":"world"}`) |
+| Success response | `200`, body `{"code":<int>,"body":<HelloReply JSON>}` |
+
+```bash
+# Separate HTTP port (--http)
+curl -X POST http://127.0.0.1:8080/api/greeter/say-hello \
+  -H "Content-Type: application/json" \
+  -d '{"name":"world"}'
+
+# Unified port (--unified)
+curl -X POST http://127.0.0.1:7999/api/greeter/say-hello \
+  -H "Content-Type: application/json" \
+  -d '{"name":"world"}'
+```
+
+### Example error responses
+
+| Condition | HTTP status | Example body |
+| --- | --- | --- |
+| Unknown route | 404 | `{"error":"route not found"}` |
+| Wrong method | 405 | `{"error":"method not allowed"}` |
+| Non-JSON Content-Type | 415 | `{"error":"content type must be application/json"}` |
+| Invalid JSON | 400 | `{"error":"invalid json body"}` |
+| Connection not ready | 503 | `{"error":"connection not ready"}` |
+
+Business errors are returned in the JSON `code` field (often HTTP `200` with non-zero `code`). CRpc binary errors use `resultCode` in the frame header.
