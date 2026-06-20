@@ -1,5 +1,7 @@
 # Multi-Endpoint CRpc + HttpServer Design
 
+> **Superseded (HTTP-in-core):** `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md` — `HttpServer` and `IRpcHttpJsonCodec` removed from core.
+
 **Date:** 2026-05-19  
 **Status:** Approved (brainstorming session)
 

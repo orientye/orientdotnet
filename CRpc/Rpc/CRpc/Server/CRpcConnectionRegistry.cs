@@ -27,7 +27,7 @@ public sealed class CRpcConnectionRegistry
         return byId.Values.ToArray();
     }
 
-    internal CRpcConnection Register(IChannel channel)
+    public CRpcConnection Register(IChannel channel)
     {
         EnsureOwnerLoopThread();
         if (byChannel.TryGetValue(channel, out var existing))
@@ -41,7 +41,7 @@ public sealed class CRpcConnectionRegistry
         return connection;
     }
 
-    internal void Unregister(IChannel channel)
+    public void Unregister(IChannel channel)
     {
         EnsureOwnerLoopThread();
         if (!byChannel.Remove(channel, out var connection))
@@ -53,7 +53,7 @@ public sealed class CRpcConnectionRegistry
         byId.Remove(connection.ConnectionId);
     }
 
-    internal bool TryGetByChannel(IChannel channel, out CRpcConnection connection)
+    public bool TryGetByChannel(IChannel channel, out CRpcConnection connection)
     {
         EnsureOwnerLoopThread();
         return byChannel.TryGetValue(channel, out connection!);

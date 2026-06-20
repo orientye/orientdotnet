@@ -21,44 +21,10 @@ public class CRpcServerTests : CrpcTestBase
     }
 
     [Fact]
-    public void HttpStartAsyncThrowsWhenNoCRpcLoopIsBound()
-    {
-        var loop = new CRpcLoop();
-        var server = new HttpServer(loop);
-
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-        {
-            CRpcTask _ = server.StartAsync();
-        });
-
-        Assert.Contains("CRpcLoop", exception.Message);
-    }
-
-    [Fact]
     public void StartStopRunsOnOwnerLoop()
     {
         var loop = new CRpcLoop();
         var server = new CRpcServer(loop, new CRpcServerOptions
-        {
-            Address = IPAddress.Loopback,
-            Port = 0
-        });
-
-        CRpcLoopRunner.RunUntilComplete(loop, async () =>
-        {
-            await server.StartAsync();
-            Assert.True(server.IsRunning);
-
-            await server.StopAsync();
-            Assert.False(server.IsRunning);
-        });
-    }
-
-    [Fact]
-    public void HttpStartStopRunsOnOwnerLoop()
-    {
-        var loop = new CRpcLoop();
-        var server = new HttpServer(loop, new HttpServerOptions
         {
             Address = IPAddress.Loopback,
             Port = 0

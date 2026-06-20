@@ -236,7 +236,7 @@ byte[] Body { get; }
 | Tests | `CRpcMessageEncoderTests.cs`, `CRpcConnectionTests.cs`, `CRpcClientTests.cs`, `CRpcServerHandlerTests.cs`, gateway tests, push integration tests |
 | Docs | `Doc/protocol.md` — summarize v2 wire format and link here |
 
-HTTP handler (`HttpServerHandler`, `IRpcHttpJsonCodec`) unchanged.
+HTTP/JSON is an application concern; core no longer includes `HttpServerHandler` or `IRpcHttpJsonCodec`. Binary v2 codec is unaffected.
 
 ---
 

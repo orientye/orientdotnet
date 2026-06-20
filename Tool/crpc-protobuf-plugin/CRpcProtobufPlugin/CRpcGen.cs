@@ -179,32 +179,28 @@ public static class CRpcGen
         {
             var serviceId = GetServiceId(service);
 
-            var sbMethodParsers = new StringBuilder();
             var sbPushHelpers = new StringBuilder();
             foreach (var method in service.Method)
             {
-                var methodId = GetMethodId(service, method);
-
-                var outType = GetTypeName(method.OutputType);
-                var inType = GetTypeName(method.InputType);
-
-                if (IsServerPush(method))
+                if (!IsServerPush(method))
                 {
-                    ValidateServerPushMethod(service, method);
-                    sbPushHelpers.AppendLine($"    protected CRpcTask<bool> Push{method.Name}Async(CRpcConnection connection, {inType} message)");
-                    sbPushHelpers.AppendLine("    {");
-                    sbPushHelpers.AppendLine("        ArgumentNullException.ThrowIfNull(connection);");
-                    sbPushHelpers.AppendLine("        ArgumentNullException.ThrowIfNull(message);");
-                    sbPushHelpers.AppendLine($"        return connection.SendPushAsync({serviceId}, {methodId}, message.ToByteArray());");
-                    sbPushHelpers.AppendLine("    }");
-                    sbPushHelpers.AppendLine();
                     continue;
                 }
 
-                sbMethodParsers.AppendLine($"        if (methodId == {methodId}) {{ requestParser = {inType}.Parser; responseParser = {outType}.Parser; return true; }}");
+                var methodId = GetMethodId(service, method);
+                var inType = GetTypeName(method.InputType);
+
+                ValidateServerPushMethod(service, method);
+                sbPushHelpers.AppendLine($"    protected CRpcTask<bool> Push{method.Name}Async(CRpcConnection connection, {inType} message)");
+                sbPushHelpers.AppendLine("    {");
+                sbPushHelpers.AppendLine("        ArgumentNullException.ThrowIfNull(connection);");
+                sbPushHelpers.AppendLine("        ArgumentNullException.ThrowIfNull(message);");
+                sbPushHelpers.AppendLine($"        return connection.SendPushAsync({serviceId}, {methodId}, message.ToByteArray());");
+                sbPushHelpers.AppendLine("    }");
+                sbPushHelpers.AppendLine();
             }
 
-            sb.AppendLine($"public abstract class {service.Name}ServiceBase : IRpcService, IRpcHttpJsonCodec");
+            sb.AppendLine($"public abstract class {service.Name}ServiceBase : IRpcService");
             sb.AppendLine("{");
             
             sb.AppendLine( "    public ushort GetServiceId()");
@@ -250,14 +246,6 @@ public static class CRpcGen
             sb.AppendLine("        var methodId = rpcReq.MethodId;");
             sb.Append(sbMethodCase);
             sb.AppendLine("        return CRpcTask.FromResult((-1, Array.Empty<byte>()));");
-            sb.AppendLine("    }");
-            sb.AppendLine();
-            sb.AppendLine("    public bool TryGetHttpMethodParsers(ushort methodId, out MessageParser requestParser, out MessageParser responseParser)");
-            sb.AppendLine("    {");
-            sb.AppendLine("        requestParser = null!;");
-            sb.AppendLine("        responseParser = null!;");
-            sb.Append(sbMethodParsers);
-            sb.AppendLine("        return false;");
             sb.AppendLine("    }");
             sb.AppendLine();
 

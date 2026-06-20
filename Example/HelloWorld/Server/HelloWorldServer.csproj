@@ -9,6 +9,8 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\..\CRPC\CRPC.csproj" />
+      <PackageReference Include="DotNetty.Codecs.Http" Version="0.7.6" />
+      <PackageReference Include="DotNetty.Transport" Version="0.7.6" />
     </ItemGroup>
 
 </Project>

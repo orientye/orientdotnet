@@ -1,6 +1,7 @@
 ﻿using CRpc.Async;
 using CRpc.Rpc.CRpc.Server;
 using Example;
+using Example.Http;
 
 Console.WriteLine("Hello, RPC Server!");
 
@@ -13,21 +14,48 @@ Console.CancelKeyPress += (_, e) =>
     cts.Cancel();
 };
 
+var unified = args.Contains("--unified");
+var withHttp = args.Contains("--http");
 var crpcPort = ParsePort(args, defaultPort: 7999);
 var httpPort = crpcPort == 7999 ? 8080 : crpcPort + 1000;
 
+var impl = new HelloworldServiceImpl();
 var crpcServer = new CRpcServer(loop, new CRpcServerOptions { Port = crpcPort });
-var httpServer = new HttpServer(loop, new HttpServerOptions { Port = httpPort });
+HttpListenServer? httpListen = null;
+UnifiedServer? unifiedServer = null;
+
+if (unified)
+{
+    unifiedServer = new UnifiedServer(loop, crpcServer, impl, crpcPort);
+}
+else if (withHttp)
+{
+    httpListen = new HttpListenServer(loop, crpcServer, impl, httpPort);
+}
 
 CRpcLoopRunner.RunUntilComplete(loop, async () =>
 {
-    loop.RegisterService(new HelloworldServiceImpl());
-    await crpcServer.StartAsync(cts.Token);
-    await httpServer.StartAsync(cts.Token);
-});
+    loop.RegisterService(impl);
 
-Console.WriteLine($"CRpc listening on {crpcPort}, HTTP JSON on {httpPort}");
-Console.WriteLine($"POST http://127.0.0.1:{httpPort}/1000/1 with application/json body");
+    if (unifiedServer is not null)
+    {
+        await unifiedServer.StartAsync(cts.Token);
+        Console.WriteLine($"Unified CRpc+HTTP listening on {crpcPort}");
+        Console.WriteLine($"POST http://127.0.0.1:{crpcPort}/api/greeter/say-hello");
+    }
+    else if (httpListen is not null)
+    {
+        await crpcServer.StartAsync(cts.Token);
+        await httpListen.StartAsync(cts.Token);
+        Console.WriteLine($"CRpc listening on {crpcPort}, HTTP demo on {httpPort}");
+        Console.WriteLine($"POST http://127.0.0.1:{httpPort}/api/greeter/say-hello");
+    }
+    else
+    {
+        await crpcServer.StartAsync(cts.Token);
+        Console.WriteLine($"CRpc listening on {crpcPort}");
+    }
+});
 
 try
 {
@@ -37,8 +65,19 @@ finally
 {
     CRpcLoopRunner.RunUntilComplete(loop, async () =>
     {
-        await httpServer.StopAsync();
-        await crpcServer.StopAsync();
+        if (unifiedServer is not null)
+        {
+            await unifiedServer.StopAsync();
+        }
+        else
+        {
+            if (httpListen is not null)
+            {
+                await httpListen.StopAsync();
+            }
+
+            await crpcServer.StopAsync();
+        }
     });
 }
 

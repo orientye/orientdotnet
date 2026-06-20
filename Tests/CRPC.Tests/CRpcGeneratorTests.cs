@@ -19,6 +19,17 @@ public class CRpcGeneratorTests : CrpcTestBase
     }
 
     [Fact]
+    public void GeneratedServiceBaseDoesNotImplementHttpJsonCodec()
+    {
+        var response = GenerateHelloWorld(includePush: true);
+
+        var serverFile = Assert.Single(response.File, file => file.Name.EndsWith("Service.cs"));
+        Assert.Contains("public abstract class GreeterServiceBase : IRpcService", serverFile.Content);
+        Assert.DoesNotContain("IRpcHttpJsonCodec", serverFile.Content);
+        Assert.DoesNotContain("TryGetHttpMethodParsers", serverFile.Content);
+    }
+
+    [Fact]
     public void GeneratesPushHelperAndClientHandlerForServerPushMethod()
     {
         var response = GenerateHelloWorld(includePush: true);

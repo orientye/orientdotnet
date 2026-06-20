@@ -14,7 +14,7 @@
 | 线程 | 一个 loop 绑定一个业务线程；业务状态、注册表、pending 调用、定时器、`CRpcTask` 完成**只在该线程访问** |
 | 角色 | **业务执行上下文**；不另设 Runtime 层 |
 | 注册表 | `CRpcLoop.RegisterService` / `TryGetService`（内联 `Dictionary`，非独立 `ServiceRegistry` 类型） |
-| 端点 | **部分落地**：同一 loop 可挂 `CRpcServer` + `HttpServer` 等（见 `Example/HelloWorld/Server/Program.cs`）；多 loop 路由仍缺 |
+| 端点 | **CRpc 在核心**；HTTP 由应用层实现（见 `Example/HelloWorld/Server/Http/`），可选 Port Unification 与 CRpc 共端口；多 loop 路由仍缺 |
 | 调度 | MPSC mailbox + loop-owned timer + `WaitForWorkOrTimer`；见 [§9.5](#95-crpcloop-调度timer-与-rpc-timeout) |
 
 ### 现状 vs 目标

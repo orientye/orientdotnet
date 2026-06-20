@@ -17,4 +17,9 @@ public class HelloworldServiceImpl : GreeterServiceBase
             (0, new HelloReply { Msg = $"Hello {request.Msg}" }),
             CRpcLoop.Current);
     }
+
+    public CRpcTask<(int, HelloReply)> InvokeSayHelloAsync(CRpcContext context, HelloRequest request)
+    {
+        return SayHelloAsync(context, request);
+    }
 }
