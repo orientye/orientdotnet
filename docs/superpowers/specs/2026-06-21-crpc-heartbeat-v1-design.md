@@ -1,6 +1,6 @@
 # CRpc Heartbeat v1 Design — Client-Active Keepalive
 
-**Status:** Draft  
+**Status:** Approved  
 **Date:** 2026-06-21  
 **Prerequisite:** Binary codec (`CRpcMessage`), `TcpChannelHost`, `CRpcClientPipelineFactory`, `CRpcServer`
 
@@ -301,4 +301,4 @@ dotnet test Tests/CRPC.Tests/CRPC.Tests.csproj
 6. UnifiedServer CRpc path uses shared server pipeline factory.
 7. Full `CRPC.Tests` suite passes.
 
-**Plan:** (to be created via writing-plans skill)
+**Plan:** `docs/superpowers/plans/2026-06-21-crpc-heartbeat-v1.md`
