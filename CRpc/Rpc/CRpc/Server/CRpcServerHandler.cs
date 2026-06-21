@@ -26,6 +26,11 @@ public class CRpcServerHandler : ChannelHandlerAdapter
     {
         var message = (CRpcMessage)msg;
 
+        if (message.MessageType == CRpcMessageType.Heartbeat)
+        {
+            return;
+        }
+
         if (message.MessageType != CRpcMessageType.Request)
         {
             Console.WriteLine(

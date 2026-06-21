@@ -1,4 +1,5 @@
 using System.Net;
+using CRpc.Rpc.CRpc.Client;
 using DotNetty.Transport.Channels;
 
 namespace CRpc.Rpc.CRpc.Server;
@@ -15,6 +16,8 @@ public sealed class CRpcServerOptions
 
     public const int DefaultSoBacklog = 8192;
 
+    public const int DefaultReadIdleSeconds = 45;
+
     public IPAddress Address { get; init; } = IPAddress.Any;
 
     public int Port { get; init; } = DefaultPort;
@@ -27,9 +30,32 @@ public sealed class CRpcServerOptions
 
     public int SoBacklog { get; init; } = DefaultSoBacklog;
 
+    public bool HeartbeatEnabled { get; init; } = true;
+
+    public int ReadIdleSeconds { get; init; } = DefaultReadIdleSeconds;
+
     /// <summary>
     /// Optional factory for creating the channel handler added to each child channel's pipeline.
     /// Defaults to <see cref="CRpcServerHandler"/> when null.
     /// </summary>
     public Func<CRpcServer, IChannelHandler>? HandlerFactory { get; init; }
+
+    public void Validate(int clientHeartbeatIntervalSeconds = CRpcClientOptions.DefaultHeartbeatIntervalSeconds)
+    {
+        if (ReadIdleSeconds <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(ReadIdleSeconds),
+                ReadIdleSeconds,
+                "Read idle must be positive.");
+        }
+
+        if (ReadIdleSeconds < clientHeartbeatIntervalSeconds * 2)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(ReadIdleSeconds),
+                ReadIdleSeconds,
+                "Read idle must be at least twice the client heartbeat interval.");
+        }
+    }
 }

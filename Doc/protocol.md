@@ -17,7 +17,7 @@ magic(4) + payloadLen(4) + header(24) + body(N)
 | Offset | Field |
 | --- | --- |
 | 0 | `version` = 1 |
-| 1 | `messageType` — 0 Request, 1 Response, 2 Push |
+| 1 | `messageType` — 0 Request, 1 Response, 2 Push, 3 Heartbeat |
 | 2 | `flags` — current release: `0` (`0x01` = compressed, reserved) |
 | 3 | `reserved` = 0 |
 | 4 | `serviceId` u16 |
@@ -37,6 +37,13 @@ Raw protobuf bytes. No application-layer checksum. No compression in current rel
 | Request | > 0 | 0 |
 | Response | matches request | service result |
 | Push | 0 | 0 |
+| Heartbeat | 0 | 0 |
+
+## Heartbeat (v1)
+
+- Client sends `Heartbeat` on a fixed writer-idle interval (default 15s).
+- Server does not reply. Any inbound frame (RPC or Heartbeat) resets the server read-idle timer (default 45s).
+- Server closes the connection when read idle expires.
 
 ---
 

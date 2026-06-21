@@ -336,6 +336,38 @@ public class CRpcClientTests : CrpcTestBase
     }
 
     [Fact]
+    public void ChannelInactiveRaisesConnectionLostOnOwnerLoop()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var client = new CRpcClient(loop);
+        var channel = new EmbeddedChannel();
+        SetClientHostChannel(client, channel);
+        var lost = false;
+        client.ConnectionLost += () => lost = true;
+
+        GetClientHost(client).PostChannelInactive(channel);
+        loop.Tick();
+
+        Assert.True(lost);
+    }
+
+    [Fact]
+    public void InboundHeartbeatIsIgnored()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var client = new CRpcClient(loop);
+        SetClientHostChannel(client, new EmbeddedChannel());
+
+        var task = client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 5000);
+        InvokeHostInboundMessage(client, CRpcMessage.CreateHeartbeat());
+        loop.Tick();
+
+        Assert.False(task.GetAwaiter().IsCompleted);
+    }
+
+    [Fact]
     public void StaleChannelInactiveDoesNotFailCurrentChannelPendingCalls()
     {
         var loop = new CRpcLoop();
@@ -595,6 +627,15 @@ public class CRpcClientTests : CrpcTestBase
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(channelField);
         channelField!.SetValue(host, channel);
+    }
+
+    private static void InvokeHostInboundMessage(CRpcClient client, CRpcMessage message)
+    {
+        var method = typeof(CRpcClient).GetMethod(
+            "OnHostInboundMessage",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method!.Invoke(client, new object[] { message });
     }
 
     private sealed class ThrowOnWriteHandler : ChannelHandlerAdapter

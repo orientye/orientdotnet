@@ -239,6 +239,24 @@ public class CRpcServerHandlerTests : CrpcTestBase
         Assert.Same(exception, exceptions.Exception);
     }
 
+    [Fact]
+    public void HeartbeatIsIgnoredWithoutDispatchingToService()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var service = new RecordingService(NextServiceId());
+        var server = new CRpcServer(loop);
+        RegisterOnLoop(loop, service);
+        var channel = CreateHandlerChannel(server);
+        ActivateChannel(loop, channel);
+
+        Assert.False(channel.WriteInbound(CRpcMessage.CreateHeartbeat()));
+        loop.Tick();
+
+        Assert.Equal(0, service.CallCount);
+        Assert.Empty(channel.OutboundMessages);
+    }
+
     private static ushort NextServiceId()
     {
         return checked((ushort)Interlocked.Increment(ref nextServiceId));

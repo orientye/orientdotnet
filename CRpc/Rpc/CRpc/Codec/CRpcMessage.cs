@@ -43,6 +43,17 @@ public sealed class CRpcMessage : IRpcMessage
         return new CRpcMessage(header, body ?? EmptyBody);
     }
 
+    public static CRpcMessage CreateHeartbeat()
+    {
+        return Create(
+            CRpcMessageType.Heartbeat,
+            serviceId: 0,
+            methodId: 0,
+            reqSequence: 0,
+            resultCode: 0,
+            EmptyBody);
+    }
+
     public static CRpcMessage ReadFrom(IByteBuffer frame)
     {
         if (frame.ReadableBytes < FramePrefixLength)

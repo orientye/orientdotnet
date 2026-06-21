@@ -19,9 +19,16 @@ internal sealed class CRpcClientPipelineFactory : IChannelPipelineFactory
         ArgumentNullException.ThrowIfNull(pipeline);
         ArgumentNullException.ThrowIfNull(host);
 
-        pipeline.AddLast(
-            "timeout",
-            new IdleStateHandler(0, 0, options.HeartbeatIdleSeconds));
+        options.Validate();
+
+        if (options.HeartbeatEnabled)
+        {
+            pipeline.AddLast(
+                "idle",
+                new IdleStateHandler(0, options.HeartbeatIntervalSeconds, 0));
+            pipeline.AddLast("heartbeat", new CRpcClientHeartbeatHandler());
+        }
+
         pipeline.AddLast(
             "decoder",
             new CRpcMessageDecoder(options.MaxFrameLength));

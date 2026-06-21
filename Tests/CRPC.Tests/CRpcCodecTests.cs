@@ -174,4 +174,50 @@ public class CRpcCodecTests
         Assert.Equal(original.Body, decoded.Body);
         Assert.Equal(CRpcMessageType.Request, decoded.MessageType);
     }
+
+    [Fact]
+    public void CreateHeartbeatProducesExpectedHeaderFields()
+    {
+        var message = CRpcMessage.CreateHeartbeat();
+
+        Assert.Equal(CRpcMessageType.Heartbeat, message.MessageType);
+        Assert.Equal(0, message.ServiceId);
+        Assert.Equal(0, message.MethodId);
+        Assert.Equal(0, message.ReqSequence);
+        Assert.Equal(0, message.ResultCode);
+        Assert.Empty(message.Body);
+    }
+
+    [Fact]
+    public void HeartbeatRoundTripThroughEncoderDecoder()
+    {
+        var original = CRpcMessage.CreateHeartbeat();
+        var encoder = new CRpcMessageEncoder();
+        var decoder = new CRpcMessageDecoder(maxFrameLength: 1024);
+        var encodeChannel = new EmbeddedChannel(encoder);
+        Assert.True(encodeChannel.WriteOutbound(original));
+        var frame = encodeChannel.ReadOutbound<IByteBuffer>();
+        Assert.NotNull(frame);
+
+        var decodeChannel = new EmbeddedChannel(decoder);
+        Assert.True(decodeChannel.WriteInbound(frame.Retain()));
+        var decoded = decodeChannel.ReadInbound<CRpcMessage>();
+
+        Assert.Equal(CRpcMessageType.Heartbeat, decoded.MessageType);
+        Assert.Equal(0, decoded.ServiceId);
+        Assert.Equal(0, decoded.MethodId);
+        Assert.Equal(0, decoded.ReqSequence);
+    }
+
+    [Fact]
+    public void HeaderReadFromRejectsUnknownMessageTypeAboveHeartbeat()
+    {
+        var header = CRpcMessageHeader.Create(
+            CRpcMessageType.Request, 0, 0, 0, 0, Array.Empty<byte>());
+        var buffer = Unpooled.Buffer();
+        header.WriteTo(buffer);
+        buffer.SetByte(1, 5);
+
+        Assert.Throws<InvalidDataException>(() => CRpcMessageHeader.ReadFrom(buffer));
+    }
 }

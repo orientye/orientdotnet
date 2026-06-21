@@ -1,5 +1,7 @@
 using CRpc.Async;
+using CRpc.Rpc.CRpc.Client;
 using CRpc.Rpc.CRpc.Server;
+using CRpc.Transport;
 using DotNetty.Transport.Channels.Embedded;
 
 namespace CRPC.Tests.GateWayTests;
@@ -105,6 +107,31 @@ public class GateWaySessionTableTests : CrpcTestBase
         Assert.NotEqual(linkA!.Endpoint.Port, linkB!.Endpoint.Port);
     }
 
+    [Fact]
+    public void BackendConnectionLostRemovesLinkAndMarksEndpointUnhealthy()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var registry = GateWayTestHelpers.CreateRegistry(GreeterServiceId, ("127.0.0.1", 7999));
+        var factory = new CapturingBackendClientFactory(loop);
+        var table = GateWayTestHelpers.CreateSessionTable(factory, new SuccessBackendConnector(), registry);
+        var inbound = RegisterInboundConnection(loop);
+
+        var link = CRpcLoopRunner.RunUntilComplete(
+            loop,
+            async () => await table.GetOrCreateAsync(inbound, GreeterServiceId, loop));
+        Assert.NotNull(link);
+
+        var backendChannel = new EmbeddedChannel();
+        SetBackendClientChannel(factory.LastClient!, backendChannel);
+        GetClientHost(factory.LastClient!).PostChannelInactive(backendChannel);
+        loop.Tick();
+
+        Assert.Null(table.TryGet(inbound.ConnectionId));
+        Assert.True(registry.TryGetPool(GreeterServiceId, out var pool));
+        Assert.False(pool!.Endpoints[0].IsHealthy);
+    }
+
     private static CRpcConnection RegisterInboundConnection(CRpcLoop loop, CRpcServer? server = null)
     {
         server ??= new CRpcServer(loop);
@@ -116,6 +143,25 @@ public class GateWaySessionTableTests : CrpcTestBase
         return connection;
     }
 
+    private static TcpChannelHost GetClientHost(CRpcClient client)
+    {
+        var hostField = typeof(CRpcClient).GetField(
+            "host",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(hostField);
+        return Assert.IsType<TcpChannelHost>(hostField!.GetValue(client));
+    }
+
+    private static void SetBackendClientChannel(CRpcClient client, EmbeddedChannel channel)
+    {
+        var host = GetClientHost(client);
+        var channelField = typeof(TcpChannelHost).GetField(
+            "channel",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(channelField);
+        channelField!.SetValue(host, channel);
+    }
+
     private sealed class CountingBackendClientFactory : global::GateWay.IBackendClientFactory
     {
         public int CreateCount { get; private set; }
@@ -124,6 +170,24 @@ public class GateWaySessionTableTests : CrpcTestBase
         {
             CreateCount++;
             return new CRpc.Rpc.CRpc.Client.CRpcClient(loop);
+        }
+    }
+
+    private sealed class CapturingBackendClientFactory : global::GateWay.IBackendClientFactory
+    {
+        private readonly CRpcLoop loop;
+
+        public CapturingBackendClientFactory(CRpcLoop loop)
+        {
+            this.loop = loop;
+        }
+
+        public CRpc.Rpc.CRpc.Client.CRpcClient? LastClient { get; private set; }
+
+        public CRpc.Rpc.CRpc.Client.CRpcClient Create(CRpcLoop loop)
+        {
+            LastClient = new CRpc.Rpc.CRpc.Client.CRpcClient(this.loop);
+            return LastClient;
         }
     }
 

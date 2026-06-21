@@ -61,9 +61,23 @@ public sealed class GateWaySessionTable
         }
 
         var link = new GateWayBackendLink(inbound, client, serviceId, endpoint, backendConnector);
+        var inboundConnectionId = inbound.ConnectionId;
+        client.ConnectionLost += () =>
+        {
+            loop.Post(() => HandleBackendConnectionLost(inboundConnectionId, serviceId, endpoint));
+        };
         pushRelay.Attach(link);
         links[inbound.ConnectionId] = link;
         return link;
+    }
+
+    private void HandleBackendConnectionLost(long inboundConnectionId, ushort serviceId, BackendEndpoint endpoint)
+    {
+        links.Remove(inboundConnectionId);
+        if (poolRegistry.TryGetPool(serviceId, out var pool))
+        {
+            pool.MarkUnhealthy(endpoint);
+        }
     }
 
     public async CRpcTask RemoveAsync(long connectionId)

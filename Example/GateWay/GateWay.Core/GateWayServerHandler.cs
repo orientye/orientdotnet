@@ -30,6 +30,12 @@ public class GateWayServerHandler : ChannelHandlerAdapter
     public override void ChannelRead(IChannelHandlerContext ctx, object msg)
     {
         var message = (CRpcMessage)msg;
+
+        if (message.MessageType == CRpcMessageType.Heartbeat)
+        {
+            return;
+        }
+
         server.Loop.Post(() =>
         {
             if (server.Loop.TryGetService(message.ServiceId, out var rpcService))

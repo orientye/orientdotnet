@@ -1,6 +1,6 @@
 # CRpc Heartbeat v1 Design — Client-Active Keepalive
 
-**Status:** Approved  
+**Status:** Implemented  
 **Date:** 2026-06-21  
 **Prerequisite:** Binary codec (`CRpcMessage`), `TcpChannelHost`, `CRpcClientPipelineFactory`, `CRpcServer`
 

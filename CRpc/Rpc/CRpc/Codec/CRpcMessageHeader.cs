@@ -53,7 +53,7 @@ public sealed class CRpcMessageHeader
         }
 
         var messageType = (CRpcMessageType)buffer.ReadByte();
-        if (messageType > CRpcMessageType.Push)
+        if (messageType > CRpcMessageType.Heartbeat)
         {
             throw new InvalidDataException($"Unsupported CRpc message type {(byte)messageType}.");
         }

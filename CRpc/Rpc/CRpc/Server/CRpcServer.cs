@@ -133,15 +133,8 @@ public sealed class CRpcServer : IRpcServer
             .Option(ChannelOption.SoBacklog, startOptions.SoBacklog)
             .ChildHandler(new ActionChannelInitializer<IChannel>(channel =>
             {
-                var pipeline = channel.Pipeline;
-                pipeline.AddLast(
-                    "decoder",
-                    new CRpcMessageDecoder(startOptions.MaxFrameLength));
-                pipeline.AddLast(
-                    "encoder",
-                    new CRpcMessageEncoder());
                 var handler = options.HandlerFactory?.Invoke(this) ?? new CRpcServerHandler(this);
-                pipeline.AddLast("handler", handler);
+                new CRpcServerPipelineFactory(startOptions).Configure(channel.Pipeline, handler);
             }));
 
         try

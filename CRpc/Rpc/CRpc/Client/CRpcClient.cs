@@ -18,6 +18,8 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     public Action<CRpcPushContext>? OnUnhandledPush { get; set; }
 
+    public event Action? ConnectionLost;
+
     public CRpcClient(CRpcLoop loop, CRpcClientOptions? options = null)
         : this(loop, options ?? new CRpcClientOptions(), createHost: true)
     {
@@ -202,6 +204,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     private void OnHostChannelInactive()
     {
         FailPendingCalls(new ConnectionClosedException("CRpcClient channel became inactive."));
+        ConnectionLost?.Invoke();
     }
 
     private void OnHostChannelException(Exception exception)
@@ -216,6 +219,8 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     {
         switch (message.MessageType)
         {
+            case CRpcMessageType.Heartbeat:
+                return;
             case CRpcMessageType.Push:
                 DispatchPush(message);
                 return;

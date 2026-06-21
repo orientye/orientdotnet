@@ -55,9 +55,9 @@ public sealed class UnifiedServer
                 crpcServer.Connections,
                 ctx =>
                 {
-                    ctx.Channel.Pipeline.AddLast(new CRpcMessageDecoder(maxFrameLength));
-                    ctx.Channel.Pipeline.AddLast(new CRpcMessageEncoder());
-                    ctx.Channel.Pipeline.AddLast(new CRpcServerHandler(crpcServer));
+                    new CRpcServerPipelineFactory(crpcServer.Options).Configure(
+                        ctx.Channel.Pipeline,
+                        new CRpcServerHandler(crpcServer));
                 },
                 ctx =>
                 {

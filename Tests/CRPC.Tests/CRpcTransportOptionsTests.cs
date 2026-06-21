@@ -15,6 +15,8 @@ public class CRpcTransportOptionsTests
         Assert.Equal(CRpcServerOptions.DefaultBossThreadCount, options.BossThreadCount);
         Assert.Equal(CRpcServerOptions.DefaultWorkerThreadCount, options.WorkerThreadCount);
         Assert.Equal(CRpcServerOptions.DefaultSoBacklog, options.SoBacklog);
+        Assert.True(options.HeartbeatEnabled);
+        Assert.Equal(CRpcServerOptions.DefaultReadIdleSeconds, options.ReadIdleSeconds);
     }
 
     [Fact]
@@ -24,9 +26,25 @@ public class CRpcTransportOptionsTests
 
         Assert.Equal(CRpcClientOptions.DefaultIoThreadCount, options.IoThreadCount);
         Assert.Equal(CRpcClientOptions.DefaultConnectTimeoutSeconds, options.ConnectTimeoutSeconds);
-        Assert.Equal(CRpcClientOptions.DefaultHeartbeatIdleSeconds, options.HeartbeatIdleSeconds);
+        Assert.True(options.HeartbeatEnabled);
+        Assert.Equal(CRpcClientOptions.DefaultHeartbeatIntervalSeconds, options.HeartbeatIntervalSeconds);
         Assert.Equal(CRpcClientOptions.DefaultMaxFrameLength, options.MaxFrameLength);
         Assert.Equal(CRpcClientOptions.DefaultCallTimeoutMilliseconds, options.CallTimeoutMilliseconds);
+    }
+
+    [Fact]
+    public void CRpcClientOptionsValidateRejectsNonPositiveInterval()
+    {
+        var options = new CRpcClientOptions { HeartbeatIntervalSeconds = 0 };
+        Assert.Throws<ArgumentOutOfRangeException>(() => options.Validate());
+    }
+
+    [Fact]
+    public void CRpcServerOptionsValidateRequiresReadIdleAtLeastTwiceClientInterval()
+    {
+        var options = new CRpcServerOptions { ReadIdleSeconds = 10 };
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            options.Validate(clientHeartbeatIntervalSeconds: 15));
     }
 
     [Fact]
