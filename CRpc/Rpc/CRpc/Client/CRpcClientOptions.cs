@@ -2,7 +2,7 @@ namespace CRpc.Rpc.CRpc.Client;
 
 public sealed class CRpcClientOptions
 {
-    public const int DefaultMaxFrameLength = 32768;
+    public const int DefaultMaxFrameLength = 65536;
 
     public const int DefaultHeartbeatIdleSeconds = 60;
 

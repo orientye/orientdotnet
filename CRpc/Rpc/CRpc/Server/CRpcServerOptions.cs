@@ -7,7 +7,7 @@ public sealed class CRpcServerOptions
 {
     public const int DefaultPort = 7999;
 
-    public const int DefaultMaxFrameLength = 32768;
+    public const int DefaultMaxFrameLength = 65536;
 
     public const int DefaultBossThreadCount = 1;
 
