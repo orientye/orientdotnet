@@ -196,7 +196,7 @@ CRpcLoop A
   ├── registeredServices (RegisterService / TryGetService)
   │   ├── UserService
   │   └── OrderService
-  ├── CRpcServer : 7000, CRpc 二进制协议
+  ├── CRpcServer : 7999, CRpc 二进制协议
   └── HttpServer : 8080, HTTP/JSON 协议
 ```
 
