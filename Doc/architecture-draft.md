@@ -22,7 +22,7 @@
 | 维度 | 现状（代码） | 仍为方向 |
 | --- | --- | --- |
 | Service 归属 | `CRpcLoop` 持有注册表；`CRpcServer` / `HttpServer` 只持 `Loop`，经 `RpcServiceInvoker` 查 service | 独立 `ServiceRegistry` 类型；端点停止时不隐式清空 loop 注册表 |
-| 端点与 loop | 多端点共享一 loop 已可用（CRpc 7999 + HTTP 8080）；`CRpcLoopHost` 统一驱动 | 按 serviceId / channel 路由到多个 loop；IO 线程组可注入（现仍硬编码 1+1） |
+| 端点与 loop | 多端点共享一 loop 已可用；`CRpcLoopHost` 统一驱动 | 按 serviceId / channel 路由到多个 loop；IO 线程组可注入（现仍硬编码 1+1） |
 | Loop 驱动 | `Tick + WaitForWorkOrTimer`（服务端 `CRpcLoopHost` → `CRpcServerLoop`；客户端 `CRpcClientLoopHost` → `CRpcClientLoop`；一次性场景 `CRpcLoopRunner.RunUntilComplete`） | — |
 | Runtime | — | 不引入单独 Runtime；Loop 即上下文 |
 
@@ -265,7 +265,7 @@ public sealed class OrderServiceImpl : OrderBase
 
 如果两个 Service 在同一个进程内，但分别归属不同的 `CRpcLoop`，就不能直接跨线程访问对方的业务状态。
 
-底层边界仍然是 `CRpcLoop.Post`：请求先投递到目标 loop，目标 loop 执行业务逻辑，完成后再投递回调用方 loop 完成结果。业务代码不应手写 `Post + CRpcTaskCompletionSource + 再 Post 回调用方` 的样板逻辑，推荐通过 `CRpcLoop.InvokeAsync` 表达同进程跨 loop 调用：
+底层边界仍然是 `CRpcLoop.Post`：请求先投递到目标 loop，目标 loop 执行业务逻辑，完成后再投递回调用方 loop 完成结果。业务代码不应手写 `Post + CRpcTaskCompletionSource + 再 Post 回调用方` 的逻辑，而是通过 `CRpcLoop.InvokeAsync` 调用：
 
 ```csharp
 // 异步 + 有返回值
@@ -274,7 +274,7 @@ var user = await CRpcLoop.InvokeAsync(
     () => userService.GetUserAsync(userId));
 ```
 
-`InvokeAsync` 作为框架级跨 loop 调度原语，建议覆盖四类常见业务方法：
+`InvokeAsync` 是框架级跨 loop 调度原语，其接口为：
 
 ```csharp
 public static CRpcTask<T> InvokeAsync<T>(
@@ -294,7 +294,7 @@ public static CRpcTask InvokeAsync(
     Action action);
 ```
 
-这四个重载覆盖两个维度：目标业务方法是否有返回值，以及目标业务方法本身是同步方法还是返回 `CRpcTask` 的异步方法。
+四个方法覆盖两个维度：目标方法是否有返回值，以及目标方法本身是同步方法还是返回 `CRpcTask` 的异步方法。
 
 ```csharp
 // 异步 + 有返回值
@@ -348,7 +348,8 @@ public sealed class UserServiceLocalRef
 }
 ```
 
-`LocalRef` 是同进程跨 loop 引用，不是 `CRpcClient`：不走网络、不序列化、不通过 `IRpcService.OnMessageAsync`。是否由代码生成器自动生成 `LocalRef`，可以在 `InvokeAsync` 语义稳定后再设计。
+`LocalRef` 是同进程跨 loop 引用，不是 `CRpcClient`：不走网络、不序列化、不通过 `IRpcService.OnMessageAsync`。
+未来可能由代码生成器自动生成 `LocalRef`。
 
 这里最重要的线程安全规则是：
 
