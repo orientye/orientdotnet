@@ -83,7 +83,4 @@
    - DotNetty `0.7.6` 长期维护风险仍在。
    - 当前已有 `TcpChannelHost`、`IChannelPipelineFactory` 等传输边界雏形；继续把协议/业务层与 DotNetty 解耦，为 System.IO.Pipelines、Kestrel transport、SuperSocket 或直接 Socket 留迁移空间。
 
-3. Protobuf vendor 策略。
-   - `Tool/crpc-protobuf-plugin/CRpcProtobufPlugin/Google/Protobuf/...` vendor 了一份 Google.Protobuf 源码。
-   - 需要明确这份源码是否有本地 patch；若没有，尽量回到 NuGet 上游；若有，记录 patch 原因和同步策略。
 
