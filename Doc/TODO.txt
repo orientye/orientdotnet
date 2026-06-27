@@ -4,25 +4,16 @@
 
 ## P0：先修语义正确性
 
-1. 未知 `serviceId` / `methodId` 要返回明确错误响应。
-   - 当前 `CRpcServerHandler.ChannelRead` 在 `TryGetService` 失败时基本静默丢弃，请求方只能等超时。
-   - 建议先定义框架级错误码，例如 `ServiceNotFound`、`MethodNotFound`、`InvalidRequest`、`InternalError`，并在 `RpcServiceInvoker` / handler 统一构造错误响应。
-
-2. ~~梳理服务端生命周期 API。~~ **Done (2026-06-27)** — spec: `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md`
-   - 删除 `IRpcServer` / `Open()` / `Close()`；主路径 `StartAsync` / `StopAsync`。
-   - transport 支持 `Stop` 后再次 `Start`；`StopAsync` 不清 loop 注册表。
-   - `RunAsync` 保留为 demo helper，退出时不再 `ClearRegisteredServices`。
-
-3. 补齐配置校验与配置类型收敛。
+1. 补齐配置校验与配置类型收敛。
    - `CRpcServerOptions` / `CRpcClientOptions` 已经承接了端口、frame 上限、IO 线程数、心跳等配置，但校验还不完整。
    - 校验 `Port`、`MaxFrameLength`、`BossThreadCount`、`WorkerThreadCount`、`IoThreadCount`、`SoBacklog`、`ConnectTimeoutSeconds`、`CallTimeoutMilliseconds`。
    - 删除空的 `CRpc.Config.ServerConfig` / `ServiceConfig`，或让它们成为真实宿主配置入口，避免双轨配置。
 
-4. 写入背压和慢客户端保护。
+2. 写入背压和慢客户端保护。
    - 服务端已有 `IdleStateHandler` 和 `MaxFrameLength`，但还没有 `WriteBufferWaterMark` / `channel.IsWritable` 策略。
    - 响应写当前是 fire-and-forget，适合普通 RPC 路径；但慢客户端、持续 push、写队列堆积时还缺少拒绝、断开或降级策略。
 
-5. 结构化错误模型。
+3. 结构化错误模型。
    - 应用返回仍是 `(int, byte[])`，错误码只是裸 `int`，没有枚举、消息 detail、异常映射。
    - 建议定义 `CRpcStatusCode` / `CRpcError`，由框架把异常映射成稳定协议响应；应用错误与框架错误分层。
 
