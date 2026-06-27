@@ -6,6 +6,7 @@ using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using CRpc.Async;
 using CRpc.Rpc;
+using CRpc.Rpc.CRpc;
 using CRpc.Rpc.CRpc.Codec;
 using CRpc.Rpc.CRpc.Server;
 
@@ -24,7 +25,7 @@ public abstract class GreeterServiceBase : IRpcService
         var rpcReq = (CRpcMessage)req;
         var methodId = rpcReq.MethodId;
         if (methodId == 1) { return this.__OnMessageSayHelloAsync(rpcContext, rpcReq); }
-        return CRpcTask.FromResult((-1, Array.Empty<byte>()));
+        return CRpcTask.FromResult(((int)CRpcStatusCode.MethodNotFound, Array.Empty<byte>()));
     }
 
     private async CRpcTask<(int, byte[])> __OnMessageSayHelloAsync(CRpcContext context, CRpcMessage req)

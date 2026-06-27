@@ -1,5 +1,6 @@
 using CRpc.Async;
 using CRpc.Rpc;
+using CRpc.Rpc.CRpc;
 using CRpc.Rpc.CRpc.Codec;
 using CRpc.Rpc.CRpc.Server;
 using DotNetty.Buffers;
@@ -27,7 +28,7 @@ public class GateWayServerHandlerTests : CrpcTestBase
 
         var response = ReadOutboundCrpcMessage(channel);
         Assert.Equal(CRpcMessageType.Response, response.MessageType);
-        Assert.Equal(-1, response.ResultCode);
+        Assert.Equal((int)CRpcStatusCode.ServiceNotFound, response.ResultCode);
     }
 
     [Fact]
@@ -46,7 +47,7 @@ public class GateWayServerHandlerTests : CrpcTestBase
 
         var response = ReadOutboundCrpcMessage(channel);
         Assert.Equal(CRpcMessageType.Response, response.MessageType);
-        Assert.Equal(-1, response.ResultCode);
+        Assert.Equal((int)CRpcStatusCode.ServiceNotFound, response.ResultCode);
     }
 
     [Fact]

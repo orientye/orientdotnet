@@ -1,6 +1,7 @@
 using System.Net.Sockets;
 using CRpc.Async;
 using CRpc.Rpc;
+using CRpc.Rpc.CRpc;
 using CRpc.Rpc.CRpc.Codec;
 using CRpc.Rpc.CRpc.Server;
 using DotNetty.Transport.Channels;
@@ -257,6 +258,77 @@ public class CRpcServerHandlerTests : CrpcTestBase
         Assert.Empty(channel.OutboundMessages);
     }
 
+    [Fact]
+    public void UnknownServiceWritesServiceNotFoundResponse()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var server = new CRpcServer(loop);
+        var channel = CreateHandlerChannel(server);
+        ActivateChannel(loop, channel);
+        var request = CRpcTestMessages.CreateRequest(serviceId: 9999, methodId: 1, reqSequence: 42);
+
+        Assert.False(channel.WriteInbound(request));
+        loop.Tick();
+
+        var response = ReadOutboundCrpcMessage(channel);
+        Assert.Equal(CRpcMessageType.Response, response.MessageType);
+        Assert.Equal(9999, response.ServiceId);
+        Assert.Equal(1, response.MethodId);
+        Assert.Equal(42, response.ReqSequence);
+        Assert.Equal((int)CRpcStatusCode.ServiceNotFound, response.ResultCode);
+        Assert.Empty(response.Body);
+    }
+
+    [Fact]
+    public void UnknownMethodWritesMethodNotFoundResponse()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var service = new MethodRoutingService(NextServiceId());
+        var server = new CRpcServer(loop);
+        RegisterOnLoop(loop, service);
+        var channel = CreateHandlerChannel(server);
+        ActivateChannel(loop, channel);
+        var request = CRpcTestMessages.CreateRequest(service.GetServiceId(), methodId: 99, reqSequence: 7);
+
+        Assert.False(channel.WriteInbound(request));
+        loop.Tick();
+
+        var response = ReadOutboundCrpcMessage(channel);
+        Assert.Equal(CRpcMessageType.Response, response.MessageType);
+        Assert.Equal((int)CRpcStatusCode.MethodNotFound, response.ResultCode);
+        Assert.Equal(7, response.ReqSequence);
+    }
+
+    [Fact]
+    public void ServiceExceptionWritesInternalErrorResponse()
+    {
+        var loop = new CRpcLoop();
+        loop.BindToCurrentThread();
+        var service = new ThrowingService(NextServiceId());
+        var server = new CRpcServer(loop);
+        RegisterOnLoop(loop, service);
+        var channel = CreateHandlerChannel(server);
+        ActivateChannel(loop, channel);
+
+        Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
+        loop.Tick();
+        loop.Tick();
+
+        var response = ReadOutboundCrpcMessage(channel);
+        Assert.Equal(CRpcMessageType.Response, response.MessageType);
+        Assert.Equal((int)CRpcStatusCode.InternalError, response.ResultCode);
+    }
+
+    private static CRpcMessage ReadOutboundCrpcMessage(EmbeddedChannel channel)
+    {
+        var outbound = channel.ReadOutbound<object>();
+        return outbound is DotNetty.Buffers.IByteBuffer buffer
+            ? CRpcMessage.ReadFrom(buffer)
+            : (CRpcMessage)outbound!;
+    }
+
     private static ushort NextServiceId()
     {
         return checked((ushort)Interlocked.Increment(ref nextServiceId));
@@ -358,6 +430,45 @@ public class CRpcServerHandlerTests : CrpcTestBase
         public override void ChannelInactive(IChannelHandlerContext context)
         {
             WasInactive = true;
+        }
+    }
+
+    private sealed class MethodRoutingService : IRpcService
+    {
+        private readonly ushort serviceId;
+
+        public MethodRoutingService(ushort serviceId)
+        {
+            this.serviceId = serviceId;
+        }
+
+        public ushort GetServiceId() => serviceId;
+
+        public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+        {
+            if (((CRpcMessage)req).MethodId == 1)
+            {
+                return CRpcTask.FromResult((0, Array.Empty<byte>()), CRpcLoop.Current);
+            }
+
+            return CRpcTask.FromResult(((int)CRpcStatusCode.MethodNotFound, Array.Empty<byte>()), CRpcLoop.Current);
+        }
+    }
+
+    private sealed class ThrowingService : IRpcService
+    {
+        private readonly ushort serviceId;
+
+        public ThrowingService(ushort serviceId)
+        {
+            this.serviceId = serviceId;
+        }
+
+        public ushort GetServiceId() => serviceId;
+
+        public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+        {
+            throw new InvalidOperationException("boom");
         }
     }
 }

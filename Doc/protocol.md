@@ -121,4 +121,27 @@ curl -X POST http://127.0.0.1:7999/api/greeter/say-hello \
 | Invalid JSON | 400 | `{"error":"invalid json body"}` |
 | Connection not ready | 503 | `{"error":"connection not ready"}` |
 
-Business errors are returned in the JSON `code` field (often HTTP `200` with non-zero `code`). CRpc binary errors use `resultCode` in the frame header.
+Application errors are returned in the JSON `code` field (often HTTP `200` with non-zero `code`). CRpc binary errors use `resultCode` in the frame header.
+
+## Result code ranges
+
+| Range | Owner | Notes |
+| --- | --- | --- |
+| `0` | Success | Response body carries application payload when applicable |
+| `1000–1999` | CRpc framework | See table below; error responses use an empty body unless noted |
+| `2000–10000` | Unassigned | Do not use |
+| `10001+` | Application services | Per-service or codegen-defined error codes |
+
+## Framework result codes
+
+Reserved range **1000–1999** for CRpc framework responses.
+
+| Code | Name | When returned |
+| --- | --- | --- |
+| 0 | Ok | Success |
+| 1001 | ServiceNotFound | Unknown `serviceId` on the server |
+| 1002 | MethodNotFound | Known service, unknown `methodId` |
+| 1003 | InvalidRequest | Malformed or invalid request (reserved) |
+| 1004 | InternalError | Unhandled exception during dispatch |
+| 1005 | Unavailable | Connection not ready or server unavailable |
+| 1006 | DeadlineExceeded | Server-side deadline exceeded (reserved) |

@@ -57,7 +57,7 @@ public class GateWayServerHandler : ChannelHandlerAdapter
     {
         if (!server.Connections.TryGetByChannel(ctx.Channel, out var connection))
         {
-            GateWayResponseUtil.WriteErrorResponse(ctx, (CRpcMessage)msg);
+            GateWayResponseUtil.WriteErrorResponse(ctx, (CRpcMessage)msg, (int)CRpcStatusCode.Unavailable);
             return;
         }
 

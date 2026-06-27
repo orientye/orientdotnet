@@ -220,7 +220,7 @@ Framework does not define HTTP status codes. Application handlers should follow 
 | Unknown route | 404 |
 | Wrong method | 405 |
 | Invalid JSON | 400 |
-| Business error (`code != 0`) | 200 with app envelope, or 4xx/5xx per app policy |
+| Application error (`code != 0`) | 200 with app envelope, or 4xx/5xx per app policy |
 
 CRpc binary errors remain in `CRpcMessage` `resultCode` / frame semantics per `Doc/protocol.md`.
 

@@ -52,7 +52,7 @@ Accept: application/json
 { ... protobuf JSON mapping for request message ... }
 ```
 
-**Response** (HTTP 200 for handled calls; business errors use JSON `code`):
+**Response** (HTTP 200 for handled calls; application errors use JSON `code`):
 
 ```json
 {"code":0,"body":{ ... reply message as JSON ... }}

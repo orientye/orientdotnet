@@ -47,6 +47,7 @@ public static class CRpcGen
             sb.AppendLine("using CRpc.Rpc;");
             sb.AppendLine("using CRpc.Rpc.CRpc.Codec;");
             sb.AppendLine("using CRpc.Rpc.CRpc.Server;");
+            sb.AppendLine("using CRpc.Rpc.CRpc;");
             sb.AppendLine("");
 
             var ns = GetFileNamespace(fileDescriptorProto);
@@ -245,7 +246,7 @@ public static class CRpcGen
             sb.AppendLine("        var rpcReq = (CRpcMessage)req;");
             sb.AppendLine("        var methodId = rpcReq.MethodId;");
             sb.Append(sbMethodCase);
-            sb.AppendLine("        return CRpcTask.FromResult((-1, Array.Empty<byte>()));");
+            sb.AppendLine("        return CRpcTask.FromResult(((int)CRpcStatusCode.MethodNotFound, Array.Empty<byte>()));");
             sb.AppendLine("    }");
             sb.AppendLine();
 

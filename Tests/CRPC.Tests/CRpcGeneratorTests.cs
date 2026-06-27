@@ -43,6 +43,15 @@ public class CRpcGeneratorTests : CrpcTestBase
         Assert.DoesNotContain("CallAsync(1000, 2", clientFile.Content);
     }
 
+    [Fact]
+    public void GeneratedServiceBaseReturnsMethodNotFoundForUnknownMethod()
+    {
+        var response = GenerateHelloWorld();
+
+        var serverFile = Assert.Single(response.File, file => file.Name.EndsWith("Service.cs"));
+        Assert.Contains("(int)CRpcStatusCode.MethodNotFound", serverFile.Content);
+    }
+
     private static CodeGeneratorResponse GenerateHelloWorld(bool includePush = false)
     {
         var request = CRpcGenTestFixtures.BuildHelloWorldRequest(includePush);

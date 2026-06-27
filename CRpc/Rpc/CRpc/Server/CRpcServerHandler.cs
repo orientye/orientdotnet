@@ -1,6 +1,7 @@
 ﻿using System.Net.Sockets;
 using CRpc.Async;
 using CRpc.Rpc;
+using CRpc.Rpc.CRpc;
 using CRpc.Rpc.CRpc.Codec;
 using DotNetty.Transport.Channels;
 
@@ -46,6 +47,10 @@ public class CRpcServerHandler : ChannelHandlerAdapter
             {
                 ProcessMessage(rpcService, ctx, message);
             }
+            else
+            {
+                RpcServiceInvoker.WriteFrameworkErrorResponse(ctx, message, CRpcStatusCode.ServiceNotFound);
+            }
         });
         
         Console.WriteLine($"CRpcServerHandler recv msg: serviceId={serviceId}, methodId={methodId}");
@@ -54,36 +59,48 @@ public class CRpcServerHandler : ChannelHandlerAdapter
 
     private void ProcessMessage(IRpcService rpcService, IChannelHandlerContext ctx, object msg)
     {
+        var request = (CRpcMessage)msg;
         if (!server.Connections.TryGetByChannel(ctx.Channel, out var connection))
         {
+            RpcServiceInvoker.WriteFrameworkErrorResponse(ctx, request, CRpcStatusCode.Unavailable);
             return;
         }
 
-        var task = ProcessMessageAsync(rpcService, connection, ctx, msg);
+        var task = ProcessMessageAsync(rpcService, connection, ctx, request);
         var awaiter = task.GetAwaiter();
         if (awaiter.IsCompleted)
         {
-            CompleteProcessMessage(awaiter);
+            CompleteProcessMessage(ctx, request, awaiter);
             return;
         }
 
-        awaiter.OnCompleted(() => CompleteProcessMessage(awaiter));
+        awaiter.OnCompleted(() => CompleteProcessMessage(ctx, request, awaiter));
     }
 
     private static async CRpcTask ProcessMessageAsync(
         IRpcService rpcService,
         CRpcConnection connection,
         IChannelHandlerContext ctx,
-        object msg)
+        CRpcMessage request)
     {
-        var rpcContext = new CRpcContext(connection);
-        var request = (CRpcMessage)msg;
-        var (resultCode, bytes) = await RpcServiceInvoker.InvokeAsync(rpcService, rpcContext, request);
-        var rsp = RpcServiceInvoker.BuildCrpcResponse(request, resultCode, bytes);
-        ChannelWriteUtil.WriteAndFlushFireAndForget(ctx, rsp);
+        try
+        {
+            var rpcContext = new CRpcContext(connection);
+            var (resultCode, bytes) = await RpcServiceInvoker.InvokeAsync(rpcService, rpcContext, request);
+            var rsp = RpcServiceInvoker.BuildCrpcResponse(request, resultCode, bytes);
+            ChannelWriteUtil.WriteAndFlushFireAndForget(ctx, rsp);
+        }
+        catch (Exception exception)
+        {
+            Console.WriteLine($"CRpcServerHandler process exception: serviceId={request.ServiceId}, methodId={request.MethodId}, exception={exception}");
+            RpcServiceInvoker.WriteFrameworkErrorResponse(ctx, request, CRpcStatusCode.InternalError);
+        }
     }
 
-    private static void CompleteProcessMessage(CRpcTask.Awaiter awaiter)
+    private static void CompleteProcessMessage(
+        IChannelHandlerContext ctx,
+        CRpcMessage request,
+        CRpcTask.Awaiter awaiter)
     {
         try
         {
@@ -91,7 +108,8 @@ public class CRpcServerHandler : ChannelHandlerAdapter
         }
         catch (Exception exception)
         {
-            Console.WriteLine($"******************process exception={exception}");
+            Console.WriteLine($"CRpcServerHandler process exception: serviceId={request.ServiceId}, methodId={request.MethodId}, exception={exception}");
+            RpcServiceInvoker.WriteFrameworkErrorResponse(ctx, request, CRpcStatusCode.InternalError);
         }
     }
 

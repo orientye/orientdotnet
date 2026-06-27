@@ -1,5 +1,6 @@
 using CRpc.Async;
 using CRpc.Rpc;
+using CRpc.Rpc.CRpc;
 using CRpc.Rpc.CRpc.Codec;
 using CRpc.Rpc.CRpc.Server;
 using DotNetty.Transport.Channels.Embedded;
@@ -43,6 +44,40 @@ public class RpcServiceInvokerTests : CrpcTestBase
 
         Assert.Equal(CRpcMessageType.Response, response.MessageType);
         Assert.Equal(expectedBody, response.Body);
+    }
+
+    [Fact]
+    public void BuildFrameworkErrorResponseUsesEmptyBodyAndStatusCode()
+    {
+        var request = CRpcTestMessages.CreateRequest(1000, methodId: 2, reqSequence: 9);
+        var response = RpcServiceInvoker.BuildFrameworkErrorResponse(request, CRpcStatusCode.ServiceNotFound);
+
+        Assert.Equal(CRpcMessageType.Response, response.MessageType);
+        Assert.Equal(1000, response.ServiceId);
+        Assert.Equal(2, response.MethodId);
+        Assert.Equal(9, response.ReqSequence);
+        Assert.Equal((int)CRpcStatusCode.ServiceNotFound, response.ResultCode);
+        Assert.Empty(response.Body);
+    }
+
+    [Fact]
+    public void IsFrameworkCodeIdentifiesReservedRange()
+    {
+        Assert.True(CRpcStatusCodeExtensions.IsFrameworkCode((int)CRpcStatusCode.ServiceNotFound));
+        Assert.True(CRpcStatusCodeExtensions.IsFrameworkCode(1999));
+        Assert.False(CRpcStatusCodeExtensions.IsFrameworkCode(0));
+        Assert.False(CRpcStatusCodeExtensions.IsFrameworkCode(500));
+        Assert.False(CRpcStatusCodeExtensions.IsFrameworkCode(10001));
+    }
+
+    [Fact]
+    public void IsApplicationCodeIdentifiesApplicationRange()
+    {
+        Assert.False(CRpcStatusCodeExtensions.IsApplicationCode(0));
+        Assert.False(CRpcStatusCodeExtensions.IsApplicationCode(1001));
+        Assert.False(CRpcStatusCodeExtensions.IsApplicationCode(10000));
+        Assert.True(CRpcStatusCodeExtensions.IsApplicationCode(10001));
+        Assert.True(CRpcStatusCodeExtensions.IsApplicationCode(20001));
     }
 
     private sealed class ByteReturnService : IRpcService

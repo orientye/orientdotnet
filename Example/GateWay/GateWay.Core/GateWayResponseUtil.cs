@@ -12,7 +12,7 @@ internal static class GateWayResponseUtil
         ChannelWriteUtil.WriteAndFlushFireAndForget(ctx, response);
     }
 
-    public static void WriteErrorResponse(IChannelHandlerContext ctx, CRpcMessage request, int resultCode = -1)
+    public static void WriteErrorResponse(IChannelHandlerContext ctx, CRpcMessage request, int resultCode = (int)CRpcStatusCode.ServiceNotFound)
     {
         WriteResponse(ctx, request, resultCode, Array.Empty<byte>());
     }
