@@ -28,9 +28,17 @@
 
 ### 网络层：入口与适配，非 Service Owner
 
+**服务端（listen / accept）**
+
 - **`CRpcServer`**：监听、pipeline、连接生命周期；把解码后的请求**投递**到目标 loop。
 - **`CRpcServerHandler`**：DotNetty IO 线程上的搬运工；`ChannelRead` → 选 loop → `Post`。
-- 二者是**网络入口与协议适配**，不是 Service 或业务状态的长期 owner。
+
+**客户端（出站 connect）**
+
+- **`CRpcClient`**：pending calls、`CallAsync`、timeout；经 `TcpChannelHost` 管理出站 TCP，**不负责 listen**。
+- **`TcpChannelHost` + `LoopInboundHandler`**：DotNetty 出站 lifecycle；IO 线程只做 ingress，`Post` 到 owner loop。
+
+二者（服务端入口 / 客户端出站）都是**网络适配**，不是 Service 或业务状态的长期 owner。
 
 ### Service 间通信：按边界选型
 
@@ -96,6 +104,7 @@ CRpc 想要的核心模型是 **单线程业务循环 + 异步状态机**：
 | 出站 IO 入站 handler | `LoopInboundHandler` | DotNetty `ChannelHandlerAdapter`；`ChannelRead` / `ChannelInactive` / `ExceptionCaught` → `TcpChannelHost.Post*` → `ownerLoop.Post`；不持有 RPC 业务状态。 |
 | 出站 TCP 宿主 | `TcpChannelHost` | **仅出站、单连接**（`Bootstrap` + `ConnectAsync`）；listen/accept 走 `CRpcServer` 的 `ServerBootstrap`（[§6.2](#62-crpcserver--crpcserverhandler--rpcserviceinvoker)）。`LoopInboundHandler` 将入站 Post 到 owner loop；可选注入共享 `IEventLoopGroup`（见 [§8.1](#81-io-线程组与业务-loop-的拓扑)）。 |
 | 管道工厂 | `IChannelPipelineFactory` | 按 wire 协议装配 pipeline（如 `CRpcClientPipelineFactory`）；不同协议各自实现 factory，共用 `TcpChannelHost` 连接 lifecycle。 |
+| CRpc 编解码 | `CRpcMessageDecoder` / `CRpcMessageEncoder` | DotNetty pipeline handler；服务端经 `CRpcServerPipelineFactory`，客户端经 `CRpcClientPipelineFactory`；帧格式见 `Doc/protocol.md`。 |
 
 ---
 
@@ -143,6 +152,7 @@ flowchart TB
     end
 
     subgraph NettyClient["DotNetty 出站客户端 IO 线程"]
+        Host[TcpChannelHost]
         LIH[LoopInboundHandler]
         DecC[CRpcMessageDecoder]
     end
@@ -159,7 +169,8 @@ flowchart TB
     Net <-- bytes --> DecC --> LIH
     LIH -- "TcpChannelHost.Post → ownerLoop.Post" --> Loop
     Loop --> Client
-    Client -- "WriteAndFlushAsync (fire-and-forget)" --> Net
+    Client -- "TcpChannelHost.WriteAndFlushAsync" --> Host
+    Host -- "WriteAndFlushAsync (fire-and-forget)" --> Net
 ```
 
 关键边：
@@ -168,14 +179,22 @@ flowchart TB
 - **业务 Loop → Netty IO 线程**：调用 `IChannel.WriteAndFlushAsync(frame)`，**不 await 返回的 `Task`**（避免业务线程被 IO 写完成回调拖回线程池）。
 - **业务 Loop 内部**：`CRpcTask` await ↔ `CRpcTaskCompletionSource.OnCompleted/TrySetResult` ↔ `loop.Post(continuation)`。
 
-#### 4.1 Loop / Server / Handler 的边界
+#### 4.1 Loop / 端点 / IO 适配器的边界
 
 目标模型不引入单独的 `Runtime`。边界按"执行上下文、协议端点、IO 适配器"拆开：
+
+**服务端**
 
 - `CRpcLoop` 是 **业务执行上下文**：拥有业务线程、mailbox、timer、`CRpcTask` continuation，以及 service 注册表（`RegisterService` / `TryGetService`）。
 - `IRpcService` 是 **业务能力和业务状态**：业务状态只在所属 `CRpcLoop` 线程访问。
 - `CRpcServer` 是 **协议端点**：监听端口、配置 DotNetty pipeline、管理连接生命周期，并把解码后的请求投递到目标 loop。
 - `CRpcServerHandler` 是 **IO 适配器**：运行在 DotNetty IO 线程，负责从 channel 取出消息、选择目标 loop、`Post`，以及把 loop 线程产生的响应写回 channel。
+
+**客户端**
+
+- `CRpcClient` 是 **RPC 客户端语义**：pending calls、seq、timeout、`CallAsync`；业务状态只在 owner loop 线程访问。
+- `TcpChannelHost` 是 **出站 TCP 宿主**：单连接 `Bootstrap` / connect / write / close；可选共享 `IEventLoopGroup`（见 [§6.3](#63-出站传输tcpchannelhost与-crpcclient)）。
+- `LoopInboundHandler` 是 **IO 适配器**：运行在 DotNetty IO 线程，经 `TcpChannelHost.Post*` 把入站事件投递到 owner loop。
 
 也就是说：
 
@@ -183,6 +202,9 @@ flowchart TB
 CRpcLoop 决定：业务在哪里执行，Service 注册在哪里，状态归谁所有。
 CRpcServer 决定：请求从哪个端口 / 哪种协议进入。
 CRpcServerHandler 决定：IO 线程收到一条消息后，如何传递给业务 loop。
+CRpcClient 决定：出站 RPC 调用语义（pending、timeout、seq）。
+TcpChannelHost 决定：出站 TCP 如何连、写、关。
+LoopInboundHandler 决定：IO 线程收到的 response / 断连如何 Post 回 owner loop。
 ```
 
 #### 4.2 多协议、单 Loop
@@ -599,7 +621,8 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 - `FailPendingCalls`：快照 pending、清空 `results`、取消 timer、批量 `TrySetException`；**只在 owner loop 线程执行**。
 
 `LoopInboundHandler` 在 IO 线程只做 ingress；host 回调已在 owner loop 线程执行（`TcpChannelHost.Post*` 内部 `ownerLoop.Post`）：
-```173:211:CRpc/Rpc/CRpc/Client/CRpcClient.cs
+
+```173:212:CRpc/Rpc/CRpc/Client/CRpcClient.cs
     private void ConfigureHostCallbacks()
     {
         host.InboundMessageReceived = OnHostInboundMessage;
@@ -619,6 +642,8 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         ConnectionLost?.Invoke();
     }
 ```
+
+`OnReceiveResponse(CRpcMessage)` 仍保留为 `internal` 测试 seam（直接 `ownerLoop.Post`）；生产入站路径不经此，走上述 host 回调。
 
 `CompleteReceiveResponse` / timeout 回调 / `FailPendingCalls` 三者竞争同一 `results` 表：`Remove(seq)` 成功者独占完成权，迟到 response 或重复 close 事件被忽略。
 
