@@ -106,7 +106,7 @@ public sealed class CRpcServer
         return StopInternalAsync();
     }
 
-    private async CRpcTask StartInternalAsync(CRpcServerOptions startOptions, CancellationToken cancellationToken)
+    private CRpcTask StartInternalAsync(CRpcServerOptions startOptions, CancellationToken cancellationToken)
     {
         if (bootstrapChannel is not null)
         {
@@ -115,6 +115,13 @@ public sealed class CRpcServer
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        startOptions.Validate();
+
+        return StartInternalAsyncCore(startOptions, cancellationToken);
+    }
+
+    private async CRpcTask StartInternalAsyncCore(CRpcServerOptions startOptions, CancellationToken cancellationToken)
+    {
         runCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         group = new MultithreadEventLoopGroup(startOptions.BossThreadCount);
         workGroup = new MultithreadEventLoopGroup(startOptions.WorkerThreadCount);

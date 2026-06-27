@@ -31,6 +31,8 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(host);
 
+        options.Validate();
+
         ownerLoop = loop;
         this.options = options;
         this.host = host;
@@ -177,6 +179,8 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     private static TcpChannelHost CreateHost(CRpcLoop loop, CRpcClientOptions options)
     {
+        options.Validate();
+
         return new TcpChannelHost(
             loop,
             new CRpcClientPipelineFactory(options),

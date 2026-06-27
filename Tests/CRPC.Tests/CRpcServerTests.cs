@@ -8,6 +8,28 @@ namespace CRPC.Tests;
 public class CRpcServerTests : CrpcTestBase
 {
     [Fact]
+    public void StartAsyncRejectsInvalidPortBeforeBind()
+    {
+        var loop = new CRpcLoop();
+        var server = new CRpcServer(loop, new CRpcServerOptions
+        {
+            Address = IPAddress.Loopback,
+            Port = 65536,
+        });
+
+        CRpcLoopRunner.RunUntilComplete(loop, () =>
+        {
+            var ex = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            {
+                CRpcTask _ = server.StartAsync();
+            });
+            Assert.Equal(nameof(CRpcServerOptions.Port), ex.ParamName);
+            Assert.False(server.IsRunning);
+            return CRpcTask.CompletedTask(loop);
+        });
+    }
+
+    [Fact]
     public void StartAsyncThrowsWhenNoCRpcLoopIsBound()
     {
         var loop = new CRpcLoop();

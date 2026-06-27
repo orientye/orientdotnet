@@ -1,5 +1,6 @@
 using System.Net;
 using CRpc.Rpc.CRpc.Client;
+using CRpc.Rpc.CRpc.Codec;
 using DotNetty.Transport.Channels;
 
 namespace CRpc.Rpc.CRpc.Server;
@@ -17,6 +18,12 @@ public sealed class CRpcServerOptions
     public const int DefaultSoBacklog = 8192;
 
     public const int DefaultReadIdleSeconds = 45;
+
+    public const int MinPort = 0;
+
+    public const int MaxPort = 65535;
+
+    public const int MaxMaxFrameLength = 16 * 1024 * 1024;
 
     public IPAddress Address { get; init; } = IPAddress.Any;
 
@@ -42,12 +49,57 @@ public sealed class CRpcServerOptions
 
     public void Validate(int clientHeartbeatIntervalSeconds = CRpcClientOptions.DefaultHeartbeatIntervalSeconds)
     {
+        if (Port != MinPort && (Port < 1 || Port > MaxPort))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(Port),
+                Port,
+                "CRpcServerOptions.Port must be 0 (ephemeral) or between 1 and 65535.");
+        }
+
+        if (MaxFrameLength < CRpcMessage.MinFrameLength || MaxFrameLength > MaxMaxFrameLength)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(MaxFrameLength),
+                MaxFrameLength,
+                $"CRpcServerOptions.MaxFrameLength must be between {CRpcMessage.MinFrameLength} and {MaxMaxFrameLength}.");
+        }
+
+        if (BossThreadCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(BossThreadCount),
+                BossThreadCount,
+                "CRpcServerOptions.BossThreadCount must be positive.");
+        }
+
+        if (WorkerThreadCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(WorkerThreadCount),
+                WorkerThreadCount,
+                "CRpcServerOptions.WorkerThreadCount must be positive.");
+        }
+
+        if (SoBacklog <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(SoBacklog),
+                SoBacklog,
+                "CRpcServerOptions.SoBacklog must be positive.");
+        }
+
+        if (!HeartbeatEnabled)
+        {
+            return;
+        }
+
         if (ReadIdleSeconds <= 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(ReadIdleSeconds),
                 ReadIdleSeconds,
-                "Read idle must be positive.");
+                "CRpcServerOptions.ReadIdleSeconds must be positive when heartbeat is enabled.");
         }
 
         if (ReadIdleSeconds < clientHeartbeatIntervalSeconds * 2)
@@ -55,7 +107,7 @@ public sealed class CRpcServerOptions
             throw new ArgumentOutOfRangeException(
                 nameof(ReadIdleSeconds),
                 ReadIdleSeconds,
-                "Read idle must be at least twice the client heartbeat interval.");
+                "CRpcServerOptions.ReadIdleSeconds must be at least twice the client heartbeat interval.");
         }
     }
 }
