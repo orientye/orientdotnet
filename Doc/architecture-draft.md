@@ -21,8 +21,8 @@
 
 | 维度 | 现状（代码） | 仍为方向 |
 | --- | --- | --- |
-| Service 归属 | `CRpcLoop` 持有注册表；`CRpcServer` / `HttpServer` 只持 `Loop`，经 `RpcServiceInvoker` 查 service | 独立 `ServiceRegistry` 类型；端点停止时不隐式清空 loop 注册表 |
-| 端点与 loop | 多端点共享一 loop 已可用；`CRpcLoopHost` 统一驱动 | 按 serviceId / channel 路由到多个 loop；IO 线程组可注入（现仍硬编码 1+1） |
+| Service 归属 | `CRpcLoop` 持有注册表；`CRpcServer` / `HttpServer` 只持 `Loop`，经 `RpcServiceInvoker` 查 service；`StopAsync` 不清空 loop 注册表 | 独立 `ServiceRegistry` 类型 |
+| 端点与 loop | 多端点共享一 loop 已可用；`CRpcLoopHost` 统一驱动；IO 线程数已通过 options 可配置（默认 1+1） | 按 serviceId / channel 路由到多个 loop；共享 `IEventLoopGroup` 注入 |
 | Loop 驱动 | `Tick + WaitForWorkOrTimer`（服务端 `CRpcLoopHost` → `CRpcServerLoop`；客户端 `CRpcClientLoopHost` → `CRpcClientLoop`；一次性场景 `CRpcLoopRunner.RunUntilComplete`） | — |
 | Runtime | — | 不引入单独 Runtime；Loop 即上下文 |
 
@@ -111,13 +111,13 @@ CRpc 想要的核心模型是 **单线程业务循环 + 异步状态机**：
    - 跑什么：`CRpcLoop.Tick()`，即注册服务、`OnMessageAsync`、`CallAsync`、超时回调、`CRpcTask` 的 continuation。
 
 2. **DotNetty 服务端 boss 线程组**（`group`）
-   - `CRpcServer.RunAsync` 里 `new MultithreadEventLoopGroup(1)`，处理 `accept`。
+   - `CRpcServer.StartAsync` 里 `new MultithreadEventLoopGroup(BossThreadCount)`（默认 1），处理 `accept`。
 
 3. **DotNetty 服务端 worker 线程组**（`workGroup`）
-   - 同上 `new MultithreadEventLoopGroup(1)`，处理已建立连接的读写、解码、`CRpcServerHandler.ChannelRead`。
+   - 同上 `new MultithreadEventLoopGroup(WorkerThreadCount)`（默认 1），处理已建立连接的读写、解码、`CRpcServerHandler.ChannelRead`。
 
 4. **DotNetty 客户端 IO 线程组**
-   - `CRpcClient` 里 `new MultithreadEventLoopGroup(1)`，处理 connect/read/write 与 `CRpcClientHandler.ChannelRead`。
+   - `CRpcClient` 经 `TcpChannelHost` 创建 `MultithreadEventLoopGroup(IoThreadCount)`（默认 1），处理 connect/read/write 与 `CRpcClientHandler.ChannelRead`。
 
 5. **.NET 线程池 / 调用方任意线程**
    - `CRpcTask.FromTask` 用 `Task.ContinueWith` 做 interop，`ContinueWith` 的回调可能在线程池或同步线程上跑，**只允许 `loop.Post` 回业务 loop**，不能直接动业务状态。
@@ -525,7 +525,7 @@ public sealed class CRpcServer
 - **推荐启动形态**（HelloWorld）：在 `CRpcLoopRunner.RunUntilComplete` 中 `loop.RegisterService` → `await crpcServer.StartAsync` + `await httpServer.StartAsync`，再 `CRpcLoopHost.RunUntilCancelled` 常驻驱动，退出时回到 loop 内 `await StopAsync`。
 - `StartAsync` / `StopAsync` 返回 `CRpcTask`，必须在 owner loop 线程调用；DotNetty `BindAsync` / `CloseAsync` / `ShutdownGracefullyAsync` 经 `CRpcTask.FromTask(..., Loop)` 回到 loop 后再修改端点状态。
 - `RunAsync` 也返回 `CRpcTask`，内部完成启动后嵌入 `CRpcLoopHost.RunUntilCancelled`；**不再**在退出时 `ClearRegisteredServices`（见 `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md`）。
-- DotNetty 仍硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）；见 [§8.1](#81-io-线程组与业务-loop-的拓扑)。
+- DotNetty IO 线程数已通过 `CRpcServerOptions.BossThreadCount` / `WorkerThreadCount` 可配置（默认各 1）；共享 `IEventLoopGroup` 注入仍待做；见 [§8.1](#81-io-线程组与业务-loop-的拓扑)。
 
 ```18:30:CRpc/Rpc/CRpc/Server/CRpcServerHandler.cs
     public override void ChannelRead(IChannelHandlerContext ctx, object msg)
@@ -716,20 +716,21 @@ sequenceDiagram
 
 #### 8.1 IO 线程组与业务 loop 的拓扑
 
-**已部分落地（2026-05-30）**
+**已部分落地**
 
 - `TcpChannelHost` 支持可选 `sharedEventLoopGroup`：borrowed host 只关 channel，不 shutdown 共享 group；`CRpcClient` 已迁移到 `TcpChannelHost`（默认仍每 client 自有 group）。
+- IO 线程**数量**已通过 options 可配置：`CRpcServerOptions.BossThreadCount` / `WorkerThreadCount`（默认各 1）、`CRpcClientOptions.IoThreadCount`（默认 1）；`Validate()` 在 bind/connect 前 fail-fast（见 `docs/superpowers/specs/2026-06-27-crpc-config-validation-design.md`）。
 
 **仍为现状 / 待做**
 
-- `CRpcServer` / `HttpServer` 的 `StartAsync` 里仍硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）；`CRpcServer.RunAsync` 同理。
-- `CRpcClient` / `TcpChannelHost` 默认路径仍为每连接一个 group；`CRpcClientOptions` 注入共享 group 尚未暴露给业务 API。
+- `HttpServer` / `UnifiedServer` 的 `StartAsync` 里仍硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）。
+- `CRpcClient` / `TcpChannelHost` 默认路径仍为每连接一个 group；`CRpcServerOptions` / `CRpcClientOptions` 注入共享 `IEventLoopGroup` 尚未暴露给业务 API。
 - 业务 loop 线程来自 `CRpcLoopHost.RunUntilCancelled` 调用线程（推荐）或 `RunAsync` 内嵌驱动（遗留）。
 - 后果：
   - 没有"按业务模块切多个 `CRpcLoop`"的路由能力，整个进程默认可视为单 loop 单线程业务吞吐。
-  - 服务端仍无法配置 IO 线程数或复用同一 IO group 给多个 listener。
+  - 服务端仍无法复用同一 IO group 给多个 listener（CRpc 端点已可调线程数，但不可注入共享 group）。
 - 方向：
-  - `CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`（options 类型已存在，CRPC 端注入仍待做）。
+  - `CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`（CRPC 端注入仍待做）。
   - 服务端 handler 增加 `RouteLoop` 抽象，按 `serviceId` / channel 路由到不同 `CRpcLoop`。
 
 #### 8.2 `CRpcServerHandler` 的 owner loop 选择不灵活
@@ -1168,13 +1169,11 @@ while (!cancellationToken.IsCancellationRequested)
 ---
 
 ### 10. 现状到目标的演进步骤（建议顺序）
-
 1. **`RouteLoop` 钩子**：`CRpcServer` / `HttpServer` 增加 `Func<..., CRpcLoop>? RouteLoop`，支持按消息路由到不同 loop（见 §9.2）。
-2. **IO 线程可配置 / 可复用**：`TcpChannelHost` 已支持注入共享 group；`CRpcServerOptions` / `CRpcClientOptions` 对 CRPC 服务端与 Reference 客户端暴露注入仍待做。
-3. **多协议示例变体**：HelloWorld 已支持 `--unified`（**推荐**，单端口 Port Unification）与 `--http`（可选，CRpc 7999 + HTTP 8080）；补充纯 CRpc、管理端口、第二个 CRpc 端口等变体示例。
+2. **共享 IO group 注入**：`TcpChannelHost` 已支持注入共享 group；`CRpcServerOptions` / `CRpcClientOptions` 对 CRPC 服务端与 Reference 客户端暴露注入仍待做。
+3. **多协议示例变体**：HelloWorld 默认即为纯 CRpc；已支持 `--unified`（**推荐**，单端口 Port Unification）与 `--http`（可选，CRpc 7999 + HTTP 8080）；仍缺管理端口、第二个 CRpc 端口等变体示例。
 4. **多 loop 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 loop"的 demo，覆盖跨 loop 调用 / 路由 / 关闭顺序。
 5. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[loop|io|tp]` 来源。
-6. **清理 host helper 语义**：`CRpcServer.RunAsync` 已不在退出时 `ClearRegisteredServices`；见 `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md`。
 
 ---
 
