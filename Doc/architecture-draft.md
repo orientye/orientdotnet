@@ -666,23 +666,23 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 sequenceDiagram
     autonumber
     participant Net as Socket
-    participant Dec as CRpcMessageDecoder<br/>(Netty IO 线程)
-    participant SH as CRpcServerHandler<br/>(Netty IO 线程)
-    participant Loop as CRpcLoop (业务线程)
+    participant Dec as CRpcMessageDecoder<br/>Netty IO 线程
+    participant SH as CRpcServerHandler<br/>Netty IO 线程
+    participant BizLoop as CRpcLoop<br/>业务线程
     participant Svc as IRpcService 实现
     participant TCS as CRpcTaskCompletionSource
 
     Net->>Dec: bytes
-    Dec->>SH: ChannelRead(CRpcMessage)
-    SH->>Loop: Loop.Post(() => ProcessMessage)
+    Dec->>SH: ChannelRead CRpcMessage
+    SH->>BizLoop: Post ProcessMessage
     Note right of SH: IO 线程返回，开始下一帧解码
-    Loop->>Loop: Tick() drain action
-    Loop->>Loop: TryGetService + RpcServiceInvoker
-    Loop->>Svc: OnMessageAsync(ctx, req)
+    BizLoop->>BizLoop: Tick drain action
+    BizLoop->>BizLoop: TryGetService + RpcServiceInvoker
+    BizLoop->>Svc: OnMessageAsync
     Svc->>TCS: 状态机里 await 各种 CRpcTask
     TCS-->>Svc: 完成时通过 loop.Post 让 await 恢复
-    Svc-->>Loop: 返回 (resultCode, bytes)
-    Loop->>Net: ctx.WriteAndFlushAsync(frame) (fire-and-forget)
+    Svc-->>BizLoop: 返回 resultCode + bytes
+    BizLoop->>Net: WriteAndFlushAsync fire-and-forget
 ```
 
 #### 7.2 客户端：发起调用 → 收到响应
@@ -690,28 +690,28 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    participant App as 调用方<br/>(业务 loop 线程)
+    participant App as 调用方<br/>业务 loop 线程
     participant Cli as CRpcClient
-    participant Loop as CRpcLoop
+    participant BizLoop as CRpcLoop
     participant Net as Socket
-    participant Dec as CRpcMessageDecoder<br/>(Netty IO 线程)
-    participant LIH as LoopInboundHandler<br/>(Netty IO 线程)
+    participant Dec as CRpcMessageDecoder<br/>Netty IO 线程
+    participant LIH as LoopInboundHandler<br/>Netty IO 线程
     participant Host as TcpChannelHost
 
-    App->>Cli: CallAsync(srv, mth, body, timeout)
-    Cli->>Loop: ScheduleDelay(timeout, 超时回调)
-    Cli->>Host: WriteAndFlushAsync(frame) (fire-and-forget)
-    Cli-->>App: CRpcTask<CRpcMessage>
-    App->>Loop: await → OnCompleted(continuation)
+    App->>Cli: CallAsync
+    Cli->>BizLoop: ScheduleDelay timeout
+    Cli->>Host: WriteAndFlushAsync fire-and-forget
+    Cli-->>App: CRpcTask CRpcMessage
+    App->>BizLoop: await OnCompleted
 
     Net->>Dec: bytes
-    Dec->>LIH: ChannelRead(CRpcMessage)
-    LIH->>Host: PostInboundMessage(message)
-    Host->>Loop: ownerLoop.Post(OnHostInboundMessage)
-    Loop->>Cli: CompleteReceiveResponse 在 loop 线程
-    Cli->>Cli: results.Remove(seq) + 取消 timeout timer
-    Cli->>Loop: pendingCall.Source.TrySetResult(message)
-    Loop-->>App: continuation 被 Post 回来恢复
+    Dec->>LIH: ChannelRead CRpcMessage
+    LIH->>Host: PostInboundMessage
+    Host->>BizLoop: Post OnHostInboundMessage
+    BizLoop->>Cli: CompleteReceiveResponse 在 loop 线程
+    Cli->>Cli: Remove seq + 取消 timeout timer
+    Cli->>BizLoop: TrySetResult
+    BizLoop-->>App: continuation 被 Post 回来恢复
 ```
 
 > Response 经 IO 线程 `Post` 回 owner loop；与 timeout / 断连的竞争规则见 [§9.5.8 RPC Timeout 语义](#958-rpc-timeout-语义) 与 [§9.5.9 Pending Call 生命周期](#959-pending-call-生命周期)。
@@ -725,20 +725,20 @@ sequenceDiagram
     participant LIH as LoopInboundHandler
     participant Host as TcpChannelHost
     participant Cli as CRpcClient
-    participant Loop as CRpcLoop (owner)
+    participant BizLoop as CRpcLoop<br/>owner
     participant App as 调用方
 
     alt 主动 CloseAsync
-        App->>Cli: CloseAsync()
-        Cli->>Cli: FailPendingCalls(ConnectionClosedException)
-        Cli->>Host: CloseAsync (fire-and-forget via FromTask)
+        App->>Cli: CloseAsync
+        Cli->>Cli: FailPendingCalls ConnectionClosed
+        Cli->>Host: CloseAsync fire-and-forget
     else 对端断开 ChannelInactive
         IO->>LIH: ChannelInactive
-        LIH->>Host: PostChannelInactive(channel)
-        Host->>Loop: ownerLoop.Post(OnHostChannelInactive)
-        Loop->>Cli: FailPendingCalls(ConnectionClosedException)
+        LIH->>Host: PostChannelInactive
+        Host->>BizLoop: Post OnHostChannelInactive
+        BizLoop->>Cli: FailPendingCalls ConnectionClosed
     end
-    Loop-->>App: pending CRpcTask TrySetException
+    BizLoop-->>App: pending CRpcTask TrySetException
 ```
 
 ---
