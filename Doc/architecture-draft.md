@@ -351,15 +351,58 @@ public sealed class UserServiceLocalRef
 `LocalRef` 是同进程跨 loop 引用，不是 `CRpcClient`：不走网络、不序列化、不通过 `IRpcService.OnMessageAsync`。
 未来可能由代码生成器自动生成 `LocalRef`。
 
-这里最重要的线程安全规则是：
+##### 跨 loop 的线程安全边界
+
+`InvokeAsync` 只负责线程调度：把调用投递到目标 loop，并把结果投递回调用方 loop。它不让闭包里捕获的引用对象自动变成线程安全对象。因此，同进程跨 loop 调用必须把数据边界定义清楚：**默认传快照，不共享可变对象**。
+
+推荐规则：
+
+- **值类型、ID、枚举、`string`、真正不可变对象** 可以直接跨 loop 传递。
+- **protobuf message / DTO** 应在跨 loop 边界复制成快照；推荐由 `LocalRef` 或代码生成器自动调用 `Clone()`。
+- **Service 内部实体、缓存、集合、聚合对象** 不应跨 loop 传递；只传 ID 或 DTO，让目标 loop 在自己的状态里查找和修改。
+- **`CRpcContext` / `CRpcConnection`** 不跨 loop 传递；它们绑定连接和所属 loop。若需要 traceId、callerId 等信息，应抽成不可变的跨 loop DTO。
+- **`byte[]` / 大 buffer** 默认也应复制；只有显式所有权转移 API 才允许零拷贝传递。
+
+例如，`LocalRef` 生成代码在处理 protobuf 参数和返回值时应做快照：
+
+```csharp
+public CRpcTask<HelloReply> SayHelloAsync(HelloRequest request)
+{
+    var requestSnapshot = request.Clone();
+
+    return CRpcLoop.InvokeAsync(
+        targetLoop,
+        async () =>
+        {
+            var reply = await service.SayHelloAsync(requestSnapshot);
+            return reply.Clone();
+        });
+}
+```
+
+这里的 `Clone()` 是同进程跨 loop 的默认快照机制；跨进程 RPC 仍然使用 `ToByteArray()` / `ParseFrom()` 完成序列化边界。
+
+##### 显式所有权转移
+
+默认跨 loop 调用按快照传递。对大块 payload，可在性能热点上提供显式所有权转移 API，例如 `InvokeOwnedAsync` / `PostOwned`。
+
+所有权转移 API 的语义是：
+
+- 参数校验通过并成功入队后，payload 所有权从调用方 loop 转移到目标 loop。
+- 调用方投递后不得再读写、缓存、复用或释放该 payload。
+- 目标 loop 是 payload 的唯一 owner；若 payload 需要释放、归还池或 `Dispose`，由目标 loop 负责。
+- 目标 action 抛异常不会把所有权还给调用方，异常只通过返回的 `CRpcTask` 传播。
+- 该路径只用于明确的性能热点；普通业务调用仍使用默认快照路径。
+
+##### 线程安全规则
 
 - `CRpcLoop.Post` 仍是跨线程入口，内部队列必须线程安全；`InvokeAsync` 只是把双向 `Post` 封装起来。
 - 目标 Service 的业务状态只在目标 loop 线程访问。
 - 调用方的 `CRpcTaskCompletionSource` 只在调用方 loop 线程完成。
-- 跨线程传递的数据应当是不可变对象、DTO、值类型，或者明确 copy 出来的快照。
-- 不要把可变业务对象同时暴露给两个 loop。
+- 跨 loop 默认传递值、ID、不可变对象或快照；不要把同一个可变对象同时暴露给两个 loop。
+- 若引入显式所有权转移路径，必须在 API 名称和文档中标明：投递成功后发送方不再访问 payload。
 
-也就是说，同进程不同线程的通信模型不是“共享对象 + 加锁”，而是 **消息投递 + 线程所有权**。
+也就是说，同进程不同线程的通信模型不是“共享对象 + 加锁”，而是 **消息投递 + 线程所有权 + 默认快照边界**。
 
 #### 5.3 不同进程：真正的 RPC 调用
 
@@ -387,7 +430,7 @@ var (code, reply) = await greeterClient.SayHelloAsync(request);
 #### 5.4 选择规则
 
 - 同 loop / 同线程：本地接口直接调用，不需要序列化，也不跨线程。
-- 同进程 / 不同 loop：`CRpcLoop.InvokeAsync` 封装跨 loop 消息投递，底层仍通过 `CRpcLoop.Post`；通常不需要序列化，但建议只传 DTO / 快照。
+- 同进程 / 不同 loop：`CRpcLoop.InvokeAsync` 封装跨 loop 消息投递，底层仍通过 `CRpcLoop.Post`；protobuf 参数/返回值默认 `Clone()` 成快照，通常不需要 `ToByteArray()` 序列化。
 - 不同进程：`CRpcClient` RPC 调用，需要序列化，也需要网络错误与超时处理。
 
 一句话总结：
