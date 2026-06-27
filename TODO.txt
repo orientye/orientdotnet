@@ -1,0 +1,89 @@
+# CRpc TODO
+
+> 2026-06-27 按当前实现重新整理。已落地的历史 TODO 移到文末归档；本文件只跟踪还需要继续推进的事项。
+
+## P0：先修语义正确性
+
+1. 未知 `serviceId` / `methodId` 要返回明确错误响应。
+   - 当前 `CRpcServerHandler.ChannelRead` 在 `TryGetService` 失败时基本静默丢弃，请求方只能等超时。
+   - 建议先定义框架级错误码，例如 `ServiceNotFound`、`MethodNotFound`、`InvalidRequest`、`InternalError`，并在 `RpcServiceInvoker` / handler 统一构造错误响应。
+
+2. 梳理服务端生命周期 API。
+   - `CRpcServer.Open()` 仍是空方法，`Close()` 只投递 cancel，实际生命周期由 `RunAsync` / `StartAsync` / `StopAsync` 驱动。
+   - 明确一种模型：要么删除/废弃 `Open()`，要么让 `Open` / `Close` 成为真正对称 API。
+   - 明确 `CRpcServer` 是否支持 restart；不支持就显式禁止重复启动。
+   - 重新评估 `RunInternalAsync` 结束时 `Loop.ClearRegisteredServices()`：端点停止不一定应该清空 loop 级 service 注册表。
+
+3. 补齐配置校验与配置类型收敛。
+   - `CRpcServerOptions` / `CRpcClientOptions` 已经承接了端口、frame 上限、IO 线程数、心跳等配置，但校验还不完整。
+   - 校验 `Port`、`MaxFrameLength`、`BossThreadCount`、`WorkerThreadCount`、`IoThreadCount`、`SoBacklog`、`ConnectTimeoutSeconds`、`CallTimeoutMilliseconds`。
+   - 删除空的 `CRpc.Config.ServerConfig` / `ServiceConfig`，或让它们成为真实宿主配置入口，避免双轨配置。
+
+4. 写入背压和慢客户端保护。
+   - 服务端已有 `IdleStateHandler` 和 `MaxFrameLength`，但还没有 `WriteBufferWaterMark` / `channel.IsWritable` 策略。
+   - 响应写当前是 fire-and-forget，适合普通 RPC 路径；但慢客户端、持续 push、写队列堆积时还缺少拒绝、断开或降级策略。
+
+5. 结构化错误模型。
+   - 业务返回仍是 `(int, byte[])`，错误码只是裸 `int`，没有枚举、消息 detail、异常映射。
+   - 建议定义 `CRpcStatusCode` / `CRpcError`，由框架把异常映射成稳定协议响应；业务错误与框架错误分层。
+
+## P1：协议与并发模型完善
+
+1. 决定压缩 / 加密策略。
+   - 当前协议 header 有 `Flags`，实现只接受 `CRpcFrameFlags.None`。
+   - 要么删除未实现状态位，只保留未来扩展点；要么补上压缩 / 加密的完整实现、协商策略和测试。
+
+2. 增强协议完整性校验。
+   - 已有 magic、payload length、version、message type、flags 校验。
+   - Body 仍缺完整校验；如果需要抵抗传输损坏或中间字节篡改，补 CRC32 / xxHash 等全 body checksum。
+
+3. `CRpcTask` 取消语义。
+   - 目前 pending call 超时和连接关闭会 fault，但没有面向调用方的 `CRpcCancellationToken`。
+   - 如要支持业务取消，必须保证 cancel completion 仍只在 owner `CRpcLoop` 线程触发。
+
+4. 多 loop 路由。
+   - 当前 service 注册表在单个 `CRpcLoop` 上，多端点共享一个 loop 已可用。
+   - 仍缺按 `serviceId`、连接或 shard 路由到多个业务 loop 的 `RouteLoop` / dispatcher。
+
+5. 连接与重连策略。
+   - 客户端断线会 fault pending calls，并抛 `ConnectionLost`。
+   - 是否自动重连、重连期间调用如何排队/失败、服务发现变更如何切换 endpoint，还需要单独设计。
+
+## P2：可观测性、测试和代码卫生
+
+1. 用结构化日志替换 `Console.WriteLine` / `Console.Error`。
+   - 当前仍分散在 `CRpcServer`、`CRpcServerHandler`、`CRpcMessageDecoder`、`CRpcClient`、示例和 Gateway 中。
+   - 建议先引入一个轻量 `CRpcLog` / `ILogger` 适配点，字段至少包含 `connectionId`、`serviceId`、`methodId`、`reqSequence`、`resultCode`、异常。
+
+2. 增加 metrics / tracing 钩子。
+   - 需要能观察 QPS、pending 数、超时率、连接数、push 失败、请求耗时分布。
+   - tracing 可以先预留 OpenTelemetry / W3C TraceContext 入口，不必一次性接完整链路。
+
+3. 扩充端到端与压力测试。
+   - 已有 loop、timer、codec、pipeline、heartbeat、client pending、push、server handler 等单测。
+   - 仍建议补真实 client + server TCP 集成测试：正常响应、未知 service 错误、超时、断线、并发、慢消费者、超过 frame 上限。
+   - 减少通过反射读取私有字段的测试，优先从公开行为断言。
+
+4. 清理命名和占位代码。
+   - `CRpcContext` 已实现 `IRpcContext` 并携带连接，但 `IRpcContext` 仍为空接口。
+   - `CRpc.Rpc.CRpc.*`、`CRpc.Mgr.Nacos`、`CRpc.ConfigCenter.Nacos` 等命名空间需要统一风格。
+   - `CRpc/Mgr/Nacos/Test/NacosTest.cs` 仍在生产工程中，应移到测试/示例，或删除。
+
+5. Nacos 组件改造成可注入服务。
+   - `NacosMgr.Instance` 是强单例，`Srv` 可为空且很多方法静默返回默认值。
+   - `NacosRegistry` / `NacosConfig` 目前直接暴露或隐藏 `Task` API，需要明确这是外部 interop 边界，并加初始化状态检查。
+
+## P3：依赖与长期演进
+
+1. 依赖版本治理。
+   - `Google.Protobuf` / `Google.Protobuf.Tools` 仍是 `3.35.0-rc1`，`Microsoft.Extensions.Logging.Console` 仍是 `11.0.0-preview.3...`。
+   - 建议加 `Directory.Packages.props` 统一版本，并优先固定到稳定版。
+
+2. DotNetty 替换路线。
+   - DotNetty `0.7.6` 长期维护风险仍在。
+   - 当前已有 `TcpChannelHost`、`IChannelPipelineFactory` 等传输边界雏形；继续把协议/业务层与 DotNetty 解耦，为 System.IO.Pipelines、Kestrel transport、SuperSocket 或直接 Socket 留迁移空间。
+
+3. Protobuf vendor 策略。
+   - `Tool/crpc-protobuf-plugin/CRpcProtobufPlugin/Google/Protobuf/...` vendor 了一份 Google.Protobuf 源码。
+   - 需要明确这份源码是否有本地 patch；若没有，尽量回到 NuGet 上游；若有，记录 patch 原因和同步策略。
+
