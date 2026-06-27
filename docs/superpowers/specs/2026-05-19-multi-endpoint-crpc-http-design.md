@@ -87,7 +87,7 @@ Codegen (`crpc-protobuf-plugin`) generates `TryGetHttpMethodParsers` on each `{S
 | `CRpcLoop` | `RegisterService`, `TryGetService`, `UnregisterService` |
 | `CRpcLoopHost` | `RunUntilCancelled` (alias/evolution of `CRpcServerLoop`) |
 | `CRpcServerOptions` | Address, port, frame limits |
-| `CRpcServer` | Bind TCP CRpc pipeline; `StartAsync` / `StopAsync`; registry forwards to loop |
+| `CRpcServer` | Bind TCP CRpc pipeline; `StartAsync` / `StopAsync`; service registry on `CRpcLoop` only |
 | `HttpServerOptions` | Address, port (8080), max body bytes |
 | `HttpServer` | Bind DotNetty HTTP pipeline |
 | `HttpServerHandler` | Parse HTTP, Post to loop, write JSON response |

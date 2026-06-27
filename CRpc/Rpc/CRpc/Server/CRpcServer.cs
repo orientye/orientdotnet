@@ -5,12 +5,11 @@ using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Sockets;
 
 using CRpc.Async;
-using CRpc.Rpc;
 using CRpc.Rpc.CRpc.Codec;
 
 namespace CRpc.Rpc.CRpc.Server;
 
-public sealed class CRpcServer : IRpcServer
+public sealed class CRpcServer
 {
     private readonly CRpcServerOptions options;
     private CancellationTokenSource? runCancellation;
@@ -35,15 +34,11 @@ public sealed class CRpcServer : IRpcServer
 
     public bool IsRunning => Volatile.Read(ref isRunning) == 1;
 
-    public void Open()
-    {
-    }
-
-    public void Close()
-    {
-        Loop.Post(() => runCancellation?.Cancel());
-    }
-
+    /// <summary>
+    /// Demo host helper: bind, run <see cref="CRpcLoopHost.RunUntilCancelled"/> on the current thread, then stop.
+    /// Does not clear loop service registrations. Production hosts should use <see cref="StartAsync"/> +
+    /// <see cref="CRpcLoopHost.RunUntilCancelled"/> + <see cref="StopAsync"/>.
+    /// </summary>
     public CRpcTask RunAsync(IPAddress address, int port, bool registerConsoleCancelHandler = true)
     {
         EnsureOwnerLoopThread();
@@ -94,8 +89,6 @@ public sealed class CRpcServer : IRpcServer
                 Console.CancelKeyPress -= cancelHandler;
             }
         }
-
-        Loop.ClearRegisteredServices();
 
         await StopInternalAsync();
     }

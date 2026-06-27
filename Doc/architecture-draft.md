@@ -508,7 +508,7 @@ public sealed class CRpcLoop
 #### 6.2 CRpcServer + CRpcServerHandler + RpcServiceInvoker
 
 ```13:28:CRpc/Rpc/CRpc/Server/CRpcServer.cs
-public sealed class CRpcServer : IRpcServer
+public sealed class CRpcServer
 {
     // ...
     public CRpcServer(CRpcLoop loop, CRpcServerOptions? options = null)
@@ -524,7 +524,7 @@ public sealed class CRpcServer : IRpcServer
 - `Loop` 在构造时**必须显式传入**；`CRpcServer` **不**持有 service 注册表。
 - **推荐启动形态**（HelloWorld）：在 `CRpcLoopRunner.RunUntilComplete` 中 `loop.RegisterService` → `await crpcServer.StartAsync` + `await httpServer.StartAsync`，再 `CRpcLoopHost.RunUntilCancelled` 常驻驱动，退出时回到 loop 内 `await StopAsync`。
 - `StartAsync` / `StopAsync` 返回 `CRpcTask`，必须在 owner loop 线程调用；DotNetty `BindAsync` / `CloseAsync` / `ShutdownGracefullyAsync` 经 `CRpcTask.FromTask(..., Loop)` 回到 loop 后再修改端点状态。
-- `RunAsync` 也返回 `CRpcTask`，内部完成启动后嵌入 `CRpcLoopHost.RunUntilCancelled`；它保留“退出时 `ClearRegisteredServices`”的 host-helper 语义。
+- `RunAsync` 也返回 `CRpcTask`，内部完成启动后嵌入 `CRpcLoopHost.RunUntilCancelled`；**不再**在退出时 `ClearRegisteredServices`（见 `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md`）。
 - DotNetty 仍硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）；见 [§8.1](#81-io-线程组与业务-loop-的拓扑)。
 
 ```18:30:CRpc/Rpc/CRpc/Server/CRpcServerHandler.cs
@@ -746,7 +746,7 @@ sequenceDiagram
 
 - `CRpcServer.StartAsync` / `StopAsync` 与 `HttpServer.StartAsync` / `StopAsync` 已统一为 `CRpcTask`，必须在 owner loop 线程调用。
 - `bootstrapChannel`、IO groups、运行状态的写入收束到 owner loop；对外 `IsRunning` 是 `Volatile` 快照。
-- `CRpcServer.RunAsync` 仅作为 host helper 保留；更明确的组合仍是 `StartAsync` + `CRpcLoopHost.RunUntilCancelled` + `StopAsync`。
+- `CRpcServer.RunAsync` 仅作为 demo host helper 保留；生产组合为 `StartAsync` + `CRpcLoopHost.RunUntilCancelled` + `StopAsync`（`docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md`）。
 
 #### 8.5 `CRpcLoopRunner.RunUntilComplete` 的使用方式
 
@@ -1174,7 +1174,7 @@ while (!cancellationToken.IsCancellationRequested)
 3. **多协议示例变体**：HelloWorld 已支持 `--unified`（**推荐**，单端口 Port Unification）与 `--http`（可选，CRpc 7999 + HTTP 8080）；补充纯 CRpc、管理端口、第二个 CRpc 端口等变体示例。
 4. **多 loop 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 loop"的 demo，覆盖跨 loop 调用 / 路由 / 关闭顺序。
 5. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[loop|io|tp]` 来源。
-6. **清理 host helper 语义**：评估是否保留 `CRpcServer.RunAsync` 的“结束时隐式 `ClearRegisteredServices`”；常规端点生命周期使用 `CRpcTask StartAsync` + `CRpcLoopHost` + `CRpcTask StopAsync` 模式。
+6. **清理 host helper 语义**：`CRpcServer.RunAsync` 已不在退出时 `ClearRegisteredServices`；见 `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md`。
 
 ---
 

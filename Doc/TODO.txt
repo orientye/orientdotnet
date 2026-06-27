@@ -8,11 +8,10 @@
    - 当前 `CRpcServerHandler.ChannelRead` 在 `TryGetService` 失败时基本静默丢弃，请求方只能等超时。
    - 建议先定义框架级错误码，例如 `ServiceNotFound`、`MethodNotFound`、`InvalidRequest`、`InternalError`，并在 `RpcServiceInvoker` / handler 统一构造错误响应。
 
-2. 梳理服务端生命周期 API。
-   - `CRpcServer.Open()` 仍是空方法，`Close()` 只投递 cancel，实际生命周期由 `RunAsync` / `StartAsync` / `StopAsync` 驱动。
-   - 明确一种模型：要么删除/废弃 `Open()`，要么让 `Open` / `Close` 成为真正对称 API。
-   - 明确 `CRpcServer` 是否支持 restart；不支持就显式禁止重复启动。
-   - 重新评估 `RunInternalAsync` 结束时 `Loop.ClearRegisteredServices()`：端点停止不一定应该清空 loop 级 service 注册表。
+2. ~~梳理服务端生命周期 API。~~ **Done (2026-06-27)** — spec: `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md`
+   - 删除 `IRpcServer` / `Open()` / `Close()`；主路径 `StartAsync` / `StopAsync`。
+   - transport 支持 `Stop` 后再次 `Start`；`StopAsync` 不清 loop 注册表。
+   - `RunAsync` 保留为 demo helper，退出时不再 `ClearRegisteredServices`。
 
 3. 补齐配置校验与配置类型收敛。
    - `CRpcServerOptions` / `CRpcClientOptions` 已经承接了端口、frame 上限、IO 线程数、心跳等配置，但校验还不完整。
