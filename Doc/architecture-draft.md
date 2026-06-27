@@ -833,9 +833,9 @@ flowchart LR
         Worker[worker group]
     end
     subgraph Business["业务层 (N 个 CRpcLoop)"]
-        L1[CRpcLoop A<br/>事务 / 玩家分片 1]
-        L2[CRpcLoop B<br/>事务 / 玩家分片 2]
-        L3[CRpcLoop C<br/>聊天 / 推送]
+        L1[CRpcLoop A<br/>User分片 1]
+        L2[CRpcLoop B<br/>User分片 2]
+        L3[CRpcLoop C<br/>聊天]
     end
     subgraph Interop["interop 边界"]
         TP[(.NET ThreadPool / Task)]
