@@ -14,7 +14,7 @@
 | 线程 | 一个 loop 绑定一个业务线程；业务状态、注册表、pending 调用、定时器、`CRpcTask` 完成**只在该线程访问** |
 | 角色 | **业务执行上下文**；不另设 Runtime 层 |
 | 注册表 | `CRpcLoop.RegisterService` / `TryGetService`（内联 `Dictionary`，非独立 `ServiceRegistry` 类型） |
-| 端点 | **CRpc 在核心**；HTTP 由应用层实现（见 `Example/HelloWorld/Server/Http/`），可选 Port Unification 与 CRpc 共端口；多 loop 路由仍缺 |
+| 端点 | **CRpc 在核心**；HTTP 由应用层实现（见 `Example/HelloWorld/Server/Http/`）；**推荐** Port Unification 单端口多协议（`--unified`）；双端口（7999+8080，`--http`）为可选调试形态；详见 [§4.2](#42-多协议单-loop) 与 `Doc/protocol.md`；多 loop 路由仍缺 |
 | 调度 | MPSC mailbox + loop-owned timer + `WaitForWorkOrTimer`；见 [§9.5](#95-crpcloop-调度timer-与-rpc-timeout) |
 
 ### 现状 vs 目标
@@ -187,9 +187,38 @@ CRpcServer 决定：请求从哪个端口 / 哪种协议进入。
 CRpcServerHandler 决定：IO 线程收到一条消息后，如何传递给业务 loop。
 ```
 
-#### 4.2 多端口、多协议
+#### 4.2 多协议、单 Loop
 
-多端口不是多份业务状态，而是多个协议端点共享同一个业务 loop：
+多协议不是多份业务状态，而是多种接入方式共享同一个业务 loop 与同一份 service 注册表。对外暴露时**优先同端口多种协议**（Port Unification）；双端口仅作可选部署。
+
+部署模式（与 `Doc/protocol.md` 一致）：
+
+| 模式 | 启动 | 端口 | 定位 |
+| --- | --- | --- | --- |
+| CRpc only | 默认 | `7999`（`--port` 可改） | 纯二进制 RPC |
+| **Unified（推荐）** | `--unified` | **单端口**（默认 `7999`） | 同 TCP 口嗅探分支 CRpc / HTTP |
+| CRpc + HTTP | `--http` | CRpc `7999` + HTTP `8080` | 双 listener，便于分别调试 / 压测 |
+
+##### 推荐：同端口 Port Unification（`--unified`）
+
+应用层 `UnifiedServer` + `PortUnificationHandler`（不在 `CRpc.dll` 核心）：每个新连接读首字节，按 magic 或 HTTP 前缀安装 pipeline，嗅探一次后 `remove(this)`。
+
+```text
+CRpcLoop A
+  ├── registeredServices (RegisterService / TryGetService)
+  │   ├── UserService
+  │   └── OrderService
+  └── UnifiedServer :7999                    ← 推荐：单端口
+        ├── magic 'CRPC' → CRpcMessageDecoder → CRpcServerHandler
+        └── GET/POST/…   → HttpServerCodec → GreeterHttpHandler（应用路由）
+```
+
+- 共享 **一个** `CRpcLoop`、**一个** service 注册表、**一个** `CRpcConnectionRegistry`、**一套** boss/worker IO 线程组。
+- HelloWorld：`Example/HelloWorld/Server/Http/UnifiedServer.cs`、`PortUnificationHandler.cs`；启动见 `Program.cs --unified`。
+
+##### 可选：双端口（`--http`）
+
+以下为早期 / 调试友好形态，**保留**作备选；业务模型与 Unified 相同，仅 TCP 监听层拆成两个端口：
 
 ```text
 CRpcLoop A
@@ -200,6 +229,10 @@ CRpcLoop A
   └── HttpServer : 8080, HTTP/JSON 协议
 ```
 
+HelloWorld 双端口路径：`CRpcServer.StartAsync` + `HttpListenServer.StartAsync`（`Program.cs --http`）。
+
+##### 协议边界（两种部署共用）
+
 多协议的关键是：不同端点把外部协议转换成统一的内部调用形态：
 
 ```text
@@ -207,7 +240,7 @@ serviceId + methodId + request body + IRpcContext
 ```
 
 - CRpc 二进制端点：`TCP bytes -> CRpcMessage -> loop.Post -> RpcServiceInvoker -> CRpcMessage response -> TCP frame`。
-- HTTP 端点：`HTTP/JSON -> serviceId/methodId/body -> loop.Post -> RpcServiceInvoker -> HTTP response`（参考 `HttpServerHandler`）。
+- HTTP 端点：`HTTP/JSON -> serviceId/methodId/body -> loop.Post -> RpcServiceInvoker -> HTTP response`（参考 `HttpServerHandler`；应用层 HTTP 亦可 `loop.Post` 后直接调 typed 方法，见 `GreeterHttpHandler`）。
 
 ---
 
@@ -785,7 +818,7 @@ flowchart LR
 - 多个业务 loop **互不共享状态**，靠消息传递。
 - 每个 loop 拥有自己的 service 注册表；Service 不再长期归属于某个 Server。
 - IO 层通过路由把请求 dispatch 到合适的 loop（最常见：按连接 ID / 用户 ID hash）。
-- 多端口 / 多协议通过多个协议端点实现，这些端点可以共享同一个 loop，也可以按路由投递到不同 loop。
+- 多协议：**推荐**单端口 Port Unification（见 [§4.2](#42-多协议单-loop)）；亦可双端口或多 listener。端点可以共享同一个 loop，也可以按路由投递到不同 loop。
 - 任何 `.NET Task` interop 必须 `Post` 回某个具体的 loop。
 
 #### 9.2 推荐的 API 形态（草稿）
@@ -1138,7 +1171,7 @@ while (!cancellationToken.IsCancellationRequested)
 
 1. **`RouteLoop` 钩子**：`CRpcServer` / `HttpServer` 增加 `Func<..., CRpcLoop>? RouteLoop`，支持按消息路由到不同 loop（见 §9.2）。
 2. **IO 线程可配置 / 可复用**：`TcpChannelHost` 已支持注入共享 group；`CRpcServerOptions` / `CRpcClientOptions` 对 CRPC 服务端与 Reference 客户端暴露注入仍待做。
-3. **多端口 / 多协议示例变体**：HelloWorld 已演示同一 loop 上 CRpc 7999 + HTTP 8080；补充第二个 CRpc 端口、管理端口等变体示例。
+3. **多协议示例变体**：HelloWorld 已支持 `--unified`（**推荐**，单端口 Port Unification）与 `--http`（可选，CRpc 7999 + HTTP 8080）；补充纯 CRpc、管理端口、第二个 CRpc 端口等变体示例。
 4. **多 loop 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 loop"的 demo，覆盖跨 loop 调用 / 路由 / 关闭顺序。
 5. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[loop|io|tp]` 来源。
 6. **清理 host helper 语义**：评估是否保留 `CRpcServer.RunAsync` 的“结束时隐式 `ClearRegisteredServices`”；常规端点生命周期使用 `CRpcTask StartAsync` + `CRpcLoopHost` + `CRpcTask StopAsync` 模式。
