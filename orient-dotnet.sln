@@ -13,9 +13,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HelloWorldClient", "Example
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{3D3C20CD-0A65-4D17-AFD7-50E0648EE450}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CRPC.Tests", "Tests\CRPC.Tests\CRPC.Tests.csproj", "{CD3A3253-6E5A-452B-816C-C4BA1FF0F1DF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Orient.Tests", "Tests\Orient.Tests\Orient.Tests.csproj", "{CD3A3253-6E5A-452B-816C-C4BA1FF0F1DF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CRPC.TestHelper", "CRPC.TestHelper\CRPC.TestHelper.csproj", "{870855F5-9434-4D14-A1DB-E78935BC4AA6}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Orient.TestHelper", "Orient.TestHelper\Orient.TestHelper.csproj", "{870855F5-9434-4D14-A1DB-E78935BC4AA6}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GateWay.Core", "Example\GateWay\GateWay.Core\GateWay.Core.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567891}"
 EndProject

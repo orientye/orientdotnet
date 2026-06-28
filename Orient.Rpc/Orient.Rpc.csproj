@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <InternalsVisibleTo Include="CRPC.Tests" />
+    <InternalsVisibleTo Include="Orient.Tests" />
     <InternalsVisibleTo Include="GateWay.Core" />
   </ItemGroup>
 

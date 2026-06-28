@@ -67,7 +67,7 @@ public sealed class OrientLoop
 
 #if DEBUG
     /// <summary>
-    /// Clears DEBUG thread binding state. For test harnesses only (e.g. <c>CRpc.TestHelper.CrpcTestBase</c>).
+    /// Clears DEBUG thread binding state. For test harnesses only (e.g. <c>Orient.TestHelper.OrientTestBase</c>).
     /// </summary>
     public static void ResetDebugThreadBindingForTests()
     {

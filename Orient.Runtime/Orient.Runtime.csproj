@@ -2,7 +2,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Orient.Rpc" />
-    <InternalsVisibleTo Include="CRPC.Tests" />
+    <InternalsVisibleTo Include="Orient.Tests" />
   </ItemGroup>
 
   <PropertyGroup>
