@@ -1,4 +1,4 @@
-# Orient 架构（CRpc 协议 + Orient.Runtime）
+# 架构（Orient.Runtime + Orient.Rpc）
 
 > **范围**：线程、`OrientLoop`（原 `CRpcLoop`）、`CRpcServer` / `CRpcServerHandler`、`CRpcClient` / `TcpChannelHost` 及其关系。既写现状，也标目标方向；**现有代码 ≠ 推荐设计**。
 >
