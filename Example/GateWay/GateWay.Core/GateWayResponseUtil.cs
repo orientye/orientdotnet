@@ -1,5 +1,5 @@
-using CRpc.Rpc.CRpc;
-using CRpc.Rpc.CRpc.Codec;
+using Orient.Rpc.CRpc;
+using Orient.Rpc.Codec;
 using DotNetty.Transport.Channels;
 
 namespace GateWay;

@@ -1,4 +1,4 @@
-using CRpc.Transport;
+using Orient.Rpc.Transport;
 using DotNetty.Transport.Channels;
 
 namespace CRPC.Tests.Transport;

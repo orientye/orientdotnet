@@ -1,6 +1,6 @@
-using CRpc.Async;
-using CRpc.Rpc.CRpc.Codec;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc.Codec;
+using Orient.Rpc.Server;
 using DotNetty.Transport.Channels.Embedded;
 
 namespace CRPC.Tests;
@@ -10,7 +10,7 @@ public class CRpcConnectionTests : CrpcTestBase
     [Fact]
     public void SendPushAsyncWritesStatePushMessage()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var channel = new EmbeddedChannel();
         var connection = new CRpcConnection(loop, id: 42, channel);
@@ -32,7 +32,7 @@ public class CRpcConnectionTests : CrpcTestBase
     [Fact]
     public void SendPushAsyncReturnsFalseWhenConnectionInactive()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var channel = new EmbeddedChannel();
         var connection = new CRpcConnection(loop, id: 42, channel);
@@ -47,15 +47,15 @@ public class CRpcConnectionTests : CrpcTestBase
     [Fact]
     public void SendPushAsyncThrowsWhenCalledOutsideOwnerLoop()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var channel = new EmbeddedChannel();
         var connection = new CRpcConnection(loop, id: 42, channel);
 
-        var otherLoop = new CRpcLoop();
+        var otherLoop = new OrientLoop();
         otherLoop.BindToCurrentThread();
         var exception = Assert.Throws<InvalidOperationException>(
             () => connection.SendPushAsync(1000, 2, Array.Empty<byte>()));
 
-        Assert.Contains("owner CRpcLoop", exception.Message);
+        Assert.Contains("owner OrientLoop", exception.Message);
     }
 }

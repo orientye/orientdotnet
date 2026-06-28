@@ -1,11 +1,11 @@
-using CRpc.Async;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc.Server;
 
 namespace Example;
 
 public class HelloworldServiceImpl : GreeterServiceBase
 {
-    protected override CRpcTask<(int, HelloReply)> SayHelloAsync(
+    protected override OrientTask<(int, HelloReply)> SayHelloAsync(
         CRpcContext context,
         HelloRequest request)
     {
@@ -13,12 +13,12 @@ public class HelloworldServiceImpl : GreeterServiceBase
             context.Connection,
             new ServerHelloPush { Msg = $"server saw: {request.Msg}" });
 
-        return CRpcTask.FromResult(
+        return OrientTask.FromResult(
             (0, new HelloReply { Msg = $"Hello {request.Msg}" }),
-            CRpcLoop.Current);
+            OrientLoop.Current);
     }
 
-    public CRpcTask<(int, HelloReply)> InvokeSayHelloAsync(CRpcContext context, HelloRequest request)
+    public OrientTask<(int, HelloReply)> InvokeSayHelloAsync(CRpcContext context, HelloRequest request)
     {
         return SayHelloAsync(context, request);
     }

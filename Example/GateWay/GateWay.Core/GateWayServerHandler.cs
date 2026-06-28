@@ -1,9 +1,9 @@
 using System.Net.Sockets;
-using CRpc.Async;
-using CRpc.Rpc;
-using CRpc.Rpc.CRpc;
-using CRpc.Rpc.CRpc.Codec;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc;
+using Orient.Rpc.CRpc;
+using Orient.Rpc.Codec;
+using Orient.Rpc.Server;
 using DotNetty.Transport.Channels;
 
 namespace GateWay;
@@ -38,11 +38,11 @@ public class GateWayServerHandler : ChannelHandlerAdapter
 
         server.Loop.Post(() =>
         {
-            if (server.Loop.TryGetService(message.ServiceId, out var rpcService))
+            if (server.Services.TryGet(message.ServiceId, out var rpcService))
             {
                 ProcessMessage(rpcService, ctx, message);
             }
-            else if (server.Loop.TryGetService(fallbackServiceId, out var fallbackService))
+            else if (server.Services.TryGet(fallbackServiceId, out var fallbackService))
             {
                 ProcessMessage(fallbackService, ctx, message);
             }
@@ -72,7 +72,7 @@ public class GateWayServerHandler : ChannelHandlerAdapter
         awaiter.OnCompleted(() => CompleteProcessMessage(awaiter));
     }
 
-    private static async CRpcTask ProcessMessageAsync(
+    private static async OrientTask ProcessMessageAsync(
         IRpcService rpcService,
         CRpcConnection connection,
         IChannelHandlerContext ctx,
@@ -85,7 +85,7 @@ public class GateWayServerHandler : ChannelHandlerAdapter
         ChannelWriteUtil.WriteAndFlushFireAndForget(ctx, rsp);
     }
 
-    private static void CompleteProcessMessage(CRpcTask.Awaiter awaiter)
+    private static void CompleteProcessMessage(OrientTask.Awaiter awaiter)
     {
         try
         {

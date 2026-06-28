@@ -2,6 +2,7 @@
 
 **Status:** Draft (pending review)  
 **Date:** 2026-06-28  
+**Implementation:** Completed by `docs/superpowers/plans/2026-06-28-a2-runtime-rpc-split.md`.  
 **Related:** `Doc/architecture-draft.md` (ServiceRegistry target), `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md` (supersedes §Goal / §Decisions §1 / §7 / §Invariants registry items), `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
 
 **Follow-up spec:** `docs/superpowers/specs/2026-06-28-orient-runtime-rpc-split-design.md` (Runtime/Rpc split + `OrientLoop` / `OrientTask` rename). Combined implementation plan covers both.

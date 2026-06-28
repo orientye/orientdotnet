@@ -1,5 +1,5 @@
-using CRpc.Async;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc.Server;
 
 namespace GateWay;
 
@@ -28,10 +28,10 @@ public sealed class GateWaySessionTable
         return links.GetValueOrDefault(connectionId);
     }
 
-    public async CRpcTask<GateWayBackendLink?> GetOrCreateAsync(
+    public async OrientTask<GateWayBackendLink?> GetOrCreateAsync(
         CRpcConnection inbound,
         ushort serviceId,
-        CRpcLoop loop)
+        OrientLoop loop)
     {
         if (links.TryGetValue(inbound.ConnectionId, out var existing))
         {
@@ -80,7 +80,7 @@ public sealed class GateWaySessionTable
         }
     }
 
-    public async CRpcTask RemoveAsync(long connectionId)
+    public async OrientTask RemoveAsync(long connectionId)
     {
         if (links.Remove(connectionId, out var link))
         {
@@ -88,7 +88,7 @@ public sealed class GateWaySessionTable
         }
     }
 
-    public async CRpcTask DisposeAllAsync()
+    public async OrientTask DisposeAllAsync()
     {
         foreach (var link in links.Values)
         {

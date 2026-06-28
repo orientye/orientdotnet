@@ -1,21 +1,21 @@
-using CRpc.Async;
+using Orient.Runtime;
 
 namespace CRPC.Tests;
 
-public class CRpcLoopRunnerTests : CrpcTestBase
+public class OrientLoopRunnerTests : CrpcTestBase
 {
     [Fact]
     public void RunUntilCompleteBindsLoopBeforeStartingOperation()
     {
-        var loop = new CRpcLoop();
-        CRpcLoop? capturedLoop = null;
+        var loop = new OrientLoop();
+        OrientLoop? capturedLoop = null;
 
-        var result = CRpcLoopRunner.RunUntilComplete(
+        var result = OrientLoopRunner.RunUntilComplete(
             loop,
             () =>
             {
-                capturedLoop = CRpcLoop.Current;
-                return CRpcTask.FromResult(7, CRpcLoop.Current);
+                capturedLoop = OrientLoop.Current;
+                return OrientTask.FromResult(7, OrientLoop.Current);
             });
 
         Assert.Same(loop, capturedLoop);
@@ -25,10 +25,10 @@ public class CRpcLoopRunnerTests : CrpcTestBase
     [Fact]
     public void RunUntilCompleteReturnsResultOnLoopThread()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var callingThreadId = Environment.CurrentManagedThreadId;
 
-        var continuationThreadId = CRpcLoopRunner.RunUntilComplete(
+        var continuationThreadId = OrientLoopRunner.RunUntilComplete(
             loop,
             GetThreadIdAfterDelayAsync);
 
@@ -38,14 +38,14 @@ public class CRpcLoopRunnerTests : CrpcTestBase
     [Fact]
     public void RunUntilCompleteVoidOverloadRunsOperation()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var count = 0;
 
-        CRpcLoopRunner.RunUntilComplete(
+        OrientLoopRunner.RunUntilComplete(
             loop,
             async () =>
             {
-                await CRpcTask.Delay(1, CRpcLoop.Current);
+                await OrientTask.Delay(1, OrientLoop.Current);
                 count++;
             });
 
@@ -55,23 +55,23 @@ public class CRpcLoopRunnerTests : CrpcTestBase
     [Fact]
     public void RunUntilCompleteRethrowsOperationException()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
-            CRpcLoopRunner.RunUntilComplete(loop, ThrowAfterDelayAsync));
+            OrientLoopRunner.RunUntilComplete(loop, ThrowAfterDelayAsync));
 
         Assert.Equal("runner failure", exception.Message);
     }
 
-    private static async CRpcTask<int> GetThreadIdAfterDelayAsync()
+    private static async OrientTask<int> GetThreadIdAfterDelayAsync()
     {
-        await CRpcTask.Delay(1, CRpcLoop.Current);
+        await OrientTask.Delay(1, OrientLoop.Current);
         return Environment.CurrentManagedThreadId;
     }
 
-    private static async CRpcTask<int> ThrowAfterDelayAsync()
+    private static async OrientTask<int> ThrowAfterDelayAsync()
     {
-        await CRpcTask.Delay(1, CRpcLoop.Current);
+        await OrientTask.Delay(1, OrientLoop.Current);
         throw new InvalidOperationException("runner failure");
     }
 }

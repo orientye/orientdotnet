@@ -4,11 +4,11 @@
 using System;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
-using CRpc.Async;
-using CRpc.Rpc;
-using CRpc.Rpc.CRpc;
-using CRpc.Rpc.CRpc.Codec;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc;
+using Orient.Rpc.CRpc;
+using Orient.Rpc.Codec;
+using Orient.Rpc.Server;
 
 namespace Example {
 
@@ -19,16 +19,16 @@ public abstract class GreeterServiceBase : IRpcService
         return 1000;
     }
 
-    public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+    public OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
     {
         var rpcContext = (CRpcContext)context;
         var rpcReq = (CRpcMessage)req;
         var methodId = rpcReq.MethodId;
         if (methodId == 1) { return this.__OnMessageSayHelloAsync(rpcContext, rpcReq); }
-        return CRpcTask.FromResult(((int)CRpcStatusCode.MethodNotFound, Array.Empty<byte>()));
+        return OrientTask.FromResult(((int)CRpcStatusCode.MethodNotFound, Array.Empty<byte>()));
     }
 
-    private async CRpcTask<(int, byte[])> __OnMessageSayHelloAsync(CRpcContext context, CRpcMessage req)
+    private async OrientTask<(int, byte[])> __OnMessageSayHelloAsync(CRpcContext context, CRpcMessage req)
     {
         var request = Example.HelloRequest.Parser.ParseFrom(req.Body);
         var (result, data) = await SayHelloAsync(context, request);
@@ -36,7 +36,7 @@ public abstract class GreeterServiceBase : IRpcService
         return (result, bytes);
     }
 
-    protected CRpcTask<bool> PushServerPushHelloAsync(CRpcConnection connection, Example.ServerHelloPush message)
+    protected OrientTask<bool> PushServerPushHelloAsync(CRpcConnection connection, Example.ServerHelloPush message)
     {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(message);
@@ -44,7 +44,7 @@ public abstract class GreeterServiceBase : IRpcService
     }
 
     // Please implement the following:
-    protected abstract CRpcTask<(int, Example.HelloReply)> SayHelloAsync(CRpcContext context, Example.HelloRequest request);
+    protected abstract OrientTask<(int, Example.HelloReply)> SayHelloAsync(CRpcContext context, Example.HelloRequest request);
 }
 }
 

@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\CRPC\CRPC.csproj" />
+    <ProjectReference Include="..\Orient.Runtime\Orient.Runtime.csproj" />
   </ItemGroup>
 
 </Project>

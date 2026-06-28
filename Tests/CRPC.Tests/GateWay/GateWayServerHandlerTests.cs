@@ -1,8 +1,8 @@
-using CRpc.Async;
-using CRpc.Rpc;
-using CRpc.Rpc.CRpc;
-using CRpc.Rpc.CRpc.Codec;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc;
+using Orient.Rpc.CRpc;
+using Orient.Rpc.Codec;
+using Orient.Rpc.Server;
 using DotNetty.Buffers;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Embedded;
@@ -14,7 +14,7 @@ public class GateWayServerHandlerTests : CrpcTestBase
     [Fact]
     public void NoFallbackRegisteredWritesErrorResponse()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var sessions = GateWayTestHelpers.CreateSessionTable(
             new global::GateWay.DefaultBackendClientFactory(),
@@ -34,7 +34,7 @@ public class GateWayServerHandlerTests : CrpcTestBase
     [Fact]
     public void MissingInboundConnectionWritesErrorResponse()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var sessions = GateWayTestHelpers.CreateSessionTable(
             new global::GateWay.DefaultBackendClientFactory(),
@@ -53,14 +53,14 @@ public class GateWayServerHandlerTests : CrpcTestBase
     [Fact]
     public void FallbackRoutesToRegisteredForwarder()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var sessions = GateWayTestHelpers.CreateSessionTable(
             new global::GateWay.DefaultBackendClientFactory(),
             new NoOpBackendConnector());
         var forwarder = new RecordingForwarderService(fallbackServiceId: 0);
         var server = new CRpcServer(loop);
-        RegisterOnLoop(loop, forwarder);
+        RegisterOnServer(server, forwarder);
         var channel = CreateHandlerChannel(server, sessions, fallbackServiceId: 0);
 
         ActivateChannel(loop, channel);
@@ -91,13 +91,13 @@ public class GateWayServerHandlerTests : CrpcTestBase
             : (CRpcMessage)outbound!;
     }
 
-    private static void RegisterOnLoop(CRpcLoop loop, IRpcService service)
+    private static void RegisterOnServer(CRpcServer server, IRpcService service)
     {
-        loop.Post(() => loop.RegisterService(service));
-        loop.Tick();
+        server.Loop.Post(() => server.Services.Register(service));
+        server.Loop.Tick();
     }
 
-    private static void ActivateChannel(CRpcLoop loop, EmbeddedChannel channel)
+    private static void ActivateChannel(OrientLoop loop, EmbeddedChannel channel)
     {
         channel.Pipeline.FireChannelActive();
         loop.Tick();
@@ -116,18 +116,18 @@ public class GateWayServerHandlerTests : CrpcTestBase
 
         public ushort GetServiceId() => fallbackServiceId;
 
-        public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+        public OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
         {
             CallCount++;
-            return CRpcTask.FromResult((-1, Array.Empty<byte>()), CRpcLoop.Current);
+            return OrientTask.FromResult((-1, Array.Empty<byte>()), OrientLoop.Current);
         }
     }
 
     private sealed class NoOpBackendConnector : global::GateWay.IBackendConnector
     {
-        public CRpcTask ConnectAsync(CRpc.Rpc.CRpc.Client.CRpcClient client, global::GateWay.BackendEndpoint endpoint)
+        public OrientTask ConnectAsync(Orient.Rpc.Client.CRpcClient client, global::GateWay.BackendEndpoint endpoint)
         {
-            return CRpcTask.CompletedTask(CRpcLoop.Current);
+            return OrientTask.CompletedTask(OrientLoop.Current);
         }
     }
 }

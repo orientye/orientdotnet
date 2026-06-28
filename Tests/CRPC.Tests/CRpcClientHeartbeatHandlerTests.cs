@@ -1,5 +1,5 @@
-using CRpc.Rpc.CRpc.Client;
-using CRpc.Rpc.CRpc.Codec;
+using Orient.Rpc.Client;
+using Orient.Rpc.Codec;
 using DotNetty.Buffers;
 using DotNetty.Handlers.Timeout;
 using DotNetty.Transport.Channels.Embedded;

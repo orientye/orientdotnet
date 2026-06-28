@@ -36,9 +36,9 @@ public class CRpcGeneratorTests : CrpcTestBase
 
         var serverFile = Assert.Single(response.File, file => file.Name.EndsWith("Service.cs"));
         var clientFile = Assert.Single(response.File, file => file.Name.EndsWith("Client.cs"));
-        Assert.Contains("protected CRpcTask<bool> PushServerNoticeAsync", serverFile.Content);
+        Assert.Contains("protected OrientTask<bool> PushServerNoticeAsync", serverFile.Content);
         Assert.Contains("connection.SendPushAsync(1000, 2", serverFile.Content);
-        Assert.Contains("protected virtual CRpcTask OnPushServerNoticeAsync", clientFile.Content);
+        Assert.Contains("protected virtual OrientTask OnPushServerNoticeAsync", clientFile.Content);
         Assert.Contains("RegisterPushHandler(", clientFile.Content);
         Assert.DoesNotContain("CallAsync(1000, 2", clientFile.Content);
     }

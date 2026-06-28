@@ -1,19 +1,19 @@
 # CRpc 架构
 
-> **范围**：线程、`CRpcLoop`、`CRpcServer` / `CRpcServerHandler`、`CRpcClient` / `TcpChannelHost` 及其关系。既写现状，也标目标方向；**现有代码 ≠ 推荐设计**。
+> **范围**：线程、`OrientLoop`（原 `CRpcLoop`）、`CRpcServer` / `CRpcServerHandler`、`CRpcClient` / `TcpChannelHost` 及其关系。既写现状，也标目标方向；**现有代码 ≠ 推荐设计**。
 
 ## 概要
 
 目标模型与现状差异的浓缩说明；正文各章展开细节与代码对照。
 
-### 执行单元：`CRpcLoop`
+### 执行单元：`OrientLoop`（`Orient.Runtime`）
 
 | 维度 | 说明 |
 | --- | --- |
-| 数量 | 进程内可有一个或多个 `CRpcLoop` |
-| 线程 | 一个 loop 绑定一个业务线程；业务状态、注册表、pending 调用、定时器、`CRpcTask` 完成**只在该线程访问** |
-| 角色 | **业务执行上下文**；不另设 Runtime 层 |
-| 注册表 | `CRpcLoop.RegisterService` / `TryGetService`（内联 `Dictionary`，非独立 `ServiceRegistry` 类型） |
+| 数量 | 进程内可有一个或多个 `OrientLoop` |
+| 线程 | 一个 loop 绑定一个业务线程；业务状态、pending 调用、定时器、`OrientTask` 完成**只在该线程访问** |
+| 角色 | **业务执行上下文**（`Orient.Runtime` 程序集，BCL only） |
+| 注册表 | **不在 loop 上**；`RpcServiceRegistry` 由 `CRpcServer.Services` 持有（`Orient.Rpc`） |
 | 端点 | **CRpc 在核心**；HTTP 由应用层实现（见 `Example/HelloWorld/Server/Http/`）；**推荐** Port Unification 单端口多协议（`--unified`）；双端口（7999+8080，`--http`）为可选调试形态；详见 [§4.2](#42-多协议单-loop) 与 `Doc/protocol.md`；多 loop 路由仍缺 |
 | 调度 | MPSC mailbox + loop-owned timer + `WaitForWorkOrTimer`；见 [§9.5](#95-crpcloop-调度timer-与-rpc-timeout) |
 
@@ -21,10 +21,10 @@
 
 | 维度 | 现状（代码） | 仍为方向 |
 | --- | --- | --- |
-| Service 归属 | `CRpcLoop` 持有注册表；`CRpcServer` / `HttpServer` 只持 `Loop`，经 `RpcServiceInvoker` 查 service；`StopAsync` 不清空 loop 注册表 | 独立 `ServiceRegistry` 类型 |
-| 端点与 loop | 多端点共享一 loop 已可用；`CRpcLoopHost` 统一驱动；IO 线程数已通过 options 可配置（默认 1+1） | 按 serviceId / channel 路由到多个 loop；共享 `IEventLoopGroup` 注入 |
-| Loop 驱动 | `Tick + WaitForWorkOrTimer`（服务端 `CRpcLoopHost` → `CRpcServerLoop`；客户端 `CRpcClientLoopHost` → `CRpcClientLoop`；一次性场景 `CRpcLoopRunner.RunUntilComplete`） | — |
-| Runtime | — | 不引入单独 Runtime；Loop 即上下文 |
+| Service 归属 | `RpcServiceRegistry` 在 `CRpcServer.Services`；`OrientLoop` 无 RPC 类型 | 已实现（A2） |
+| 端点与 loop | 多端点共享一 loop 已可用；`OrientLoopHost` 统一驱动；IO 线程数已通过 options 可配置（默认 1+1） | 按 serviceId / channel 路由到多个 loop；共享 `IEventLoopGroup` 注入 |
+| Loop 驱动 | `Tick + WaitForWorkOrTimer`（`OrientLoopHost.RunUntilCancelled`；Rpc 层 `CRpcLoopHost`/`CRpcClientLoopHost` 为别名；一次性场景 `OrientLoopRunner.RunUntilComplete`） | — |
+| Runtime | `Orient.Runtime` + `Orient.Rpc` 已拆分 | — |
 
 ### 网络层：入口与适配，非 Service Owner
 

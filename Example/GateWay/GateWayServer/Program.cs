@@ -1,5 +1,5 @@
-using CRpc.Async;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc.Server;
 
 namespace GateWay;
 
@@ -13,7 +13,7 @@ public static class Program
         var config = GateWayConfigLoader.LoadOrDefault(configPath);
         var poolRegistry = config.BuildRegistry();
 
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var pushRelay = new GateWayPushRelay();
         var sessionTable = new GateWaySessionTable(
             poolRegistry,
@@ -35,9 +35,9 @@ public static class Program
             HandlerFactory = srv => new GateWayServerHandler(srv, sessionTable, config.FallbackServiceId),
         });
 
-        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        OrientLoopRunner.RunUntilComplete(loop, async () =>
         {
-            loop.RegisterService(new GateWayServiceImpl(router));
+            server.Services.Register(new GateWayServiceImpl(router));
             await server.StartAsync(cts.Token);
         });
 
@@ -53,11 +53,11 @@ public static class Program
 
         try
         {
-            CRpcLoopHost.RunUntilCancelled(loop, cts.Token);
+            OrientLoopHost.RunUntilCancelled(loop, cts.Token);
         }
         finally
         {
-            CRpcLoopRunner.RunUntilComplete(loop, async () =>
+            OrientLoopRunner.RunUntilComplete(loop, async () =>
             {
                 await sessionTable.DisposeAllAsync();
                 await server.StopAsync();

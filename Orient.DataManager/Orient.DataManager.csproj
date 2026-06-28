@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>Orient.DataManager</AssemblyName>
+    <RootNamespace>Orient.DataManager</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Orient.Runtime\Orient.Runtime.csproj" />
+  </ItemGroup>
+
+</Project>

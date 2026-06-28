@@ -1,14 +1,14 @@
-using CRpc.Async;
-using CRpc.Rpc.CRpc.Client;
+using Orient.Runtime;
+using Orient.Rpc.Client;
 
 namespace GateWay;
 
 public interface IBackendClientFactory
 {
-    CRpcClient Create(CRpcLoop loop);
+    CRpcClient Create(OrientLoop loop);
 }
 
 public sealed class DefaultBackendClientFactory : IBackendClientFactory
 {
-    public CRpcClient Create(CRpcLoop loop) => new CRpcClient(loop);
+    public CRpcClient Create(OrientLoop loop) => new CRpcClient(loop);
 }

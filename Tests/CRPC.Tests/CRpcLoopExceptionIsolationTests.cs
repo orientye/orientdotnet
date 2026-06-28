@@ -1,13 +1,13 @@
-using CRpc.Async;
+using Orient.Runtime;
 
 namespace CRPC.Tests;
 
-public class CRpcLoopExceptionIsolationTests : CrpcTestBase
+public class OrientLoopExceptionIsolationTests : CrpcTestBase
 {
     [Fact]
     public void TickContinuesProcessingActionsAfterOneThrows()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
 
         var executed = new List<int>();
@@ -23,7 +23,7 @@ public class CRpcLoopExceptionIsolationTests : CrpcTestBase
     [Fact]
     public void TickRaisesUnhandledExceptionForFailingAction()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
 
         Exception? captured = null;
@@ -40,7 +40,7 @@ public class CRpcLoopExceptionIsolationTests : CrpcTestBase
     [Fact]
     public void TickContinuesProcessingTimersAfterOneThrows()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
 
         var executed = new List<int>();
@@ -56,7 +56,7 @@ public class CRpcLoopExceptionIsolationTests : CrpcTestBase
     [Fact]
     public void TickRaisesUnhandledExceptionForFailingTimer()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
 
         Exception? captured = null;
@@ -73,7 +73,7 @@ public class CRpcLoopExceptionIsolationTests : CrpcTestBase
     [Fact]
     public void TickDoesNotPropagateExceptionsWhenNoHandlerSubscribed()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
 
         loop.Post(() => throw new InvalidOperationException("no handler"));
@@ -90,7 +90,7 @@ public class CRpcLoopExceptionIsolationTests : CrpcTestBase
     [Fact]
     public void TickSurvivesExceptionsThrownByUnhandledExceptionHandler()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
 
         loop.UnhandledException += _ => throw new InvalidOperationException("handler boom");

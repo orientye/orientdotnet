@@ -4,10 +4,10 @@
 using System;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
-using CRpc.Async;
-using CRpc.Rpc;
-using CRpc.Rpc.CRpc.Codec;
-using CRpc.Rpc.CRpc.Client;
+using Orient.Runtime;
+using Orient.Rpc;
+using Orient.Rpc.Codec;
+using Orient.Rpc.Client;
 
 namespace Example {
 
@@ -21,7 +21,7 @@ public abstract class GreeterClientBase : ICRpcGeneratedClient
         client.RegisterPushHandler(1000, 2, __OnPushServerPushHelloAsync);
     }
 
-    public async CRpcTask<(int, Example.HelloReply)> SayHelloAsync(Example.HelloRequest request, int timeOut = 5000)
+    public async OrientTask<(int, Example.HelloReply)> SayHelloAsync(Example.HelloRequest request, int timeOut = 5000)
     {
         CRpcMessage message = await __client.CallAsync(1000, 1, request.ToByteArray(), timeOut);
         var result = message.ResultCode;
@@ -34,14 +34,14 @@ public abstract class GreeterClientBase : ICRpcGeneratedClient
         return (-1, null);
     }
 
-    private async CRpcTask __OnPushServerPushHelloAsync(CRpcPushContext context, byte[] body)
+    private async OrientTask __OnPushServerPushHelloAsync(CRpcPushContext context, byte[] body)
     {
         await OnPushServerPushHelloAsync(context, Example.ServerHelloPush.Parser.ParseFrom(body));
     }
 
-    protected virtual CRpcTask OnPushServerPushHelloAsync(CRpcPushContext context, Example.ServerHelloPush message)
+    protected virtual OrientTask OnPushServerPushHelloAsync(CRpcPushContext context, Example.ServerHelloPush message)
     {
-        return CRpcTask.CompletedTask(context.Loop);
+        return OrientTask.CompletedTask(context.Loop);
     }
 
 }

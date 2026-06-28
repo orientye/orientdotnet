@@ -43,11 +43,11 @@ public static class CRpcGen
             sb.AppendLine("using System;");
             sb.AppendLine("using Google.Protobuf;");
             sb.AppendLine("using Google.Protobuf.WellKnownTypes;");
-            sb.AppendLine("using CRpc.Async;");
-            sb.AppendLine("using CRpc.Rpc;");
-            sb.AppendLine("using CRpc.Rpc.CRpc.Codec;");
-            sb.AppendLine("using CRpc.Rpc.CRpc.Server;");
-            sb.AppendLine("using CRpc.Rpc.CRpc;");
+            sb.AppendLine("using Orient.Runtime;");
+            sb.AppendLine("using Orient.Rpc;");
+            sb.AppendLine("using Orient.Rpc.Codec;");
+            sb.AppendLine("using Orient.Rpc.Server;");
+            sb.AppendLine("using Orient.Rpc.CRpc;");
             sb.AppendLine("");
 
             var ns = GetFileNamespace(fileDescriptorProto);
@@ -81,10 +81,10 @@ public static class CRpcGen
             sb.AppendLine("using System;");
             sb.AppendLine("using Google.Protobuf;");
             sb.AppendLine("using Google.Protobuf.WellKnownTypes;");
-            sb.AppendLine("using CRpc.Async;");
-            sb.AppendLine("using CRpc.Rpc;");
-            sb.AppendLine("using CRpc.Rpc.CRpc.Codec;");
-            sb.AppendLine("using CRpc.Rpc.CRpc.Client;");
+            sb.AppendLine("using Orient.Runtime;");
+            sb.AppendLine("using Orient.Rpc;");
+            sb.AppendLine("using Orient.Rpc.Codec;");
+            sb.AppendLine("using Orient.Rpc.Client;");
             sb.AppendLine("");
 
             var ns = GetFileNamespace(fileDescriptorProto);
@@ -145,20 +145,20 @@ public static class CRpcGen
                 {
                     ValidateServerPushMethod(service, method);
 
-                    sb.AppendLine($"    private async CRpcTask __OnPush{method.Name}Async(CRpcPushContext context, byte[] body)");
+                    sb.AppendLine($"    private async OrientTask __OnPush{method.Name}Async(CRpcPushContext context, byte[] body)");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        await OnPush{method.Name}Async(context, {inType}.Parser.ParseFrom(body));");
                     sb.AppendLine("    }");
                     sb.AppendLine();
-                    sb.AppendLine($"    protected virtual CRpcTask OnPush{method.Name}Async(CRpcPushContext context, {inType} message)");
+                    sb.AppendLine($"    protected virtual OrientTask OnPush{method.Name}Async(CRpcPushContext context, {inType} message)");
                     sb.AppendLine("    {");
-                    sb.AppendLine("        return CRpcTask.CompletedTask(context.Loop);");
+                    sb.AppendLine("        return OrientTask.CompletedTask(context.Loop);");
                     sb.AppendLine("    }");
                     sb.AppendLine();
                     continue;
                 }
 
-                sb.AppendLine($"    public async CRpcTask<(int, {outType})> {method.Name}Async({inType} request, int timeOut = 5000)");
+                sb.AppendLine($"    public async OrientTask<(int, {outType})> {method.Name}Async({inType} request, int timeOut = 5000)");
                 sb.AppendLine("    {");
                 sb.AppendLine($"        CRpcMessage message = await __client.CallAsync({serviceId}, {msgId}, request.ToByteArray(), timeOut);");
                 sb.AppendLine("        var result = message.ResultCode;");
@@ -192,7 +192,7 @@ public static class CRpcGen
                 var inType = GetTypeName(method.InputType);
 
                 ValidateServerPushMethod(service, method);
-                sbPushHelpers.AppendLine($"    protected CRpcTask<bool> Push{method.Name}Async(CRpcConnection connection, {inType} message)");
+                sbPushHelpers.AppendLine($"    protected OrientTask<bool> Push{method.Name}Async(CRpcConnection connection, {inType} message)");
                 sbPushHelpers.AppendLine("    {");
                 sbPushHelpers.AppendLine("        ArgumentNullException.ThrowIfNull(connection);");
                 sbPushHelpers.AppendLine("        ArgumentNullException.ThrowIfNull(message);");
@@ -226,7 +226,7 @@ public static class CRpcGen
                 var outType = GetTypeName(method.OutputType);
                 var inType = GetTypeName(method.InputType);
 
-                sbMethodInner.AppendLine($"    private async CRpcTask<(int, byte[])> __OnMessage{method.Name}Async(CRpcContext context, CRpcMessage req)");
+                sbMethodInner.AppendLine($"    private async OrientTask<(int, byte[])> __OnMessage{method.Name}Async(CRpcContext context, CRpcMessage req)");
                 sbMethodInner.AppendLine("    {");
                 sbMethodInner.AppendLine($"        var request = {inType}.Parser.ParseFrom(req.Body);");
                 sbMethodInner.AppendLine($"        var (result, data) = await {method.Name}Async(context, request);");
@@ -235,18 +235,18 @@ public static class CRpcGen
                 sbMethodInner.AppendLine("    }");
                 sbMethodInner.AppendLine();
 
-                sbMethodAbstract.AppendLine($"    protected abstract CRpcTask<(int, {outType})> {method.Name}Async(CRpcContext context, {inType} request);");
+                sbMethodAbstract.AppendLine($"    protected abstract OrientTask<(int, {outType})> {method.Name}Async(CRpcContext context, {inType} request);");
 
                 sbMethodCase.AppendLine($"        if (methodId == {methodId}) {{ return this.__OnMessage{method.Name}Async(rpcContext, rpcReq); }}");
             }
             
-            sb.AppendLine("    public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)");
+            sb.AppendLine("    public OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)");
             sb.AppendLine("    {");
             sb.AppendLine("        var rpcContext = (CRpcContext)context;");
             sb.AppendLine("        var rpcReq = (CRpcMessage)req;");
             sb.AppendLine("        var methodId = rpcReq.MethodId;");
             sb.Append(sbMethodCase);
-            sb.AppendLine("        return CRpcTask.FromResult(((int)CRpcStatusCode.MethodNotFound, Array.Empty<byte>()));");
+            sb.AppendLine("        return OrientTask.FromResult(((int)CRpcStatusCode.MethodNotFound, Array.Empty<byte>()));");
             sb.AppendLine("    }");
             sb.AppendLine();
 

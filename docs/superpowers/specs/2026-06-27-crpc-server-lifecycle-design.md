@@ -2,6 +2,7 @@
 
 **Status:** Approved  
 **Date:** 2026-06-27  
+**Superseded (registry):** Service registry decisions replaced by `docs/superpowers/specs/2026-06-28-a2-rpc-service-registry-design.md`. `StartAsync` / `StopAsync` / transport-only stop remain in force.  
 **Related:** `Doc/architecture-draft.md` §4.1 / §8.4, `Doc/TODO.txt` P0.2, `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
 
 ---

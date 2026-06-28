@@ -9,6 +9,6 @@
     <InternalsVisibleTo Include="CRPC.Tests" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\CRPC\CRPC.csproj" />
+    <ProjectReference Include="..\..\..\Orient.Rpc\Orient.Rpc.csproj" />
   </ItemGroup>
 </Project>

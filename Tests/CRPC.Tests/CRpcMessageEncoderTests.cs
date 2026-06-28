@@ -1,4 +1,4 @@
-using CRpc.Rpc.CRpc.Codec;
+using Orient.Rpc.Codec;
 using DotNetty.Buffers;
 using DotNetty.Transport.Channels.Embedded;
 

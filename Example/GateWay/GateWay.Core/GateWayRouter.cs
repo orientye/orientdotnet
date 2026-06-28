@@ -1,17 +1,17 @@
-using CRpc.Async;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc.Server;
 
 namespace GateWay;
 
 public sealed class GateWayRouter
 {
-    private readonly CRpcLoop loop;
+    private readonly OrientLoop loop;
     private readonly GateWayConfig config;
     private readonly GateWaySessionTable sessionTable;
     private readonly BackendPoolRegistry poolRegistry;
 
     public GateWayRouter(
-        CRpcLoop loop,
+        OrientLoop loop,
         GateWayConfig config,
         BackendPoolRegistry poolRegistry,
         GateWaySessionTable sessionTable)
@@ -28,7 +28,7 @@ public sealed class GateWayRouter
 
     public GateWayConfig Config => config;
 
-    public async CRpcTask<GateWayBackendLink?> GetOrCreateLinkAsync(CRpcConnection inbound, ushort serviceId)
+    public async OrientTask<GateWayBackendLink?> GetOrCreateLinkAsync(CRpcConnection inbound, ushort serviceId)
     {
         if (!poolRegistry.TryGetPool(serviceId, out _))
         {

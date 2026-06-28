@@ -1,9 +1,9 @@
 using System.Net.Sockets;
-using CRpc.Async;
-using CRpc.Rpc;
-using CRpc.Rpc.CRpc;
-using CRpc.Rpc.CRpc.Codec;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc;
+using Orient.Rpc.CRpc;
+using Orient.Rpc.Codec;
+using Orient.Rpc.Server;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Embedded;
 
@@ -40,7 +40,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
     [Fact]
     public void ChannelActiveRegistersConnection()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var server = new CRpcServer(loop);
         var channel = CreateHandlerChannel(server);
@@ -55,7 +55,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
     [Fact]
     public void ChannelInactiveUnregistersConnection()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var server = new CRpcServer(loop);
         var channel = CreateHandlerChannel(server);
@@ -73,10 +73,10 @@ public class CRpcServerHandlerTests : CrpcTestBase
     [Fact]
     public void ServiceReceivesCurrentConnectionInContext()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var service = new ContextRecordingService(NextServiceId());
         var server = new CRpcServer(loop);
-        RegisterOnLoop(loop, service);
+        RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
 
         channel.Pipeline.FireChannelActive();
@@ -89,12 +89,12 @@ public class CRpcServerHandlerTests : CrpcTestBase
     }
 
     [Fact]
-    public void ChannelReadDispatchesServiceWorkToCRpcLoop()
+    public void ChannelReadDispatchesServiceWorkToOrientLoop()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var service = new RecordingService(NextServiceId());
         var server = new CRpcServer(loop);
-        RegisterOnLoop(loop, service);
+        RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
         ActivateChannel(loop, channel);
 
@@ -111,20 +111,22 @@ public class CRpcServerHandlerTests : CrpcTestBase
     public void HandlerUsesBoundLoopRegistry()
     {
         var serviceId = NextServiceId();
-        var firstLoop = new CRpcLoop();
-        var secondLoop = new CRpcLoop();
+        var firstLoop = new OrientLoop();
+        var secondLoop = new OrientLoop();
         var firstService = new RecordingService(serviceId);
         var secondService = new RecordingService(serviceId);
         var firstServer = new CRpcServer(firstLoop);
 
+        var secondServer = new CRpcServer(secondLoop);
+
         DedicatedLoopThread.Run(secondLoop, loop =>
         {
-            loop.Post(() => loop.RegisterService(secondService));
+            loop.Post(() => secondServer.Services.Register(secondService));
             loop.Tick();
         });
 
         using var firstDriver = new LoopTestDriver(firstLoop);
-        firstDriver.Run(() => firstLoop.Post(() => firstLoop.RegisterService(firstService)));
+        firstDriver.Run(() => firstLoop.Post(() => firstServer.Services.Register(firstService)));
 
         var channel = CreateHandlerChannel(firstServer);
 
@@ -145,12 +147,12 @@ public class CRpcServerHandlerTests : CrpcTestBase
     }
 
     [Fact]
-    public void ServiceLogicRunsOnCRpcLoopThread()
+    public void ServiceLogicRunsOnOrientLoopThread()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var service = new RecordingService(NextServiceId());
         var server = new CRpcServer(loop);
-        RegisterOnLoop(loop, service);
+        RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
         ActivateChannel(loop, channel);
 
@@ -166,10 +168,10 @@ public class CRpcServerHandlerTests : CrpcTestBase
     [Fact]
     public void ChannelReadDoesNotWaitForOutboundWriteCompletion()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var service = new RecordingService(NextServiceId());
         var server = new CRpcServer(loop);
-        RegisterOnLoop(loop, service);
+        RegisterOnServer(server, service);
         var delayedWrite = new DelayedWriteHandler();
         var channel = CreateHandlerChannel(server, headHandlers: new IChannelHandler[] { delayedWrite });
         ActivateChannel(loop, channel);
@@ -186,10 +188,10 @@ public class CRpcServerHandlerTests : CrpcTestBase
     [Fact]
     public void ResponseWriteDoesNotMutateInboundRequest()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var service = new RecordingService(NextServiceId());
         var server = new CRpcServer(loop);
-        RegisterOnLoop(loop, service);
+        RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
         ActivateChannel(loop, channel);
         var request = CreateRequest(service.GetServiceId());
@@ -206,7 +208,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
     public void ConnectionResetByPeerIsHandledAsNormalDisconnect()
     {
         var exceptions = new ExceptionCaptureHandler();
-        var server = new CRpcServer(new CRpcLoop());
+        var server = new CRpcServer(new OrientLoop());
         var channel = CreateHandlerChannel(server, tailHandlers: new IChannelHandler[] { exceptions });
 
         channel.Pipeline.FireExceptionCaught(new SocketException(10054));
@@ -218,7 +220,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
     public void ChannelInactiveLogsNormalClientDisconnect()
     {
         var inactive = new InactiveCaptureHandler();
-        var server = new CRpcServer(new CRpcLoop());
+        var server = new CRpcServer(new OrientLoop());
         var channel = CreateHandlerChannel(server, tailHandlers: new IChannelHandler[] { inactive });
 
         var output = ConsoleTestOutput.Capture(() => channel.Pipeline.FireChannelInactive());
@@ -231,7 +233,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
     public void UnexpectedExceptionsContinueThroughPipeline()
     {
         var exceptions = new ExceptionCaptureHandler();
-        var server = new CRpcServer(new CRpcLoop());
+        var server = new CRpcServer(new OrientLoop());
         var channel = CreateHandlerChannel(server, tailHandlers: new IChannelHandler[] { exceptions });
         var exception = new InvalidOperationException("boom");
 
@@ -243,11 +245,11 @@ public class CRpcServerHandlerTests : CrpcTestBase
     [Fact]
     public void HeartbeatIsIgnoredWithoutDispatchingToService()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var service = new RecordingService(NextServiceId());
         var server = new CRpcServer(loop);
-        RegisterOnLoop(loop, service);
+        RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
         ActivateChannel(loop, channel);
 
@@ -261,7 +263,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
     [Fact]
     public void UnknownServiceWritesServiceNotFoundResponse()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var server = new CRpcServer(loop);
         var channel = CreateHandlerChannel(server);
@@ -283,11 +285,11 @@ public class CRpcServerHandlerTests : CrpcTestBase
     [Fact]
     public void UnknownMethodWritesMethodNotFoundResponse()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var service = new MethodRoutingService(NextServiceId());
         var server = new CRpcServer(loop);
-        RegisterOnLoop(loop, service);
+        RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
         ActivateChannel(loop, channel);
         var request = CRpcTestMessages.CreateRequest(service.GetServiceId(), methodId: 99, reqSequence: 7);
@@ -304,11 +306,11 @@ public class CRpcServerHandlerTests : CrpcTestBase
     [Fact]
     public void ServiceExceptionWritesInternalErrorResponse()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var service = new ThrowingService(NextServiceId());
         var server = new CRpcServer(loop);
-        RegisterOnLoop(loop, service);
+        RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
         ActivateChannel(loop, channel);
 
@@ -339,13 +341,13 @@ public class CRpcServerHandlerTests : CrpcTestBase
         return CRpcTestMessages.CreateRequest(serviceId, methodId: 1, reqSequence: 1);
     }
 
-    private static void RegisterOnLoop(CRpcLoop loop, IRpcService service)
+    private static void RegisterOnServer(CRpcServer server, IRpcService service)
     {
-        loop.Post(() => loop.RegisterService(service));
-        loop.Tick();
+        server.Loop.Post(() => server.Services.Register(service));
+        server.Loop.Tick();
     }
 
-    private static void ActivateChannel(CRpcLoop loop, EmbeddedChannel channel)
+    private static void ActivateChannel(OrientLoop loop, EmbeddedChannel channel)
     {
         channel.Pipeline.FireChannelActive();
         loop.Tick();
@@ -364,10 +366,10 @@ public class CRpcServerHandlerTests : CrpcTestBase
 
         public ushort GetServiceId() => serviceId;
 
-        public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+        public OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
         {
             Connection = ((CRpcContext)context).Connection;
-            return CRpcTask.FromResult((0, Array.Empty<byte>()), CRpcLoop.Current);
+            return OrientTask.FromResult((0, Array.Empty<byte>()), OrientLoop.Current);
         }
     }
 
@@ -384,19 +386,19 @@ public class CRpcServerHandlerTests : CrpcTestBase
 
         public int? LastThreadId { get; private set; }
 
-        public CRpcLoop? LastLoop { get; private set; }
+        public OrientLoop? LastLoop { get; private set; }
 
         public ushort GetServiceId()
         {
             return serviceId;
         }
 
-        public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+        public OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
         {
             CallCount++;
             LastThreadId = Environment.CurrentManagedThreadId;
-            LastLoop = CRpcLoop.Current;
-            return CRpcTask.FromResult((0, Array.Empty<byte>()), CRpcLoop.Current);
+            LastLoop = OrientLoop.Current;
+            return OrientTask.FromResult((0, Array.Empty<byte>()), OrientLoop.Current);
         }
     }
 
@@ -444,14 +446,14 @@ public class CRpcServerHandlerTests : CrpcTestBase
 
         public ushort GetServiceId() => serviceId;
 
-        public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+        public OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
         {
             if (((CRpcMessage)req).MethodId == 1)
             {
-                return CRpcTask.FromResult((0, Array.Empty<byte>()), CRpcLoop.Current);
+                return OrientTask.FromResult((0, Array.Empty<byte>()), OrientLoop.Current);
             }
 
-            return CRpcTask.FromResult(((int)CRpcStatusCode.MethodNotFound, Array.Empty<byte>()), CRpcLoop.Current);
+            return OrientTask.FromResult(((int)CRpcStatusCode.MethodNotFound, Array.Empty<byte>()), OrientLoop.Current);
         }
     }
 
@@ -466,7 +468,7 @@ public class CRpcServerHandlerTests : CrpcTestBase
 
         public ushort GetServiceId() => serviceId;
 
-        public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+        public OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
         {
             throw new InvalidOperationException("boom");
         }

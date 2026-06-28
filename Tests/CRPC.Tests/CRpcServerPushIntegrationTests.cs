@@ -1,7 +1,7 @@
-using CRpc.Async;
-using CRpc.Rpc;
-using CRpc.Rpc.CRpc.Codec;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc;
+using Orient.Rpc.Codec;
+using Orient.Rpc.Server;
 using DotNetty.Buffers;
 using DotNetty.Transport.Channels.Embedded;
 
@@ -12,11 +12,11 @@ public class CRpcServerPushIntegrationTests : CrpcTestBase
     [Fact]
     public void ServiceCanPushToCurrentConnectionWithoutClientAck()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var service = new PushOnRequestService();
         var server = new CRpcServer(loop);
-        loop.RegisterService(service);
+        server.Services.Register(service);
         var channel = new EmbeddedChannel(
             new CRpcMessageEncoder(),
             new CRpcServerHandler(server));
@@ -53,7 +53,7 @@ public class CRpcServerPushIntegrationTests : CrpcTestBase
 
         public ushort GetServiceId() => ServiceId;
 
-        public async CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+        public async OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
         {
             var rpcContext = (CRpcContext)context;
             await rpcContext.Connection.SendPushAsync(ServiceId, PushMethodId, [7, 8, 9]);

@@ -1,7 +1,7 @@
 using System.Net;
-using CRpc.Async;
-using CRpc.Rpc;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc;
+using Orient.Rpc.Server;
 
 namespace CRPC.Tests;
 
@@ -10,50 +10,50 @@ public class CRpcServerTests : CrpcTestBase
     [Fact]
     public void StartAsyncRejectsInvalidPortBeforeBind()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var server = new CRpcServer(loop, new CRpcServerOptions
         {
             Address = IPAddress.Loopback,
             Port = 65536,
         });
 
-        CRpcLoopRunner.RunUntilComplete(loop, () =>
+        OrientLoopRunner.RunUntilComplete(loop, () =>
         {
             var ex = Assert.Throws<ArgumentOutOfRangeException>(() =>
             {
-                CRpcTask _ = server.StartAsync();
+                OrientTask _ = server.StartAsync();
             });
             Assert.Equal(nameof(CRpcServerOptions.Port), ex.ParamName);
             Assert.False(server.IsRunning);
-            return CRpcTask.CompletedTask(loop);
+            return OrientTask.CompletedTask(loop);
         });
     }
 
     [Fact]
-    public void StartAsyncThrowsWhenNoCRpcLoopIsBound()
+    public void StartAsyncThrowsWhenNoOrientLoopIsBound()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var server = new CRpcServer(loop);
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
         {
-            CRpcTask _ = server.StartAsync();
+            OrientTask _ = server.StartAsync();
         });
 
-        Assert.Contains("CRpcLoop", exception.Message);
+        Assert.Contains("OrientLoop", exception.Message);
     }
 
     [Fact]
     public void StartStopRunsOnOwnerLoop()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var server = new CRpcServer(loop, new CRpcServerOptions
         {
             Address = IPAddress.Loopback,
             Port = 0
         });
 
-        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        OrientLoopRunner.RunUntilComplete(loop, async () =>
         {
             await server.StartAsync();
             Assert.True(server.IsRunning);
@@ -66,14 +66,14 @@ public class CRpcServerTests : CrpcTestBase
     [Fact]
     public void StartAsyncThrowsWhenAlreadyStarted()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var server = new CRpcServer(loop, new CRpcServerOptions
         {
             Address = IPAddress.Loopback,
             Port = 0
         });
 
-        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        OrientLoopRunner.RunUntilComplete(loop, async () =>
         {
             await server.StartAsync();
 
@@ -91,7 +91,7 @@ public class CRpcServerTests : CrpcTestBase
     public void StopAsyncPreservesRegisteredServices()
     {
         const ushort serviceId = 4201;
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var service = new RecordingService(serviceId);
         var server = new CRpcServer(loop, new CRpcServerOptions
         {
@@ -99,13 +99,13 @@ public class CRpcServerTests : CrpcTestBase
             Port = 0
         });
 
-        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        OrientLoopRunner.RunUntilComplete(loop, async () =>
         {
-            loop.RegisterService(service);
+            server.Services.Register(service);
             await server.StartAsync();
             await server.StopAsync();
 
-            Assert.True(loop.TryGetService(serviceId, out var found));
+            Assert.True(server.Services.TryGet(serviceId, out var found));
             Assert.Same(service, found);
         });
     }
@@ -113,14 +113,14 @@ public class CRpcServerTests : CrpcTestBase
     [Fact]
     public void StopThenStartAllowsTransportRestart()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var server = new CRpcServer(loop, new CRpcServerOptions
         {
             Address = IPAddress.Loopback,
             Port = 0
         });
 
-        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        OrientLoopRunner.RunUntilComplete(loop, async () =>
         {
             await server.StartAsync();
             await server.StopAsync();
@@ -144,9 +144,9 @@ public class CRpcServerTests : CrpcTestBase
 
         public ushort GetServiceId() => ServiceId;
 
-        public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+        public OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
         {
-            return CRpcTask.FromResult((0, Array.Empty<byte>()), CRpcLoop.Current);
+            return OrientTask.FromResult((0, Array.Empty<byte>()), OrientLoop.Current);
         }
     }
 }

@@ -1,7 +1,7 @@
-using CRpc.Async;
-using CRpc.Rpc;
-using CRpc.Rpc.CRpc.Codec;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc;
+using Orient.Rpc.Codec;
+using Orient.Rpc.Server;
 
 namespace GateWay;
 
@@ -16,7 +16,7 @@ public sealed class GateWayServiceImpl : IRpcService
 
     public ushort GetServiceId() => router.Config.FallbackServiceId;
 
-    public async CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+    public async OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
     {
         var msg = (CRpcMessage)req;
         var targetServiceId = msg.ServiceId;
@@ -32,7 +32,7 @@ public sealed class GateWayServiceImpl : IRpcService
         return await ForwardAsync(link, targetServiceId, targetMethodId, msg.Body);
     }
 
-    private async CRpcTask<(int, byte[])> ForwardAsync(
+    private async OrientTask<(int, byte[])> ForwardAsync(
         GateWayBackendLink link,
         ushort serviceId,
         ushort methodId,
@@ -65,7 +65,7 @@ public sealed class GateWayServiceImpl : IRpcService
         }
     }
 
-    private async CRpcTask<(int, byte[])> CallBackendAsync(
+    private async OrientTask<(int, byte[])> CallBackendAsync(
         GateWayBackendLink link,
         ushort serviceId,
         ushort methodId,

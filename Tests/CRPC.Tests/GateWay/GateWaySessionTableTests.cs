@@ -1,7 +1,7 @@
-using CRpc.Async;
-using CRpc.Rpc.CRpc.Client;
-using CRpc.Rpc.CRpc.Server;
-using CRpc.Transport;
+using Orient.Runtime;
+using Orient.Rpc.Client;
+using Orient.Rpc.Server;
+using Orient.Rpc.Transport;
 using DotNetty.Transport.Channels.Embedded;
 
 namespace CRPC.Tests.GateWayTests;
@@ -13,16 +13,16 @@ public class GateWaySessionTableTests : CrpcTestBase
     [Fact]
     public void GetOrCreateLinkReturnsSameClientForSameConnection()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var factory = new CountingBackendClientFactory();
         var table = GateWayTestHelpers.CreateSessionTable(factory, new SuccessBackendConnector());
         var inbound = RegisterInboundConnection(loop);
 
-        var link1 = CRpcLoopRunner.RunUntilComplete(
+        var link1 = OrientLoopRunner.RunUntilComplete(
             loop,
             async () => await table.GetOrCreateAsync(inbound, GreeterServiceId, loop));
-        var link2 = CRpcLoopRunner.RunUntilComplete(
+        var link2 = OrientLoopRunner.RunUntilComplete(
             loop,
             async () => await table.GetOrCreateAsync(inbound, GreeterServiceId, loop));
 
@@ -34,23 +34,23 @@ public class GateWaySessionTableTests : CrpcTestBase
     [Fact]
     public void RemoveLinkDropsEntry()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var factory = new CountingBackendClientFactory();
         var table = GateWayTestHelpers.CreateSessionTable(factory, new SuccessBackendConnector());
         var inbound = RegisterInboundConnection(loop);
 
-        CRpcLoopRunner.RunUntilComplete(
+        OrientLoopRunner.RunUntilComplete(
             loop,
             async () => await table.GetOrCreateAsync(inbound, GreeterServiceId, loop));
 
-        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        OrientLoopRunner.RunUntilComplete(loop, async () =>
         {
             await table.RemoveAsync(inbound.ConnectionId);
             return 0;
         });
 
-        CRpcLoopRunner.RunUntilComplete(
+        OrientLoopRunner.RunUntilComplete(
             loop,
             async () => await table.GetOrCreateAsync(inbound, GreeterServiceId, loop));
 
@@ -60,7 +60,7 @@ public class GateWaySessionTableTests : CrpcTestBase
     [Fact]
     public void ConnectFailureReturnsNullAndMarksEndpointUnhealthy()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var registry = GateWayTestHelpers.CreateRegistry(GreeterServiceId, ("127.0.0.1", 7999));
         var table = GateWayTestHelpers.CreateSessionTable(
@@ -69,7 +69,7 @@ public class GateWaySessionTableTests : CrpcTestBase
             registry);
         var inbound = RegisterInboundConnection(loop);
 
-        var link = CRpcLoopRunner.RunUntilComplete(
+        var link = OrientLoopRunner.RunUntilComplete(
             loop,
             async () => await table.GetOrCreateAsync(inbound, GreeterServiceId, loop));
 
@@ -81,7 +81,7 @@ public class GateWaySessionTableTests : CrpcTestBase
     [Fact]
     public void NewConnectionsRoundRobinAcrossEndpoints()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var registry = GateWayTestHelpers.CreateRegistry(
             GreeterServiceId,
@@ -95,10 +95,10 @@ public class GateWaySessionTableTests : CrpcTestBase
         var inboundA = RegisterInboundConnection(loop, server);
         var inboundB = RegisterInboundConnection(loop, server);
 
-        var linkA = CRpcLoopRunner.RunUntilComplete(
+        var linkA = OrientLoopRunner.RunUntilComplete(
             loop,
             async () => await table.GetOrCreateAsync(inboundA, GreeterServiceId, loop));
-        var linkB = CRpcLoopRunner.RunUntilComplete(
+        var linkB = OrientLoopRunner.RunUntilComplete(
             loop,
             async () => await table.GetOrCreateAsync(inboundB, GreeterServiceId, loop));
 
@@ -110,14 +110,14 @@ public class GateWaySessionTableTests : CrpcTestBase
     [Fact]
     public void BackendConnectionLostRemovesLinkAndMarksEndpointUnhealthy()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var registry = GateWayTestHelpers.CreateRegistry(GreeterServiceId, ("127.0.0.1", 7999));
         var factory = new CapturingBackendClientFactory(loop);
         var table = GateWayTestHelpers.CreateSessionTable(factory, new SuccessBackendConnector(), registry);
         var inbound = RegisterInboundConnection(loop);
 
-        var link = CRpcLoopRunner.RunUntilComplete(
+        var link = OrientLoopRunner.RunUntilComplete(
             loop,
             async () => await table.GetOrCreateAsync(inbound, GreeterServiceId, loop));
         Assert.NotNull(link);
@@ -132,7 +132,7 @@ public class GateWaySessionTableTests : CrpcTestBase
         Assert.False(pool!.Endpoints[0].IsHealthy);
     }
 
-    private static CRpcConnection RegisterInboundConnection(CRpcLoop loop, CRpcServer? server = null)
+    private static CRpcConnection RegisterInboundConnection(OrientLoop loop, CRpcServer? server = null)
     {
         server ??= new CRpcServer(loop);
         var channel = new EmbeddedChannel();
@@ -166,42 +166,42 @@ public class GateWaySessionTableTests : CrpcTestBase
     {
         public int CreateCount { get; private set; }
 
-        public CRpc.Rpc.CRpc.Client.CRpcClient Create(CRpcLoop loop)
+        public Orient.Rpc.Client.CRpcClient Create(OrientLoop loop)
         {
             CreateCount++;
-            return new CRpc.Rpc.CRpc.Client.CRpcClient(loop);
+            return new Orient.Rpc.Client.CRpcClient(loop);
         }
     }
 
     private sealed class CapturingBackendClientFactory : global::GateWay.IBackendClientFactory
     {
-        private readonly CRpcLoop loop;
+        private readonly OrientLoop loop;
 
-        public CapturingBackendClientFactory(CRpcLoop loop)
+        public CapturingBackendClientFactory(OrientLoop loop)
         {
             this.loop = loop;
         }
 
-        public CRpc.Rpc.CRpc.Client.CRpcClient? LastClient { get; private set; }
+        public Orient.Rpc.Client.CRpcClient? LastClient { get; private set; }
 
-        public CRpc.Rpc.CRpc.Client.CRpcClient Create(CRpcLoop loop)
+        public Orient.Rpc.Client.CRpcClient Create(OrientLoop loop)
         {
-            LastClient = new CRpc.Rpc.CRpc.Client.CRpcClient(this.loop);
+            LastClient = new Orient.Rpc.Client.CRpcClient(this.loop);
             return LastClient;
         }
     }
 
     private sealed class SuccessBackendConnector : global::GateWay.IBackendConnector
     {
-        public CRpcTask ConnectAsync(CRpc.Rpc.CRpc.Client.CRpcClient client, global::GateWay.BackendEndpoint endpoint)
+        public OrientTask ConnectAsync(Orient.Rpc.Client.CRpcClient client, global::GateWay.BackendEndpoint endpoint)
         {
-            return CRpcTask.CompletedTask(CRpcLoop.Current);
+            return OrientTask.CompletedTask(OrientLoop.Current);
         }
     }
 
     private sealed class FailingBackendConnector : global::GateWay.IBackendConnector
     {
-        public CRpcTask ConnectAsync(CRpc.Rpc.CRpc.Client.CRpcClient client, global::GateWay.BackendEndpoint endpoint)
+        public OrientTask ConnectAsync(Orient.Rpc.Client.CRpcClient client, global::GateWay.BackendEndpoint endpoint)
         {
             throw new InvalidOperationException("connect failed");
         }

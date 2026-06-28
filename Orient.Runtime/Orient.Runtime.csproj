@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Orient.Rpc" />
+    <InternalsVisibleTo Include="CRPC.Tests" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Orient.Runtime</AssemblyName>
+    <RootNamespace>Orient.Runtime</RootNamespace>
+  </PropertyGroup>
+
+</Project>

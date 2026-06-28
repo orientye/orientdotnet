@@ -2,6 +2,7 @@
 
 **Status:** Draft (pending review)  
 **Date:** 2026-06-28  
+**Implementation:** Completed by `docs/superpowers/plans/2026-06-28-a2-runtime-rpc-split.md`.  
 **Prerequisite:** `docs/superpowers/specs/2026-06-28-a2-rpc-service-registry-design.md` (A2 must be implemented as part of the same delivery)  
 **Related:** `Doc/architecture-draft.md`, `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md`, `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
 

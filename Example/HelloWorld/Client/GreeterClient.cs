@@ -1,15 +1,15 @@
-using CRpc.Async;
-using CRpc.Rpc.CRpc.Client;
+using Orient.Runtime;
+using Orient.Rpc.Client;
 
 namespace Example;
 
 public sealed class GreeterClient : GreeterClientBase
 {
-    protected override CRpcTask OnPushServerPushHelloAsync(
+    protected override OrientTask OnPushServerPushHelloAsync(
         CRpcPushContext context,
         ServerHelloPush message)
     {
         Console.WriteLine($"server push: {message.Msg}");
-        return CRpcTask.CompletedTask(context.Loop);
+        return OrientTask.CompletedTask(context.Loop);
     }
 }

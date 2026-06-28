@@ -1,6 +1,6 @@
-using CRpc.Async;
-using CRpc.Rpc.CRpc.Client;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc.Client;
+using Orient.Rpc.Server;
 
 namespace GateWay;
 
@@ -30,7 +30,7 @@ public sealed class GateWayBackendLink : IAsyncDisposable
 
     public BackendEndpoint Endpoint { get; }
 
-    public async CRpcTask ReconnectAsync()
+    public async OrientTask ReconnectAsync()
     {
         await BackendClient.CloseAsync();
         await connector.ConnectAsync(BackendClient, Endpoint);

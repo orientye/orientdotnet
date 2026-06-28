@@ -1,10 +1,10 @@
-using CRpc.Async;
+using Orient.Runtime;
 
 namespace CRPC.Tests;
 
 internal static class DedicatedLoopThread
 {
-    public static void Run(CRpcLoop loop, Action<CRpcLoop> action)
+    public static void Run(OrientLoop loop, Action<OrientLoop> action)
     {
         ArgumentNullException.ThrowIfNull(loop);
         ArgumentNullException.ThrowIfNull(action);
@@ -24,7 +24,7 @@ internal static class DedicatedLoopThread
         })
         {
             IsBackground = true,
-            Name = "CRpcLoop dedicated test thread",
+            Name = "OrientLoop dedicated test thread",
         };
 
         thread.Start();

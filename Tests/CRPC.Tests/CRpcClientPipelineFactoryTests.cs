@@ -1,7 +1,7 @@
-using CRpc.Async;
-using CRpc.Rpc.CRpc.Client;
-using CRpc.Rpc.CRpc.Codec;
-using CRpc.Transport;
+using Orient.Runtime;
+using Orient.Rpc.Client;
+using Orient.Rpc.Codec;
+using Orient.Rpc.Transport;
 using DotNetty.Handlers.Timeout;
 using DotNetty.Transport.Channels.Embedded;
 
@@ -17,7 +17,7 @@ public sealed class CRpcClientPipelineFactoryTests : CrpcTestBase
             HeartbeatIntervalSeconds = 17,
             MaxFrameLength = 4096,
         };
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var host = new TcpChannelHost(loop, new CRpcClientPipelineFactory(options));
         var channel = new EmbeddedChannel();
 
@@ -34,7 +34,7 @@ public sealed class CRpcClientPipelineFactoryTests : CrpcTestBase
     public void ConfigureOmitsIdleHandlersWhenDisabled()
     {
         var options = new CRpcClientOptions { HeartbeatEnabled = false };
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var host = new TcpChannelHost(loop, new CRpcClientPipelineFactory(options));
         var channel = new EmbeddedChannel();
 

@@ -1,14 +1,14 @@
 using System.Diagnostics;
-using CRpc.Async;
+using Orient.Runtime;
 
 namespace CRPC.Tests;
 
-public class CRpcLoopWakeupTests : CrpcTestBase
+public class OrientLoopWakeupTests : CrpcTestBase
 {
     [Fact]
     public void WaitForWorkOrTimerReturnsImmediatelyWhenActionsPending()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         loop.Post(() => { });
 
@@ -22,7 +22,7 @@ public class CRpcLoopWakeupTests : CrpcTestBase
     [Fact]
     public void PostFromAnotherThreadWakesWaitForWorkOrTimer()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         using var driverReady = new ManualResetEventSlim(false);
         using var waitReturned = new ManualResetEventSlim(false);
 
@@ -48,7 +48,7 @@ public class CRpcLoopWakeupTests : CrpcTestBase
     [Fact]
     public void WaitForWorkOrTimerWakesWhenTimerBecomesDue()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var ran = false;
 
         var driver = new Thread(() =>
@@ -76,7 +76,7 @@ public class CRpcLoopWakeupTests : CrpcTestBase
     [Fact]
     public void MultiplePostsCoalesceIntoSingleWakeup()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         using var driverReady = new ManualResetEventSlim(false);
         using var waitReturned = new ManualResetEventSlim(false);
 
@@ -106,7 +106,7 @@ public class CRpcLoopWakeupTests : CrpcTestBase
     [Fact]
     public void PostAfterResetIsObservedBeforeWait()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         using var driverReady = new ManualResetEventSlim(false);
         using var waitReturned = new ManualResetEventSlim(false);
 

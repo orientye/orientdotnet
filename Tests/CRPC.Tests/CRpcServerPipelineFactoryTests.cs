@@ -1,4 +1,4 @@
-using CRpc.Rpc.CRpc.Server;
+using Orient.Rpc.Server;
 using DotNetty.Handlers.Timeout;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Embedded;
@@ -18,8 +18,8 @@ public sealed class CRpcServerPipelineFactoryTests
 
         Assert.NotNull(channel.Pipeline.Get<IdleStateHandler>());
         Assert.NotNull(channel.Pipeline.Get<CRpcServerReadIdleHandler>());
-        Assert.NotNull(channel.Pipeline.Get<CRpc.Rpc.CRpc.Codec.CRpcMessageDecoder>());
-        Assert.NotNull(channel.Pipeline.Get<CRpc.Rpc.CRpc.Codec.CRpcMessageEncoder>());
+        Assert.NotNull(channel.Pipeline.Get<Orient.Rpc.Codec.CRpcMessageDecoder>());
+        Assert.NotNull(channel.Pipeline.Get<Orient.Rpc.Codec.CRpcMessageEncoder>());
     }
 
     [Fact]

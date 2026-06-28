@@ -1,6 +1,7 @@
-using CRpc.Rpc.CRpc.Client;
-using CRpc.Rpc.CRpc.Codec;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc.Client;
+using Orient.Rpc.Codec;
+using Orient.Rpc.Server;
 
 namespace CRPC.Tests;
 
@@ -51,7 +52,7 @@ public class CRpcTransportOptionsTests
     [Fact]
     public void CRpcClientExposesConfiguredOptions()
     {
-        var loop = new CRpc.Async.CRpcLoop();
+        var loop = new OrientLoop();
         var configured = new CRpcClientOptions { MaxFrameLength = 1024 * 1024 };
         var client = new CRpcClient(loop, configured);
 
@@ -61,7 +62,7 @@ public class CRpcTransportOptionsTests
     [Fact]
     public void CRpcServerExposesConfiguredOptions()
     {
-        var loop = new CRpc.Async.CRpcLoop();
+        var loop = new OrientLoop();
         var configured = new CRpcServerOptions { Port = 9001, SoBacklog = 1024 };
         var server = new CRpcServer(loop, configured);
 
@@ -191,7 +192,7 @@ public class CRpcTransportOptionsTests
     [Fact]
     public void CRpcClientConstructorRejectsInvalidOptionsBeforeConnect()
     {
-        var loop = new CRpc.Async.CRpcLoop();
+        var loop = new OrientLoop();
         var options = new CRpcClientOptions { IoThreadCount = 0 };
 
         var ex = Assert.Throws<ArgumentOutOfRangeException>(() => new CRpcClient(loop, options));

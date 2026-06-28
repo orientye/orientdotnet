@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using CRpc.Async;
+using Orient.Runtime;
 
 namespace CRPC.Tests;
 

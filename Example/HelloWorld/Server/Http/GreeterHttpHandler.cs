@@ -1,6 +1,6 @@
 using System.Text;
-using CRpc.Async;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc.Server;
 using DotNetty.Buffers;
 using DotNetty.Codecs.Http;
 using DotNetty.Common.Utilities;
@@ -13,11 +13,11 @@ public sealed class GreeterHttpHandler : SimpleChannelInboundHandler<IFullHttpRe
 {
     private const string SayHelloPath = "/api/greeter/say-hello";
 
-    private readonly CRpcLoop loop;
+    private readonly OrientLoop loop;
     private readonly CRpcConnectionRegistry connections;
     private readonly HelloworldServiceImpl greeter;
 
-    public GreeterHttpHandler(CRpcLoop loop, CRpcConnectionRegistry connections, HelloworldServiceImpl greeter)
+    public GreeterHttpHandler(OrientLoop loop, CRpcConnectionRegistry connections, HelloworldServiceImpl greeter)
     {
         this.loop = loop;
         this.connections = connections;
@@ -93,7 +93,7 @@ public sealed class GreeterHttpHandler : SimpleChannelInboundHandler<IFullHttpRe
         awaiter.OnCompleted(() => Complete(ctx, keepAlive, awaiter));
     }
 
-    private static void Complete(IChannelHandlerContext ctx, bool keepAlive, CRpcTask<(int code, HelloReply reply)>.Awaiter awaiter)
+    private static void Complete(IChannelHandlerContext ctx, bool keepAlive, OrientTask<(int code, HelloReply reply)>.Awaiter awaiter)
     {
         try
         {

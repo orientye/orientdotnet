@@ -1,5 +1,5 @@
-using CRpc.Async;
-using CRpc.Transport;
+using Orient.Runtime;
+using Orient.Rpc.Transport;
 using DotNetty.Buffers;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Embedded;
@@ -12,19 +12,19 @@ public sealed class TcpChannelHostTests : CrpcTestBase
     [Fact]
     public void ConnectAsyncThrowsWhenNotOnOwnerLoop()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var host = new TcpChannelHost(loop, new EmptyPipelineFactory());
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             host.ConnectAsync("127.0.0.1", 1));
 
-        Assert.Contains("owner CRpcLoop", exception.Message);
+        Assert.Contains("owner OrientLoop", exception.Message);
     }
 
     [Fact]
     public void WriteAndFlushAsyncThrowsWhenNotConnected()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var host = new TcpChannelHost(loop, new EmptyPipelineFactory());
 
@@ -37,7 +37,7 @@ public sealed class TcpChannelHostTests : CrpcTestBase
     [Fact]
     public void CloseAsyncCompletesWhenNeverConnected()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var host = new TcpChannelHost(loop, new EmptyPipelineFactory());
 
@@ -49,7 +49,7 @@ public sealed class TcpChannelHostTests : CrpcTestBase
     [Fact]
     public void EmptyPipelineFactoryAddsLoopInboundHandlerToPipeline()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var factory = new EmptyPipelineFactory();
         var host = new TcpChannelHost(loop, factory);
         var channel = new EmbeddedChannel();
@@ -62,7 +62,7 @@ public sealed class TcpChannelHostTests : CrpcTestBase
     [Fact]
     public void StaleChannelInactiveDoesNotInvokeCallback()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var currentChannel = new EmbeddedChannel();
         var staleChannel = new EmbeddedChannel();
@@ -82,7 +82,7 @@ public sealed class TcpChannelHostTests : CrpcTestBase
     [Fact]
     public void CurrentChannelInactiveInvokesCallback()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var currentChannel = new EmbeddedChannel();
         var callbackCount = 0;
@@ -101,7 +101,7 @@ public sealed class TcpChannelHostTests : CrpcTestBase
     [Fact]
     public void StaleChannelExceptionDoesNotInvokeCallback()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var currentChannel = new EmbeddedChannel();
         var staleChannel = new EmbeddedChannel();
@@ -121,7 +121,7 @@ public sealed class TcpChannelHostTests : CrpcTestBase
     [Fact]
     public void BorrowedEventLoopGroupDoesNotOwnGroup()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var sharedGroup = new MultithreadEventLoopGroup(1);
         try
@@ -138,7 +138,7 @@ public sealed class TcpChannelHostTests : CrpcTestBase
     [Fact]
     public void ShutdownIoAsyncCompletesImmediatelyWhenBorrowingSharedGroup()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var sharedGroup = new MultithreadEventLoopGroup(1);
         try
@@ -156,7 +156,7 @@ public sealed class TcpChannelHostTests : CrpcTestBase
     [Fact]
     public async Task DisposeAsyncClosesChannelWithoutShuttingDownBorrowedGroup()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var sharedGroup = new MultithreadEventLoopGroup(1);
         try
@@ -181,7 +181,7 @@ public sealed class TcpChannelHostTests : CrpcTestBase
     [Fact]
     public void CurrentChannelExceptionInvokesCallback()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var currentChannel = new EmbeddedChannel();
         var expected = new InvalidOperationException("boom");
@@ -207,7 +207,7 @@ public sealed class TcpChannelHostTests : CrpcTestBase
         field!.SetValue(host, channel);
     }
 
-    private static void DrainOwnerLoop(CRpcLoop loop)
+    private static void DrainOwnerLoop(OrientLoop loop)
     {
         loop.Tick();
     }

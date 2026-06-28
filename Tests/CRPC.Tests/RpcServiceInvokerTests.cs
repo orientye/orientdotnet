@@ -1,8 +1,8 @@
-using CRpc.Async;
-using CRpc.Rpc;
-using CRpc.Rpc.CRpc;
-using CRpc.Rpc.CRpc.Codec;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc;
+using Orient.Rpc.CRpc;
+using Orient.Rpc.Codec;
+using Orient.Rpc.Server;
 using DotNetty.Transport.Channels.Embedded;
 
 namespace CRPC.Tests;
@@ -12,10 +12,9 @@ public class RpcServiceInvokerTests : CrpcTestBase
     [Fact]
     public void InvokeAsyncReturnsServiceResult()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         var service = new ByteReturnService(1000);
-        loop.RegisterService(service);
 
         (int code, byte[] body)? result = null;
         var request = CRpcTestMessages.CreateRequest(1000, methodId: 1, reqSequence: 1);
@@ -88,7 +87,7 @@ public class RpcServiceInvokerTests : CrpcTestBase
 
         public ushort GetServiceId() => ServiceId;
 
-        public CRpcTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req) =>
-            CRpcTask.FromResult((0, new byte[] { 9 }));
+        public OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req) =>
+            OrientTask.FromResult((0, new byte[] { 9 }));
     }
 }

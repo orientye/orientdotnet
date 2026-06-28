@@ -1,13 +1,13 @@
-using CRpc.Async;
+using Orient.Runtime;
 
 namespace CRPC.Tests;
 
-public class CRpcLoopTickOrderTests : CrpcTestBase
+public class OrientLoopTickOrderTests : CrpcTestBase
 {
     [Fact]
     public void TickRunsPostedActionsBeforeDueTimers()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
 
         var log = new List<string>();
@@ -23,7 +23,7 @@ public class CRpcLoopTickOrderTests : CrpcTestBase
     [Fact]
     public void TickDrainsActionsAgainAfterTimerContinuationPosts()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
 
         var log = new List<string>();

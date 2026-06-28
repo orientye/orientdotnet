@@ -1,11 +1,11 @@
-﻿using CRpc.Async;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc.Server;
 using Example;
 using Example.Http;
 
 Console.WriteLine("Hello, RPC Server!");
 
-var loop = new CRpcLoop();
+var loop = new OrientLoop();
 using var cts = new CancellationTokenSource();
 
 Console.CancelKeyPress += (_, e) =>
@@ -33,9 +33,9 @@ else if (withHttp)
     httpListen = new HttpListenServer(loop, crpcServer, impl, httpPort);
 }
 
-CRpcLoopRunner.RunUntilComplete(loop, async () =>
+OrientLoopRunner.RunUntilComplete(loop, async () =>
 {
-    loop.RegisterService(impl);
+    crpcServer.Services.Register(impl);
 
     if (unifiedServer is not null)
     {
@@ -59,11 +59,11 @@ CRpcLoopRunner.RunUntilComplete(loop, async () =>
 
 try
 {
-    CRpcLoopHost.RunUntilCancelled(loop, cts.Token);
+    OrientLoopHost.RunUntilCancelled(loop, cts.Token);
 }
 finally
 {
-    CRpcLoopRunner.RunUntilComplete(loop, async () =>
+    OrientLoopRunner.RunUntilComplete(loop, async () =>
     {
         if (unifiedServer is not null)
         {

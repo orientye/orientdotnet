@@ -1,19 +1,19 @@
 using System.Collections.Concurrent;
-using CRpc.Async;
+using Orient.Runtime;
 
 namespace CRpc.TestHelper;
 
 /// <summary>
-/// Runs a single <see cref="CRpcLoop"/> on a dedicated background thread (for handler / Post + Tick tests).
+/// Runs a single <see cref="OrientLoop"/> on a dedicated background thread (for handler / Post + Tick tests).
 /// </summary>
 public sealed class LoopTestDriver : IDisposable
 {
-    private readonly CRpcLoop loop;
+    private readonly OrientLoop loop;
     private readonly BlockingCollection<Action> queue = new();
     private readonly Thread thread;
     private volatile bool disposed;
 
-    public LoopTestDriver(CRpcLoop loop)
+    public LoopTestDriver(OrientLoop loop)
     {
         ArgumentNullException.ThrowIfNull(loop);
         this.loop = loop;
@@ -87,7 +87,7 @@ public sealed class LoopTestDriver : IDisposable
         finally
         {
 #if DEBUG
-            CRpcLoop.ResetDebugThreadBindingForTests();
+            OrientLoop.ResetDebugThreadBindingForTests();
 #endif
         }
     }

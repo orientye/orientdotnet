@@ -1,14 +1,14 @@
-﻿// See https://aka.ms/new-console-template for more information
+// See https://aka.ms/new-console-template for more information
 
-using CRpc.Async;
-using CRpc.Rpc.CRpc.Client;
+using Orient.Runtime;
+using Orient.Rpc.Client;
 using Example;
 
 Console.WriteLine("Hello, RPC Client!");
 
-var loop = new CRpcLoop();
+var loop = new OrientLoop();
 
-CRpcLoopRunner.RunUntilComplete(loop, async () =>
+OrientLoopRunner.RunUntilComplete(loop, async () =>
 {
     var reference = await CRpcReference
         .For<GreeterClient>()

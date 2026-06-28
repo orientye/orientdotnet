@@ -1,4 +1,4 @@
-using CRpc.Transport;
+using Orient.Rpc.Transport;
 
 namespace CRPC.Tests.Transport;
 

@@ -1,5 +1,5 @@
-using CRpc.Async;
-using CRpc.Transport;
+using Orient.Runtime;
+using Orient.Rpc.Transport;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Embedded;
 
@@ -10,7 +10,7 @@ public sealed class LoopInboundHandlerTests : CrpcTestBase
     [Fact]
     public void ChannelReadPostsInboundMessageToOwnerLoop()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         object? received = null;
         var host = new TcpChannelHost(loop, new EmptyPipelineFactory())
@@ -29,7 +29,7 @@ public sealed class LoopInboundHandlerTests : CrpcTestBase
     [Fact]
     public void ExceptionCaughtPostsExceptionToOwnerLoop()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         loop.BindToCurrentThread();
         Exception? received = null;
         var host = new TcpChannelHost(loop, new EmptyPipelineFactory())

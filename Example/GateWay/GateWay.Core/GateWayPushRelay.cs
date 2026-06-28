@@ -1,5 +1,5 @@
-using CRpc.Async;
-using CRpc.Rpc.CRpc.Client;
+using Orient.Runtime;
+using Orient.Rpc.Client;
 
 namespace GateWay;
 
@@ -18,7 +18,7 @@ public sealed class GateWayPushRelay
             (context, body) => ForwardPushAsync(link, body));
     }
 
-    private static async CRpcTask ForwardPushAsync(GateWayBackendLink link, byte[] body)
+    private static async OrientTask ForwardPushAsync(GateWayBackendLink link, byte[] body)
     {
         await link.Inbound.SendPushAsync(HelloWorldServiceId, HelloWorldServerNoticeMethodId, body);
     }

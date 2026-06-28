@@ -1,4 +1,4 @@
-using CRpc.Rpc.CRpc.Codec;
+using Orient.Rpc.Codec;
 
 namespace CRPC.Tests;
 

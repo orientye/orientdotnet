@@ -1,10 +1,10 @@
 using System.Net;
 using System.Reflection;
-using CRpc.Async;
-using CRpc.Rpc.CRpc;
-using CRpc.Rpc.CRpc.Client;
-using CRpc.Rpc.CRpc.Codec;
-using CRpc.Rpc.CRpc.Server;
+using Orient.Runtime;
+using Orient.Rpc.CRpc;
+using Orient.Rpc.Client;
+using Orient.Rpc.Codec;
+using Orient.Rpc.Server;
 using DotNetty.Transport.Channels;
 
 namespace CRPC.Tests;
@@ -14,14 +14,14 @@ public class CRpcServerErrorResponseIntegrationTests : CrpcTestBase
     [Fact]
     public void UnknownServiceReturnsServiceNotFoundOverTcp()
     {
-        var loop = new CRpcLoop();
+        var loop = new OrientLoop();
         var server = new CRpcServer(loop, new CRpcServerOptions
         {
             Address = IPAddress.Loopback,
             Port = 0,
         });
 
-        CRpcLoopRunner.RunUntilComplete(loop, async () =>
+        OrientLoopRunner.RunUntilComplete(loop, async () =>
         {
             await server.StartAsync();
             var port = GetBoundPort(server);

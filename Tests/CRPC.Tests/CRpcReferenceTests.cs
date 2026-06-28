@@ -1,7 +1,7 @@
-using CRpc.Async;
-using CRpc.Rpc;
-using CRpc.Rpc.CRpc.Client;
-using CRpc.Rpc.CRpc.Codec;
+using Orient.Runtime;
+using Orient.Rpc;
+using Orient.Rpc.Client;
+using Orient.Rpc.Codec;
 
 namespace CRPC.Tests;
 
@@ -64,7 +64,7 @@ public class CRpcReferenceTests : CrpcTestBase
 
     private sealed class RecordingRpcClient : IRpcClient
     {
-        public CRpcTask<CRpcMessage> CallAsync(ushort serviceId, ushort methodId, byte[] body, int timeout)
+        public OrientTask<CRpcMessage> CallAsync(ushort serviceId, ushort methodId, byte[] body, int timeout)
         {
             throw new NotSupportedException();
         }
