@@ -36,7 +36,7 @@
 | `Tests/CRPC.Tests/CRpcServerHandlerTests.cs` | Register via `loop.RegisterService` |
 | `Example/HelloWorld/Server/Program.cs` | 7999 + 8080 startup |
 | `Doc/gateway.md` | HTTP contract |
-| `Doc/architecture-draft.md` | `HttpServer` naming note |
+| `Doc/architecture.md` | `HttpServer` naming note |
 
 ---
 
@@ -608,7 +608,7 @@ Expected: `{"code":0,"body":{...}}` with greeting message.
 
 **Files:**
 - Modify: `Doc/gateway.md`
-- Modify: `Doc/architecture-draft.md` (short §4.2 naming note)
+- Modify: `Doc/architecture.md` (short §4.2 naming note)
 
 - [ ] **Step 1: Write `Doc/gateway.md`**
 

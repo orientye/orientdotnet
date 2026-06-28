@@ -3,7 +3,7 @@
 Normative wire format for CRpc TCP clients and servers. Wire magic and frame layout are unchanged after the 2026-06-28 Runtime/Rpc split.
 
 Full design: `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md`  
-Architecture: `Doc/architecture-draft.md`
+Architecture: `Doc/architecture.md`
 
 **Implementation:** `Orient.Rpc` (`Orient.Rpc/Codec/`, `Orient.Rpc/Protocol/`). Execution runtime: `Orient.Runtime` (`OrientLoop`, `OrientTask`).
 

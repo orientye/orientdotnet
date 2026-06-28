@@ -997,12 +997,12 @@ Expected: no matches outside `Tool/` historical docs (plugin namespace `CRpcProt
 ## Task 10: Documentation updates
 
 **Files:**
-- Modify: `Doc/architecture-draft.md`
+- Modify: `Doc/architecture.md`
 - Modify: `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md` — add superseded banner for registry sections
 - Modify: `docs/superpowers/specs/2026-06-28-a2-rpc-service-registry-design.md` — add implementation note after work is complete
 - Modify: `docs/superpowers/specs/2026-06-28-orient-runtime-rpc-split-design.md` — add implementation note after work is complete
 
-- [ ] **Step 1: Update `architecture-draft.md`**
+- [ ] **Step 1: Update `architecture.md`**
 
 Replace references to:
 - `CRpcLoop.RegisterService` / `TryGetService` → `CRpcServer.Services` / `RpcServiceRegistry`

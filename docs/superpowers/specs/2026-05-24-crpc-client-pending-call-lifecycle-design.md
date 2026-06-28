@@ -95,4 +95,4 @@ Late responses after timeout or connection close are ignored (`results.Remove` f
 
 ## Related docs
 
-- [architecture-draft.md §6.3 / §9.5.7 / §9.5.8](../../../Doc/architecture-draft.md) — architecture overview and invariants
+- [architecture.md §6.3 / §9.5.7 / §9.5.8](../../../Doc/architecture.md) — architecture overview and invariants

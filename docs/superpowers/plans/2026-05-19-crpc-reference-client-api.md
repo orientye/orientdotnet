@@ -28,7 +28,7 @@
   - Unit tests for proxy activation, URL validation, and builder behavior that does not require a live server.
 - Modify `Example/HelloWorld/Client/Program.cs`
   - Use the reference API and inline `await client.SayHelloAsync(...)`.
-- Modify `Doc/architecture-draft.md`
+- Modify `Doc/architecture.md`
   - Update the client API section to describe `CRpcReference` as business-facing and `CRpcClient` as transport-facing.
 
 ---
@@ -420,7 +420,7 @@ Expected: build succeeds. Existing nullable warnings may remain.
 ### Task 5: Document the Client API Boundary
 
 **Files:**
-- Modify: `Doc/architecture-draft.md`
+- Modify: `Doc/architecture.md`
 
 - [ ] **Step 1: Add client-facing API text to the target architecture section**
 
@@ -456,7 +456,7 @@ Then renumber existing `### 9.3 关键不变量（重申）` to `### 9.4 关键�
 Run:
 
 ```bash
-rg "^## |^### " Doc/architecture-draft.md
+rg "^## |^### " Doc/architecture.md
 ```
 
 Expected: headings are sequential and no duplicate `9.3` remains.

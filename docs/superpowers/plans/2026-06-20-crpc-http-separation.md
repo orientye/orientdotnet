@@ -35,7 +35,7 @@
 | `Example/HelloWorld/Server/Http/GreeterHttpHandler.cs` | App HTTP route + JSON + `loop.Post`. |
 | `Example/HelloWorld/Server/Http/UnifiedServer.cs` | Optional single-port bootstrap. |
 | `Example/HelloWorld/Server/Http/PortUnificationHandler.cs` | Sniff CRPC vs HTTP; assemble pipeline. |
-| `Doc/architecture-draft.md` | Note HTTP removed from core. |
+| `Doc/architecture.md` | Note HTTP removed from core. |
 | `docs/superpowers/specs/2026-05-19-multi-endpoint-crpc-http-design.md` | Superseded header. |
 | `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md` | Note HTTP outside core. |
 
@@ -844,7 +844,7 @@ Expected: same JSON envelope as Task 9.
 ## Task 11: Documentation Updates (P6)
 
 **Files:**
-- Modify: `Doc/architecture-draft.md`
+- Modify: `Doc/architecture.md`
 - Modify: `docs/superpowers/specs/2026-05-19-multi-endpoint-crpc-http-design.md`
 - Modify: `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md`
 - Modify: `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
@@ -865,7 +865,7 @@ Replace the line `HTTP handler (HttpServerHandler, IRpcHttpJsonCodec) unchanged.
 HTTP/JSON is an application concern; core no longer includes `HttpServerHandler` or `IRpcHttpJsonCodec`. Binary codec is unaffected.
 ```
 
-- [ ] **Step 3: Update `Doc/architecture-draft.md`**
+- [ ] **Step 3: Update `Doc/architecture.md`**
 
 In the endpoint table (~line 17), change HTTP-in-core references to:
 

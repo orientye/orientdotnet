@@ -2,7 +2,7 @@
 
 **Status:** Implemented  
 **Date:** 2026-06-27  
-**Related:** `Doc/TODO.txt` P0 item 1, `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md`, `docs/superpowers/specs/2026-06-21-crpc-heartbeat-v1-design.md`, `Doc/architecture-draft.md`
+**Related:** `Doc/TODO.txt` P0 item 1, `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md`, `docs/superpowers/specs/2026-06-21-crpc-heartbeat-v1-design.md`, `Doc/architecture.md`
 
 ---
 

@@ -3,7 +3,7 @@
 **Status:** Approved  
 **Date:** 2026-06-27  
 **Superseded (registry):** Service registry decisions replaced by `docs/superpowers/specs/2026-06-28-a2-rpc-service-registry-design.md`. `StartAsync` / `StopAsync` / transport-only stop remain in force.  
-**Related:** `Doc/architecture-draft.md` §4.1 / §8.4, `Doc/TODO.txt` P0.2, `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
+**Related:** `Doc/architecture.md` §4.1 / §8.4, `Doc/TODO.txt` P0.2, `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
 
 ---
 
@@ -117,4 +117,4 @@ Stays `internal` on `CRpcLoop` for tests or explicit host teardown. **Never** ca
 
 - Unit: `StopAsync` preserves `TryGetService`; `Stop` → `Start` succeeds; duplicate `StartAsync` throws.
 - Existing integration tests (HelloWorld, GateWay, error response) remain green.
-- Docs: `Doc/TODO.txt` P0.2 archived; `architecture-draft.md` §8.4 aligned.
+- Docs: `Doc/TODO.txt` P0.2 archived; `architecture.md` §8.4 aligned.

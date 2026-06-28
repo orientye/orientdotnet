@@ -3,7 +3,7 @@
 **Status:** Draft (pending review)  
 **Date:** 2026-06-28  
 **Implementation:** Completed by `docs/superpowers/plans/2026-06-28-a2-runtime-rpc-split.md`.  
-**Related:** `Doc/architecture-draft.md` (ServiceRegistry target), `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md` (supersedes §Goal / §Decisions §1 / §7 / §Invariants registry items), `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
+**Related:** `Doc/architecture.md` (ServiceRegistry target), `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md` (supersedes §Goal / §Decisions §1 / §7 / §Invariants registry items), `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
 
 **Follow-up spec:** `docs/superpowers/specs/2026-06-28-orient-runtime-rpc-split-design.md` (Runtime/Rpc split + `OrientLoop` / `OrientTask` rename). Combined implementation plan covers both.
 
@@ -261,7 +261,7 @@ DotNetty IO thread
 | `Example/GateWay/GateWayServer/Program.cs` | `server.Services.Register` |
 | `Tests/CRPC.Tests/CRpcLoopRegistryTests.cs` | Rename/migrate → `RpcServiceRegistryTests` |
 | `Tests/CRPC.Tests/CRpcServer*.cs`, `GateWayServerHandlerTests.cs`, etc. | Update registration calls |
-| `Doc/architecture-draft.md` | Mark ServiceRegistry target as implemented (follow-up doc edit) |
+| `Doc/architecture.md` | Mark ServiceRegistry target as implemented (follow-up doc edit) |
 
 Protobuf plugin and other `TryGetServiceId` references are unrelated (service id from proto options, not loop registry).
 
@@ -315,7 +315,7 @@ Server lifecycle decisions on `StartAsync` / `StopAsync` / `RunAsync` / transpor
 - [ ] `RpcServiceRegistryTests` covers migrated scenarios
 - [ ] Full `CRPC.Tests` suite passes
 - [ ] HelloWorld and GateWay examples build and run
-- [ ] `architecture-draft.md` updated to reflect registry on `RpcServiceRegistry` / `CRpcServer.Services`
+- [ ] `architecture.md` updated to reflect registry on `RpcServiceRegistry` / `CRpcServer.Services`
 
 ---
 

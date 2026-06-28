@@ -1,7 +1,7 @@
 # Orient / CRpc TODO
 
 > 2026-06-28 按当前实现重新整理。已落地的历史 TODO 见文末归档；本文件只跟踪还需要继续推进的事项。
-> 架构对照：`Doc/architecture-draft.md`
+> 架构对照：`Doc/architecture.md`
 
 ## P0：先修语义正确性
 

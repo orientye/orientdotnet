@@ -4,7 +4,7 @@
 **Status:** Proposed  
 **Scope:** Replace the draft binary wire codec with a simpler, fixed-header frame format. Breaking change — all .NET endpoints (server, client, gateway) migrate together. No compatibility with the draft wire format.
 
-**Related:** `Doc/protocol.md`, `Doc/architecture-draft.md`, `docs/superpowers/specs/2026-05-28-crpc-server-push-design.md`, `docs/superpowers/specs/2026-06-01-crpc-gateway-design.md`.
+**Related:** `Doc/protocol.md`, `Doc/architecture.md`, `docs/superpowers/specs/2026-05-28-crpc-server-push-design.md`, `docs/superpowers/specs/2026-06-01-crpc-gateway-design.md`.
 
 ---
 

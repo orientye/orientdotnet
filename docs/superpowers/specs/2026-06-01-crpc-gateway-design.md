@@ -6,7 +6,7 @@
 
 **Prerequisite:** `Example/GateWay` MVP (fallback `serviceId=0`, `GateWayRouter`, `GateWayServerHandler` via `HandlerFactory`).
 
-**Related:** `Doc/architecture-draft.md` (§5 cross-process `CRpcClient`), `Example/HelloWorld`, `docs/superpowers/specs/2026-05-28-crpc-server-push-design.md`.
+**Related:** `Doc/architecture.md` (§5 cross-process `CRpcClient`), `Example/HelloWorld`, `docs/superpowers/specs/2026-05-28-crpc-server-push-design.md`.
 
 ---
 

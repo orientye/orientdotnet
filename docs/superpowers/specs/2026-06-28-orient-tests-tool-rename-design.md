@@ -80,7 +80,7 @@ Regenerate HelloWorld generated files after plugin rebuild（生成物仍引用 
 | `ICRpcGeneratedClient` | Generated client contract |
 | Wire magic `0x43525043` | Binary protocol |
 | URL scheme `crpc://` | Client reference URLs |
-| `Doc/architecture-draft.md` CRpc terminology | Describes protocol layer |
+| `Doc/architecture.md` CRpc terminology | Describes protocol layer |
 | Historical `docs/superpowers/*crpc*` filenames | Archive; no sweep |
 | Splitting `Orient.Tests` into Runtime/Rpc test projects | Future |
 

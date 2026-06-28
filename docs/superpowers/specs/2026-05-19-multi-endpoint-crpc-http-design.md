@@ -120,7 +120,7 @@ await crpc.StopAsync();
 ## Documentation
 
 - Update `Doc/gateway.md` with HTTP contract.
-- Add note in `Doc/architecture-draft.md` §4.2 that `HttpServer` replaces draft `HttpGatewayServer` naming.
+- Add note in `Doc/architecture.md` §4.2 that `HttpServer` replaces draft `HttpGatewayServer` naming.
 
 ## Verification
 

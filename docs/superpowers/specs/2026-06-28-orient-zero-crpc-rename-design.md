@@ -155,7 +155,7 @@ Update all Example/GateWay references:
 
 | File | Action |
 | --- | --- |
-| `Doc/architecture-draft.md` | Full pass: title → “Orient 架构”; replace all CRpc names with Orient/Rpc names |
+| `Doc/architecture.md` | Full pass: title → “Orient 架构”; replace all CRpc names with Orient/Rpc names |
 | `Doc/protocol.md` | Title → “Orient Binary Protocol”; ORNT magic; Rpc* handler names |
 
 ### Historical specs/plans (filename rename)

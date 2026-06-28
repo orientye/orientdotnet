@@ -8,7 +8,7 @@
 
 **Tech Stack:** C# / .NET 8, xUnit, existing `CRpcLoop` / `CRpcLoopWakeupTests`.
 
-**Spec reference:** `Doc/architecture-draft.md` §9.5.2.
+**Spec reference:** `Doc/architecture.md` §9.5.2.
 
 ---
 
@@ -18,7 +18,7 @@
 | --- | --- |
 | `CRpc/Async/CRpcLoop.cs` | Remove `wakeupGate`; add `pendingWakeup`; refactor `Post` + `WaitForWorkOrTimer` |
 | `Tests/CRPC.Tests/CRpcLoopWakeupTests.cs` | Add coalesced-wakeup + race tests |
-| `Doc/architecture-draft.md` §9.5.2 | Document lock-free wakeup invariant |
+| `Doc/architecture.md` §9.5.2 | Document lock-free wakeup invariant |
 
 ---
 
@@ -41,4 +41,4 @@ See plan body in agent session for full test code.
 ### Task 3: Update Architecture Doc
 
 **Files:**
-- Modify: `Doc/architecture-draft.md` §9.5.2
+- Modify: `Doc/architecture.md` §9.5.2

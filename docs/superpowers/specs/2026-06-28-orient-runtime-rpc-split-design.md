@@ -4,7 +4,7 @@
 **Date:** 2026-06-28  
 **Implementation:** Completed by `docs/superpowers/plans/2026-06-28-a2-runtime-rpc-split.md`.  
 **Prerequisite:** `docs/superpowers/specs/2026-06-28-a2-rpc-service-registry-design.md` (A2 must be implemented as part of the same delivery)  
-**Related:** `Doc/architecture-draft.md`, `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md`, `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
+**Related:** `Doc/architecture.md`, `docs/superpowers/specs/2026-06-27-crpc-server-lifecycle-design.md`, `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
 
 **Implementation:** One combined plan covering **A2 + this split + type rename** (see Open Items).
 
@@ -64,7 +64,7 @@ Today a single `CRPC.csproj` references DotNetty, Protobuf, and nacos-sdk-csharp
 
 The monolith also embeds RPC service registration on `CRpcLoop` (removed by A2). After A2, the loop is logically pure; the csproj split makes that dependency boundary enforceable at build time.
 
-`architecture-draft.md` lists **independent `ServiceRegistry` type** (A2) and notes Runtime as a direction. This spec completes the physical split.
+`architecture.md` lists **independent `ServiceRegistry` type** (A2) and notes Runtime as a direction. This spec completes the physical split.
 
 ---
 
@@ -293,7 +293,7 @@ The plugin project itself remains in `Tool/crpc-protobuf-plugin`; only its gener
 
 | Document | Change |
 | --- | --- |
-| `Doc/architecture-draft.md` | ServiceRegistry on `RpcServiceRegistry`; Runtime split; `OrientLoop` terminology |
+| `Doc/architecture.md` | ServiceRegistry on `RpcServiceRegistry`; Runtime split; `OrientLoop` terminology |
 | `Doc/TODO.txt` | Archive completed split item if present |
 | A2 spec | Cross-link this spec; note combined implementation |
 | Example README / comments | `CRpcLoop` → `OrientLoop`, `server.Services.Register` |

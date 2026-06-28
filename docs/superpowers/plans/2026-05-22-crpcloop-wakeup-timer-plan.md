@@ -8,7 +8,7 @@
 
 **Tech Stack:** C# / .NET 8, xUnit, custom `CRpcTask`, existing `CRpcLoop` / `CRpcClient`.
 
-**Spec reference:** `Doc/architecture-draft.md` §9.5, §10 step 1.
+**Spec reference:** `Doc/architecture.md` §9.5, §10 step 1.
 
 ---
 
@@ -731,7 +731,7 @@ Expected: PASS (including new race tests).
 ### Task 7: Full Test Suite + Doc Touch-Up
 
 **Files:**
-- Modify: `Doc/architecture-draft.md` (only if API signatures in §9.2 drift from implementation)
+- Modify: `Doc/architecture.md` (only if API signatures in §9.2 drift from implementation)
 
 - [ ] **Step 1: Run full test project**
 
@@ -745,7 +745,7 @@ Expected: all tests PASS.
 
 - [ ] **Step 2: Align §9.2 API snippet with final signatures**
 
-If `sleepMilliseconds` overloads were removed (not just obsoleted), ensure `Doc/architecture-draft.md` §9.2 / §9.5.7 matches shipped API.
+If `sleepMilliseconds` overloads were removed (not just obsoleted), ensure `Doc/architecture.md` §9.2 / §9.5.7 matches shipped API.
 
 ---
 

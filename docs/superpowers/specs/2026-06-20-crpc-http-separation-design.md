@@ -242,7 +242,7 @@ CRpc binary errors remain in `CRpcMessage` `resultCode` / frame semantics per `D
 
 | Doc | Change |
 | --- | --- |
-| `Doc/architecture-draft.md` | Mark `HttpServer` as removed from core; HTTP is app concern |
+| `Doc/architecture.md` | Mark `HttpServer` as removed from core; HTTP is app concern |
 | `Doc/gateway.md` (if HTTP section exists) | Remove core `POST /{serviceId}/{methodId}` as framework contract |
 | `docs/superpowers/specs/2026-05-19-multi-endpoint-crpc-http-design.md` | Add header note: superseded by this spec for HTTP-in-core |
 | `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md` | Clarify HTTP is outside core (no change to binary wire) |
