@@ -113,11 +113,11 @@ orientdotnet/
 │   └── Timer/          OrientLoopTimer, MinHeapTimerScheduler, …
 ├── Orient.Rpc/
 │   ├── Orient.Rpc.csproj
-│   ├── Abstractions/   IRpcService, IRpcContext, IRpcMessage
+│   ├── Interfaces/   IRpcService, IRpcContext, IRpcMessage
 │   ├── Server/         CRpcServer, RpcServiceRegistry, CRpcServerHandler, …
 │   ├── Client/         CRpcClient, references, push, …
 │   ├── Codec/          CRpcMessage, encoder/decoder, …
-│   ├── CRpc/           CRpcStatusCode, ChannelWriteUtil
+│   ├── Protocol/       CRpcStatusCode
 │   ├── Transport/      TcpChannelHost, LoopInboundHandler, …
 │   ├── Registry/       NacosRegistry (optional integration)
 │   ├── ConfigCenter/   NacosConfig
@@ -175,14 +175,15 @@ orientdotnet/
 
 | Area | Files |
 | --- | --- |
-| **Abstractions** | `IRPCService.cs`, `IRPCContext.cs`, `IRpcMessage.cs` |
+| **Interfaces** | `IRPCService.cs`, `IRPCContext.cs`, `IRpcMessage.cs` |
 | **Server** | `CRpcServer.cs`, `CRpcServerHandler.cs`, `CRpcServerOptions.cs`, `CRpcConnection*.cs`, `CRpcContext.cs`, `RpcServiceInvoker.cs`, `CRpcServerPipelineFactory.cs`, `CRpcServerReadIdleHandler.cs`, **`RpcServiceRegistry.cs` (A2 new)** |
 | **Server loop alias** | `CRpcLoopHost.cs` → thin forward to `OrientLoopHost.RunUntilCancelled` (optional obsolete) |
 | **Client** | All under `Rpc/CRpc/Client/` |
 | **Client loop alias** | `CRpcClientLoopHost.cs` → forward to `OrientLoopHost` |
 | **Codec** | All under `Rpc/CRpc/Codec/` + `crpc-options.proto` |
 | **Transport** | `Transport/*.cs` |
-| **Protocol root** | `ChannelWriteUtil.cs`, `CRpcStatusCode.cs` |
+| **Protocol** | `CRpcStatusCode.cs` |
+| **Util** | `ChannelWriteUtil.cs`, `NetworkHelper.cs` |
 | **Client abstraction** | `IRPCClient.cs` → `Orient.Rpc.Client` (it depends on client and codec types) |
 | **Nacos** | `ConfigCenter/`, `Registry/`, `Mgr/` |
 
@@ -213,12 +214,13 @@ orientdotnet/
 | Rpc server | `Orient.Rpc.Server` | `Orient.Rpc.Server.CRpcServer` |
 | Rpc client | `Orient.Rpc.Client` | `Orient.Rpc.Client.CRpcClient` |
 | Rpc codec | `Orient.Rpc.Codec` | `Orient.Rpc.Codec.CRpcMessage` |
-| Rpc protocol root | `Orient.Rpc.CRpc` | `Orient.Rpc.CRpc.CRpcStatusCode` |
+| Rpc protocol | `Orient.Rpc.Protocol` | `Orient.Rpc.Protocol.CRpcStatusCode` |
+| Rpc util | `Orient.Rpc.Util` | `Orient.Rpc.Util.ChannelWriteUtil` |
 | Transport | `Orient.Rpc.Transport` | `Orient.Rpc.Transport.TcpChannelHost` |
 
 Global find-replace `CRpc.Async` → `Orient.Runtime`, `CRpc.Rpc.CRpc` → appropriate `Orient.Rpc.*` subnamespace.
 
-Protocol-level shared types that are not specifically server/client/codec (`CRpcStatusCode`, `ChannelWriteUtil`) live under `Orient.Rpc.CRpc`. Public client-facing abstractions that depend on client/codec types (`IRPCClient`) live under `Orient.Rpc.Client`, not under root abstractions.
+Protocol-level shared types (`CRpcStatusCode`) live under `Orient.Rpc.Protocol`. Transport helpers (`ChannelWriteUtil`, `NetworkHelper`) live under `Orient.Rpc.Util`. Public client-facing abstractions that depend on client/codec types (`IRPCClient`) live under `Orient.Rpc.Client`, not under root abstractions.
 
 ---
 

@@ -1,7 +1,7 @@
 using DotNetty.Common.Utilities;
 using DotNetty.Transport.Channels;
 
-namespace Orient.Rpc.CRpc;
+namespace Orient.Rpc.Util;
 
 /// <summary>
 /// DotNetty outbound write helpers. Does not await write completion or touch business loop state.

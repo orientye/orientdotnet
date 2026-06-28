@@ -8,7 +8,7 @@ using Orient.Runtime;
 using Orient.Rpc;
 using Orient.Rpc.Codec;
 using Orient.Rpc.Server;
-using Orient.Rpc.CRpc;
+using Orient.Rpc.Protocol;
 
 namespace Example {
 

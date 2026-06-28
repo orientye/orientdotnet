@@ -48,10 +48,11 @@ After Task 4 Step 2 moves `CRpc/Async/` out of the monolith, do **not** expect `
 | `Orient.Rpc/Server/RpcServiceRegistry.cs` | Loop-thread service registry (A2) |
 | `Orient.Rpc/Server/CRpcServer.cs` | Transport endpoint; owns `Services` |
 | `Orient.Rpc/Server/CRpcServerHandler.cs` | Dispatch via `server.Services.TryGet` |
-| `Orient.Rpc/Abstractions/IRpcService.cs` | RPC contracts (not in Runtime) |
+| `Orient.Rpc/Interfaces/IRpcService.cs` | RPC contracts (not in Runtime) |
 | `Orient.Rpc/Client/*.cs` | Client, references, push |
 | `Orient.Rpc/Codec/*.cs` | Frame codec |
-| `Orient.Rpc/CRpc/CRpcStatusCode.cs` | Protocol-level shared types |
+| `Orient.Rpc/Protocol/CRpcStatusCode.cs` | Protocol-level shared types |
+| `Orient.Rpc/Util/ChannelWriteUtil.cs` | Transport write helpers |
 | `Orient.Rpc/Transport/*.cs` | `TcpChannelHost`, `LoopInboundHandler` |
 | `Orient.Rpc/Util/NetworkHelper.cs` | Nacos local IP helper |
 | `CRPC.TestHelper/` | References `Orient.Runtime` only |
@@ -691,16 +692,16 @@ Suggested layout and namespace renames:
 
 | Source | Destination | Namespace |
 | --- | --- | --- |
-| `CRpc/Rpc/IRPCService.cs` | `Orient.Rpc/Abstractions/IRpcService.cs` | `Orient.Rpc` |
-| `CRpc/Rpc/IRPCContext.cs` | `Orient.Rpc/Abstractions/IRpcContext.cs` | `Orient.Rpc` |
-| `CRpc/Rpc/IRpcMessage.cs` | `Orient.Rpc/Abstractions/IRpcMessage.cs` | `Orient.Rpc` |
+| `CRpc/Rpc/IRPCService.cs` | `Orient.Rpc/Interfaces/IRpcService.cs` | `Orient.Rpc` |
+| `CRpc/Rpc/IRPCContext.cs` | `Orient.Rpc/Interfaces/IRpcContext.cs` | `Orient.Rpc` |
+| `CRpc/Rpc/IRpcMessage.cs` | `Orient.Rpc/Interfaces/IRpcMessage.cs` | `Orient.Rpc` |
 | `CRpc/Rpc/IRPCClient.cs` | `Orient.Rpc/Client/IRpcClient.cs` | `Orient.Rpc.Client` |
 | `CRpc/Rpc/CRpc/Server/*.cs` | `Orient.Rpc/Server/` | `Orient.Rpc.Server` |
 | `CRpc/Rpc/CRpc/Client/*.cs` | `Orient.Rpc/Client/` | `Orient.Rpc.Client` |
 | `CRpc/Rpc/CRpc/Codec/*.cs` | `Orient.Rpc/Codec/` | `Orient.Rpc.Codec` |
 | `CRpc/Rpc/CRpc/Protobuf/crpc-options.proto` | `Orient.Rpc/Codec/crpc-options.proto` | — |
-| `CRpc/Rpc/CRpc/ChannelWriteUtil.cs` | `Orient.Rpc/CRpc/ChannelWriteUtil.cs` | `Orient.Rpc.CRpc` |
-| `CRpc/Rpc/CRpc/CRpcStatusCode.cs` | `Orient.Rpc/CRpc/CRpcStatusCode.cs` | `Orient.Rpc.CRpc` |
+| `CRpc/Rpc/CRpc/ChannelWriteUtil.cs` | `Orient.Rpc/Util/ChannelWriteUtil.cs` | `Orient.Rpc.Util` |
+| `CRpc/Rpc/CRpc/CRpcStatusCode.cs` | `Orient.Rpc/Protocol/CRpcStatusCode.cs` | `Orient.Rpc.Protocol` |
 | `CRpc/Transport/*.cs` | `Orient.Rpc/Transport/` | `Orient.Rpc.Transport` |
 | `CRpc/Util/NetworkHelper.cs` | `Orient.Rpc/Util/NetworkHelper.cs` | `Orient.Rpc.Util` |
 | `CRpc/ConfigCenter/` | `Orient.Rpc/ConfigCenter/` | `Orient.Rpc.ConfigCenter` |
@@ -725,7 +726,7 @@ In every moved Rpc file:
 - `namespace CRpc.Rpc.CRpc.Server` → `namespace Orient.Rpc.Server`
 - `namespace CRpc.Rpc.CRpc.Client` → `namespace Orient.Rpc.Client`
 - `namespace CRpc.Rpc.CRpc.Codec` → `namespace Orient.Rpc.Codec`
-- `namespace CRpc.Rpc.CRpc` → `namespace Orient.Rpc.CRpc` (status code, channel util)
+- `namespace CRpc.Rpc.CRpc` → `namespace Orient.Rpc.Protocol` (status code), `Orient.Rpc.Util` (channel util)
 - `namespace CRpc.Transport` → `namespace Orient.Rpc.Transport`
 
 Update `RpcServiceRegistry` constructor parameter: `OrientLoop loop`.
@@ -825,7 +826,7 @@ using CRpc.Rpc;                → using Orient.Rpc;
 using CRpc.Rpc.CRpc.Server;    → using Orient.Rpc.Server;
 using CRpc.Rpc.CRpc.Client;    → using Orient.Rpc.Client;
 using CRpc.Rpc.CRpc.Codec;     → using Orient.Rpc.Codec;
-using CRpc.Rpc.CRpc;           → using Orient.Rpc.CRpc;
+using CRpc.Rpc.CRpc;           → using Orient.Rpc.Protocol; / using Orient.Rpc.Util;
 using CRpc.Transport;          → using Orient.Rpc.Transport;
 ```
 
@@ -868,7 +869,7 @@ sb.AppendLine("using Orient.Runtime;");
 sb.AppendLine("using Orient.Rpc;");
 sb.AppendLine("using Orient.Rpc.Codec;");
 sb.AppendLine("using Orient.Rpc.Server;");
-sb.AppendLine("using Orient.Rpc.CRpc;");
+sb.AppendLine("using Orient.Rpc.Protocol;");
 ```
 
 In `GenerateClient`:
@@ -908,7 +909,7 @@ Update `Example/HelloWorld/Server/HelloworldService.cs` to match the new generat
 ```csharp
 using Orient.Runtime;
 using Orient.Rpc;
-using Orient.Rpc.CRpc;
+using Orient.Rpc.Protocol;
 using Orient.Rpc.Codec;
 using Orient.Rpc.Server;
 

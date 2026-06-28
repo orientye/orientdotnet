@@ -1,4 +1,4 @@
-namespace Orient.Rpc.CRpc;
+namespace Orient.Rpc.Protocol;
 
 /// <summary>
 /// Framework-level result codes carried in the CRpc response header <c>resultCode</c> field.

@@ -1,7 +1,8 @@
 using System.Net.Sockets;
 using Orient.Runtime;
 using Orient.Rpc;
-using Orient.Rpc.CRpc;
+using Orient.Rpc.Protocol;
+using Orient.Rpc.Util;
 using Orient.Rpc.Codec;
 using DotNetty.Transport.Channels;
 

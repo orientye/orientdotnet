@@ -47,7 +47,7 @@ public static class OrientCrpcGen
             sb.AppendLine("using Orient.Rpc;");
             sb.AppendLine("using Orient.Rpc.Codec;");
             sb.AppendLine("using Orient.Rpc.Server;");
-            sb.AppendLine("using Orient.Rpc.CRpc;");
+            sb.AppendLine("using Orient.Rpc.Protocol;");
             sb.AppendLine("");
 
             var ns = GetFileNamespace(fileDescriptorProto);
