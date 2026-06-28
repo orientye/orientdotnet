@@ -1,6 +1,11 @@
 # CRpc Binary Protocol
 
-Normative wire format for CRpc TCP clients and servers. Full design: `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md`
+Normative wire format for CRpc TCP clients and servers. Wire magic and frame layout are unchanged after the 2026-06-28 Runtime/Rpc split.
+
+Full design: `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md`  
+Architecture: `Doc/architecture-draft.md`
+
+**Implementation:** `Orient.Rpc` (`Orient.Rpc/Codec/`, `Orient.Rpc/Protocol/`). Execution runtime: `Orient.Runtime` (`OrientLoop`, `OrientTask`).
 
 ## Frame
 
@@ -49,7 +54,7 @@ Raw protobuf bytes. No application-layer checksum. No compression in current rel
 
 # Multi-Protocol Endpoint & HTTP
 
-How to expose CRpc and HTTP on the same service. **HTTP is application-owned** — routes, JSON shape, and status codes are not defined by `CRpc.dll`.
+How to expose CRpc and HTTP on the same service. **HTTP is application-owned** — routes, JSON shape, and status codes are not defined by `Orient.Rpc`.
 
 Reference implementation: `Example/HelloWorld/Server/Http/`  
 Architecture decisions: `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
@@ -83,8 +88,16 @@ Optional application-layer pattern: read the first bytes of each new connection,
 Rules:
 
 1. Sniff once per connection; remove the sniff handler after branching.
-2. Share one `CRpcLoop`, one service registry, and one `CRpcConnectionRegistry` on a unified server.
-3. Not part of `CRpc.dll` — see `PortUnificationHandler.cs` and `UnifiedServer.cs` in the HelloWorld example.
+2. Share one `OrientLoop`, one `CRpcServer.Services` registry, and one `CRpcConnectionRegistry` on a unified server.
+3. Not part of `Orient.Rpc` core — see `PortUnificationHandler.cs` and `UnifiedServer.cs` in the HelloWorld example.
+
+Service registration (A2):
+
+```csharp
+var loop = new OrientLoop();
+var crpcServer = new CRpcServer(loop, new CRpcServerOptions { Port = 7999 });
+crpcServer.Services.Register(serviceImpl);
+```
 
 ## HelloWorld HTTP reference (not a framework contract)
 
@@ -134,7 +147,7 @@ Application errors are returned in the JSON `code` field (often HTTP `200` with 
 
 ## Framework result codes
 
-Reserved range **1000–1999** for CRpc framework responses.
+Reserved range **1000–1999** for CRpc framework responses. Enum: `Orient.Rpc.Protocol.CRpcStatusCode`.
 
 | Code | Name | When returned |
 | --- | --- | --- |

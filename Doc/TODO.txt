@@ -1,6 +1,7 @@
-# CRpc TODO
+# Orient / CRpc TODO
 
-> 2026-06-27 按当前实现重新整理。已落地的历史 TODO 移到文末归档；本文件只跟踪还需要继续推进的事项。
+> 2026-06-28 按当前实现重新整理。已落地的历史 TODO 见文末归档；本文件只跟踪还需要继续推进的事项。
+> 架构对照：`Doc/architecture-draft.md`
 
 ## P0：先修语义正确性
 
@@ -8,9 +9,10 @@
    - 服务端已有 `IdleStateHandler` 和 `MaxFrameLength`，但还没有 `WriteBufferWaterMark` / `channel.IsWritable` 策略。
    - 响应写当前是 fire-and-forget，适合普通 RPC 路径；但慢客户端、持续 push、写队列堆积时还缺少拒绝、断开或降级策略。
 
-2. 结构化错误模型。
-   - 应用返回仍是 `(int, byte[])`，错误码只是裸 `int`，没有枚举、消息 detail、异常映射。
-   - 建议定义 `CRpcStatusCode` / `CRpcError`，由框架把异常映射成稳定协议响应；应用错误与框架错误分层。
+2. 结构化错误模型（部分已有）。
+   - 框架层已有 `CRpcStatusCode`（`Orient.Rpc.Protocol`）及 `RpcServiceInvoker` 框架错误响应。
+   - 应用返回仍是 `(int, byte[])`，错误码只是裸 `int`，没有 detail 消息、异常映射、`CRpcError` 信封。
+   - 建议补应用错误与框架错误分层，以及异常 → 稳定协议响应的映射。
 
 ## P1：协议与并发模型完善
 
@@ -22,12 +24,13 @@
    - 已有 magic、payload length、version、message type、flags 校验。
    - Body 仍缺完整校验；如果需要抵抗传输损坏或中间字节篡改，补 CRC32 / xxHash 等全 body checksum。
 
-3. `CRpcTask` 取消语义。
-   - 目前 pending call 超时和连接关闭会 fault，但没有面向调用方的 `CRpcCancellationToken`。
-   - 如要支持业务取消，必须保证 cancel completion 仍只在 owner `CRpcLoop` 线程触发。
+3. `OrientTask` 取消语义。
+   - 目前 pending call 超时和连接关闭会 fault，但没有面向调用方的 cancellation token。
+   - 如要支持业务取消，必须保证 cancel completion 仍只在 owner `OrientLoop` 线程触发。
 
-4. 多 loop 路由。
-   - 当前 service 注册表在单个 `CRpcLoop` 上，多端点共享一个 loop 已可用。
+4. 跨 loop 调度与多 loop 路由。
+   - A2 后 service 注册表在 `CRpcServer.Services`（`RpcServiceRegistry`），多端点共享一个 `OrientLoop` 已可用。
+   - 仍缺 `OrientLoop.InvokeAsync`（跨 loop 业务调用，见 architecture-draft §5.2）。
    - 仍缺按 `serviceId`、连接或 shard 路由到多个业务 loop 的 `RouteLoop` / dispatcher。
 
 5. 连接与重连策略。
@@ -45,14 +48,14 @@
    - tracing 可以先预留 OpenTelemetry / W3C TraceContext 入口，不必一次性接完整链路。
 
 3. 扩充端到端与压力测试。
-   - 已有 loop、timer、codec、pipeline、heartbeat、client pending、push、server handler 等单测。
+   - 已有 loop、timer、codec、pipeline、heartbeat、client pending、push、server handler、`RpcServiceRegistry` 等单测（`Tests/Orient.Tests`）。
    - 仍建议补真实 client + server TCP 集成测试：正常响应、未知 service 错误、超时、断线、并发、慢消费者、超过 frame 上限。
    - 减少通过反射读取私有字段的测试，优先从公开行为断言。
 
 4. 清理命名和占位代码。
    - `CRpcContext` 已实现 `IRpcContext` 并携带连接，但 `IRpcContext` 仍为空接口。
-   - `CRpc.Rpc.CRpc.*`、`CRpc.Mgr.Nacos`、`CRpc.ConfigCenter.Nacos` 等命名空间需要统一风格。
-   - `CRpc/Mgr/Nacos/Test/NacosTest.cs` 仍在生产工程中，应移到测试/示例，或删除。
+   - Nacos 相关路径已迁至 `Orient.Rpc/Mgr/Nacos`、`Orient.Rpc/Registry/Nacos`、`Orient.Rpc/ConfigCenter/Nacos`；其余命名空间风格可继续统一。
+   - `Orient.Rpc/Mgr/Nacos/Test/NacosTest.cs` 仍在生产工程中，应移到测试/示例，或删除。
 
 5. Nacos 组件改造成可注入服务。
    - `NacosMgr.Instance` 是强单例，`Srv` 可为空且很多方法静默返回默认值。
@@ -68,4 +71,11 @@
    - DotNetty `0.7.6` 长期维护风险仍在。
    - 当前已有 `TcpChannelHost`、`IChannelPipelineFactory` 等传输边界雏形；继续把协议/业务层与 DotNetty 解耦，为 System.IO.Pipelines、Kestrel transport、SuperSocket 或直接 Socket 留迁移空间。
 
+---
 
+## 归档（2026-06-28 已完成）
+
+1. **A2 `RpcServiceRegistry`**：`Register` / `TryGet` 迁到 `CRpcServer.Services`；`OrientLoop` 不含 RPC 类型。
+2. **Runtime / Rpc 物理拆分**：`Orient.Runtime`（BCL only）+ `Orient.Rpc`（DotNetty、Proto、Nacos）。
+3. **执行类型重命名**：`CRpcLoop` → `OrientLoop`，`CRpcTask` → `OrientTask`，`CRpcLoopHost` → `OrientLoopHost`（Rpc 层 alias 保留）。
+4. **测试工程重命名**：`CRPC.Tests` → `Tests/Orient.Tests`；插件工具 → `Tool/orient-crpc-plugin`。
