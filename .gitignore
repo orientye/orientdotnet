@@ -483,6 +483,5 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
-# LordUnion integration harness artifacts
-Tests/LordUnion.IntegrationTests/live-run*.log
-Tests/LordUnion.IntegrationTests/lordunion-test-output/
+
+*.code-workspace
