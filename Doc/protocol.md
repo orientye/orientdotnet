@@ -1,4 +1,4 @@
-# CRpc Binary Protocol
+# Protocol
 
 Normative wire format for CRpc TCP clients and servers. Wire magic and frame layout are unchanged after the 2026-06-28 Runtime/Rpc split.
 
@@ -6,7 +6,9 @@ Architecture: `Doc/architecture.md`
 
 **Implementation:** `Orient.Rpc` (`Orient.Rpc/Codec/`, `Orient.Rpc/Protocol/`). Execution runtime: `Orient.Runtime` (`OrientLoop`, `OrientTask`).
 
-## Frame
+## 1. CRpc
+
+### Frame layout
 
 ```text
 magic(4) + payloadLen(4) + header(24) + body(N)
@@ -16,7 +18,7 @@ magic(4) + payloadLen(4) + header(24) + body(N)
 - `payloadLen` = `24 + body.Length` (header + body only)
 - All integers little-endian
 
-## Header (24 bytes)
+### Header
 
 | Offset | Field |
 | --- | --- |
@@ -30,11 +32,11 @@ magic(4) + payloadLen(4) + header(24) + body(N)
 | 16 | `resultCode` i32 |
 | 20 | `bodyOriginLen` u32 |
 
-## Body
+### Body
 
 Raw protobuf bytes. No application-layer checksum. No compression in current release (`flags = 0`).
 
-## Message conventions
+### Message types
 
 | Type | reqSeq | resultCode |
 | --- | --- | --- |
@@ -43,22 +45,45 @@ Raw protobuf bytes. No application-layer checksum. No compression in current rel
 | Push | 0 | 0 |
 | Heartbeat | 0 | 0 |
 
-## Heartbeat (v1)
+### Heartbeat (v1)
 
 - Client sends `Heartbeat` on a fixed writer-idle interval (default 15s).
 - Server does not reply. Any inbound frame (RPC or Heartbeat) resets the server read-idle timer (default 45s).
 - Server closes the connection when read idle expires.
 
----
+### Result codes
 
-# Multi-Protocol Endpoint & HTTP
+#### Code ranges
+
+| Range | Owner | Notes |
+| --- | --- | --- |
+| `0` | Success | Response body carries application payload when applicable |
+| `1000–1999` | CRpc framework | See table below; error responses use an empty body unless noted |
+| `2000–10000` | Unassigned | Do not use |
+| `10001+` | Application services | Per-service or codegen-defined error codes |
+
+#### Framework codes
+
+Reserved range **1000–1999** for CRpc framework responses. Enum: `Orient.Rpc.Protocol.CRpcStatusCode`.
+
+| Code | Name | When returned |
+| --- | --- | --- |
+| 0 | Ok | Success |
+| 1001 | ServiceNotFound | Unknown `serviceId` on the server |
+| 1002 | MethodNotFound | Known service, unknown `methodId` |
+| 1003 | InvalidRequest | Malformed or invalid request (reserved) |
+| 1004 | InternalError | Unhandled exception during dispatch |
+| 1005 | Unavailable | Connection not ready or server unavailable |
+| 1006 | DeadlineExceeded | Server-side deadline exceeded (reserved) |
+
+## 2. Multi-protocol
 
 How to expose CRpc and HTTP on the same service. **HTTP is application-owned** — routes, JSON shape, and status codes are not defined by `Orient.Rpc`.
 
 Reference implementation: `Example/HelloWorld/Server/Http/`  
 Architecture decisions: `Doc/architecture.md` §4.2
 
-## Deployment modes
+### Deployment modes
 
 | Mode | Start flags | Ports | Description |
 | --- | --- | --- | --- |
@@ -75,7 +100,7 @@ dotnet run --project Example/HelloWorld/Server -- --unified
 dotnet run --project Example/HelloWorld/Server -- --port 9000 --unified
 ```
 
-## Port Unification (same TCP port)
+### Port unification
 
 Optional application-layer pattern: read the first bytes of each new connection, then install the matching DotNetty pipeline.
 
@@ -98,11 +123,11 @@ var crpcServer = new CRpcServer(loop, new CRpcServerOptions { Port = 7999 });
 crpcServer.Services.Register(serviceImpl);
 ```
 
-## HelloWorld HTTP reference (not a framework contract)
+### HelloWorld HTTP example
 
 The routes below are **example only**. Production apps may define their own URLs and response envelopes.
 
-### `POST /api/greeter/say-hello`
+#### POST /api/greeter/say-hello
 
 | Item | Value |
 | --- | --- |
@@ -123,7 +148,7 @@ curl -X POST http://127.0.0.1:7999/api/greeter/say-hello \
   -d '{"name":"world"}'
 ```
 
-### Example error responses
+#### Error response examples
 
 | Condition | HTTP status | Example body |
 | --- | --- | --- |
@@ -134,26 +159,3 @@ curl -X POST http://127.0.0.1:7999/api/greeter/say-hello \
 | Connection not ready | 503 | `{"error":"connection not ready"}` |
 
 Application errors are returned in the JSON `code` field (often HTTP `200` with non-zero `code`). CRpc binary errors use `resultCode` in the frame header.
-
-## Result code ranges
-
-| Range | Owner | Notes |
-| --- | --- | --- |
-| `0` | Success | Response body carries application payload when applicable |
-| `1000–1999` | CRpc framework | See table below; error responses use an empty body unless noted |
-| `2000–10000` | Unassigned | Do not use |
-| `10001+` | Application services | Per-service or codegen-defined error codes |
-
-## Framework result codes
-
-Reserved range **1000–1999** for CRpc framework responses. Enum: `Orient.Rpc.Protocol.CRpcStatusCode`.
-
-| Code | Name | When returned |
-| --- | --- | --- |
-| 0 | Ok | Success |
-| 1001 | ServiceNotFound | Unknown `serviceId` on the server |
-| 1002 | MethodNotFound | Known service, unknown `methodId` |
-| 1003 | InvalidRequest | Malformed or invalid request (reserved) |
-| 1004 | InternalError | Unhandled exception during dispatch |
-| 1005 | Unavailable | Connection not ready or server unavailable |
-| 1006 | DeadlineExceeded | Server-side deadline exceeded (reserved) |
