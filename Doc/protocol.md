@@ -2,7 +2,6 @@
 
 Normative wire format for CRpc TCP clients and servers. Wire magic and frame layout are unchanged after the 2026-06-28 Runtime/Rpc split.
 
-Full design: `docs/superpowers/specs/2026-06-19-crpc-binary-codec-design.md`  
 Architecture: `Doc/architecture.md`
 
 **Implementation:** `Orient.Rpc` (`Orient.Rpc/Codec/`, `Orient.Rpc/Protocol/`). Execution runtime: `Orient.Runtime` (`OrientLoop`, `OrientTask`).
@@ -57,7 +56,7 @@ Raw protobuf bytes. No application-layer checksum. No compression in current rel
 How to expose CRpc and HTTP on the same service. **HTTP is application-owned** — routes, JSON shape, and status codes are not defined by `Orient.Rpc`.
 
 Reference implementation: `Example/HelloWorld/Server/Http/`  
-Architecture decisions: `docs/superpowers/specs/2026-06-20-crpc-http-separation-design.md`
+Architecture decisions: `Doc/architecture.md` §4.2
 
 ## Deployment modes
 
