@@ -71,11 +71,3 @@
    - DotNetty `0.7.6` 长期维护风险仍在。
    - 当前已有 `TcpChannelHost`、`IChannelPipelineFactory` 等传输边界雏形；继续把协议/业务层与 DotNetty 解耦，为 System.IO.Pipelines、Kestrel transport、SuperSocket 或直接 Socket 留迁移空间。
 
----
-
-## 归档（2026-06-28 已完成）
-
-1. **A2 `RpcServiceRegistry`**：`Register` / `TryGet` 迁到 `CRpcServer.Services`；`OrientLoop` 不含 RPC 类型。
-2. **Runtime / Rpc 物理拆分**：`Orient.Runtime`（BCL only）+ `Orient.Rpc`（DotNetty、Proto、Nacos）。
-3. **执行类型重命名**：`CRpcLoop` → `OrientLoop`，`CRpcTask` → `OrientTask`，`CRpcLoopHost` → `OrientLoopHost`（Rpc 层 alias 保留）。
-4. **测试工程重命名**：`CRPC.Tests` → `Tests/Orient.Tests`；插件工具 → `Tool/orient-crpc-plugin`。
