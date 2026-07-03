@@ -9,11 +9,6 @@
    - 服务端已有 `IdleStateHandler` 和 `MaxFrameLength`，但还没有 `WriteBufferWaterMark` / `channel.IsWritable` 策略。
    - 响应写当前是 fire-and-forget，适合普通 RPC 路径；但慢客户端、持续 push、写队列堆积时还缺少拒绝、断开或降级策略。
 
-2. 结构化错误模型（部分已有）。
-   - 框架层已有 `CRpcStatusCode`（`Orient.Rpc.Protocol`）及 `RpcServiceInvoker` 框架错误响应。
-   - 应用返回仍是 `(int, byte[])`，错误码只是裸 `int`，没有 detail 消息、异常映射、`CRpcError` 信封。
-   - 建议补应用错误与框架错误分层，以及异常 → 稳定协议响应的映射。
-
 ## P1：协议与并发模型完善
 
 1. 决定压缩 / 加密策略。
@@ -60,6 +55,11 @@
 5. Nacos 组件改造成可注入服务。
    - `NacosMgr.Instance` 是强单例，`Srv` 可为空且很多方法静默返回默认值。
    - `NacosRegistry` / `NacosConfig` 目前直接暴露或隐藏 `Task` API，需要明确这是外部 interop 边界，并加初始化状态检查。
+
+6. 错误模型增强（现状可用，按需推进）。
+   - 现状：框架层已有 `CRpcStatusCode` 分段（1000–1999 框架 / 10001+ 应用）与 `RpcServiceInvoker` 框架错误响应；应用返回 `(int, byte[])` 裸 int，够内部单语言场景用，暂不需要 `CRpcError` 信封 / 字段级 details。
+   - 需要修：客户端 codegen 把所有非零码折叠成 `(-1, null)`（见 `OrientCrpcGen.cs` 生成的 `*Async`），丢掉了服务端已区分的 `resultCode`。应改为透传真实 code（如 `return (result, null);`），调用方才能区分 MethodNotFound / InternalError / 应用错误。纯 codegen 改动，不动协议与 wire。
+   - 按需再做（出现跨语言客户端 / 对外 API / 需向调用方传 message 时）：`CRpcError` 信封（code + message + 可选 details）、异常 → 稳定框架码的集中映射；异常 detail 可随 P2 结构化日志一并落到服务端，默认不向客户端暴露 stack。
 
 ## P3：依赖与长期演进
 
