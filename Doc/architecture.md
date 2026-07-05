@@ -1203,16 +1203,6 @@ while (!cancellationToken.IsCancellationRequested)
 
 ### 10. 现状到目标的演进步骤（建议顺序）
 
-**已完成（2026-06-28）**
-
-1. **A2 `RpcServiceRegistry`**：`Register` / `TryGet` 迁到 `CRpcServer.Services`；`OrientLoop` 不含 RPC 类型。
-2. **Runtime / Rpc 物理拆分**：`Orient.Runtime`（BCL only）+ `Orient.Rpc`（DotNetty、Proto、Nacos）。
-3. **执行类型重命名**：`OrientLoop`、`OrientTask`、`OrientLoopHost`、`OrientLoopRunner`。
-
-**已完成（2026-07-05）**
-
-4. **`OrientLoop.InvokeAsync`**：跨 loop 调度原语（见 §5.2；`Orient.Runtime/Loop/OrientLoop.InvokeAsync.cs`）。
-
 **待做**
 
 1. **`RouteLoop` 钩子**：`CRpcServer` / `HttpServer` 增加 `Func<..., OrientLoop>? RouteLoop`，支持按消息路由到不同 loop（见 §9.2）。

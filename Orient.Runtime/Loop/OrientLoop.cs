@@ -3,7 +3,7 @@ using System.Diagnostics;
 
 namespace Orient.Runtime;
 
-public sealed class OrientLoop
+public sealed partial class OrientLoop
 {
     [ThreadStatic]
     private static OrientLoop? current;
