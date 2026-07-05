@@ -3,13 +3,6 @@
 > 2026-06-28 按当前实现重新整理。已落地的历史 TODO 见文末归档；本文件只跟踪还需要继续推进的事项。
 > 架构对照：`Doc/architecture.md`
 
-## P0：先修语义正确性
-
-1. 写入背压和慢客户端保护（第一版已落地：水位感知 + 告警）。
-   - 服务端 `CRpcServer` 子连接已配置 `WriteBufferHighWaterMark` / `WriteBufferLowWaterMark`（默认 1MiB / 512KiB）。
-   - Pipeline 已加 `CRpcServerWriteBufferWarningHandler`：`ChannelWritabilityChanged` 且 `!IsWritable` 时打 warning 日志。
-   - 尚未做：停读、丢弃 push、自动断开、结构化日志；按需后续迭代。
-
 ## P1：协议与并发模型完善
 
 1. 决定压缩 / 加密策略。
@@ -71,4 +64,3 @@
 2. DotNetty 替换路线。
    - DotNetty `0.7.6` 长期维护风险仍在。
    - 当前已有 `TcpChannelHost`、`IChannelPipelineFactory` 等传输边界雏形；继续把协议/业务层与 DotNetty 解耦，为 System.IO.Pipelines、Kestrel transport、SuperSocket 或直接 Socket 留迁移空间。
-
