@@ -140,6 +140,13 @@ public sealed class CRpcServer
                 new CRpcServerPipelineFactory(startOptions).Configure(channel.Pipeline, handler);
             }));
 
+        if (startOptions.WriteBufferWarningEnabled)
+        {
+            bootstrap
+                .ChildOption(ChannelOption.WriteBufferLowWaterMark, startOptions.WriteBufferLowWaterMark)
+                .ChildOption(ChannelOption.WriteBufferHighWaterMark, startOptions.WriteBufferHighWaterMark);
+        }
+
         try
         {
             bootstrapChannel = await OrientTask.FromTask(

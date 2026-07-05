@@ -34,4 +34,28 @@ public sealed class CRpcServerPipelineFactoryTests
         Assert.Null(channel.Pipeline.Get<IdleStateHandler>());
         Assert.Null(channel.Pipeline.Get<CRpcServerReadIdleHandler>());
     }
+
+    [Fact]
+    public void ConfigureAddsWriteBufferWarningHandlerWhenEnabled()
+    {
+        var options = new CRpcServerOptions();
+        var factory = new CRpcServerPipelineFactory(options);
+        var channel = new EmbeddedChannel();
+
+        factory.Configure(channel.Pipeline, new ChannelHandlerAdapter());
+
+        Assert.NotNull(channel.Pipeline.Get<CRpcServerWriteBufferWarningHandler>());
+    }
+
+    [Fact]
+    public void ConfigureOmitsWriteBufferWarningHandlerWhenDisabled()
+    {
+        var options = new CRpcServerOptions { WriteBufferWarningEnabled = false };
+        var factory = new CRpcServerPipelineFactory(options);
+        var channel = new EmbeddedChannel();
+
+        factory.Configure(channel.Pipeline, new ChannelHandlerAdapter());
+
+        Assert.Null(channel.Pipeline.Get<CRpcServerWriteBufferWarningHandler>());
+    }
 }

@@ -19,6 +19,10 @@ public sealed class CRpcServerOptions
 
     public const int DefaultReadIdleSeconds = 45;
 
+    public const int DefaultWriteBufferLowWaterMark = 512 * 1024;
+
+    public const int DefaultWriteBufferHighWaterMark = 1024 * 1024;
+
     public const int MinPort = 0;
 
     public const int MaxPort = 65535;
@@ -40,6 +44,12 @@ public sealed class CRpcServerOptions
     public bool HeartbeatEnabled { get; init; } = true;
 
     public int ReadIdleSeconds { get; init; } = DefaultReadIdleSeconds;
+
+    public bool WriteBufferWarningEnabled { get; init; } = true;
+
+    public int WriteBufferLowWaterMark { get; init; } = DefaultWriteBufferLowWaterMark;
+
+    public int WriteBufferHighWaterMark { get; init; } = DefaultWriteBufferHighWaterMark;
 
     /// <summary>
     /// Optional factory for creating the channel handler added to each child channel's pipeline.
@@ -91,6 +101,7 @@ public sealed class CRpcServerOptions
 
         if (!HeartbeatEnabled)
         {
+            ValidateWriteBufferWaterMark();
             return;
         }
 
@@ -108,6 +119,32 @@ public sealed class CRpcServerOptions
                 nameof(ReadIdleSeconds),
                 ReadIdleSeconds,
                 "CRpcServerOptions.ReadIdleSeconds must be at least twice the client heartbeat interval.");
+        }
+
+        ValidateWriteBufferWaterMark();
+    }
+
+    internal void ValidateWriteBufferWaterMark()
+    {
+        if (!WriteBufferWarningEnabled)
+        {
+            return;
+        }
+
+        if (WriteBufferLowWaterMark <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(WriteBufferLowWaterMark),
+                WriteBufferLowWaterMark,
+                "CRpcServerOptions.WriteBufferLowWaterMark must be positive when write-buffer warning is enabled.");
+        }
+
+        if (WriteBufferHighWaterMark <= WriteBufferLowWaterMark)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(WriteBufferHighWaterMark),
+                WriteBufferHighWaterMark,
+                "CRpcServerOptions.WriteBufferHighWaterMark must be greater than WriteBufferLowWaterMark.");
         }
     }
 }

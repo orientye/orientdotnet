@@ -28,6 +28,11 @@ public sealed class CRpcServerPipelineFactory
             pipeline.AddLast("idle-handler", new CRpcServerReadIdleHandler());
         }
 
+        if (options.WriteBufferWarningEnabled)
+        {
+            pipeline.AddLast("write-buffer-warning", new CRpcServerWriteBufferWarningHandler());
+        }
+
         pipeline.AddLast("decoder", new CRpcMessageDecoder(options.MaxFrameLength));
         pipeline.AddLast("encoder", new CRpcMessageEncoder());
         pipeline.AddLast("handler", appHandler);

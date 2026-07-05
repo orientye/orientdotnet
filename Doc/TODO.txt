@@ -5,9 +5,10 @@
 
 ## P0：先修语义正确性
 
-1. 写入背压和慢客户端保护。
-   - 服务端已有 `IdleStateHandler` 和 `MaxFrameLength`，但还没有 `WriteBufferWaterMark` / `channel.IsWritable` 策略。
-   - 响应写当前是 fire-and-forget，适合普通 RPC 路径；但慢客户端、持续 push、写队列堆积时还缺少拒绝、断开或降级策略。
+1. 写入背压和慢客户端保护（第一版已落地：水位感知 + 告警）。
+   - 服务端 `CRpcServer` 子连接已配置 `WriteBufferHighWaterMark` / `WriteBufferLowWaterMark`（默认 1MiB / 512KiB）。
+   - Pipeline 已加 `CRpcServerWriteBufferWarningHandler`：`ChannelWritabilityChanged` 且 `!IsWritable` 时打 warning 日志。
+   - 尚未做：停读、丢弃 push、自动断开、结构化日志；按需后续迭代。
 
 ## P1：协议与并发模型完善
 

@@ -48,6 +48,13 @@ public sealed class UnifiedServer
         var bootstrap = new ServerBootstrap();
         bootstrap.Group(bossGroup, workerGroup);
         bootstrap.Channel<TcpServerSocketChannel>();
+        if (crpcServer.Options.WriteBufferWarningEnabled)
+        {
+            bootstrap
+                .ChildOption(ChannelOption.WriteBufferLowWaterMark, crpcServer.Options.WriteBufferLowWaterMark)
+                .ChildOption(ChannelOption.WriteBufferHighWaterMark, crpcServer.Options.WriteBufferHighWaterMark);
+        }
+
         bootstrap.ChildHandler(new ActionChannelInitializer<IChannel>(ch =>
         {
             ch.Pipeline.AddLast(new PortUnificationHandler(
