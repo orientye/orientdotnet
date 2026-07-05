@@ -220,4 +220,17 @@ public class CRpcCodecTests
 
         Assert.Throws<InvalidDataException>(() => CRpcMessageHeader.ReadFrom(buffer));
     }
+
+    [Fact]
+    public void HeaderReadFromRejectsNonZeroFlags()
+    {
+        var header = CRpcMessageHeader.Create(
+            CRpcMessageType.Request, 0, 0, 0, 0, Array.Empty<byte>());
+        var buffer = Unpooled.Buffer();
+        header.WriteTo(buffer);
+        buffer.SetByte(2, 0x01);
+
+        var ex = Assert.Throws<InvalidDataException>(() => CRpcMessageHeader.ReadFrom(buffer));
+        Assert.Contains("frame flags", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -24,7 +24,7 @@ magic(4) + payloadLen(4) + header(24) + body(N)
 | --- | --- |
 | 0 | `version` = 1 |
 | 1 | `messageType` — 0 Request, 1 Response, 2 Push, 3 Heartbeat |
-| 2 | `flags` — current release: `0` (`0x01` = compressed, reserved) |
+| 2 | `flags` — must be `0` in protocol v1; non-zero frames are rejected. Reserved for future extensions (e.g. compression); use a higher `version` when defining new flag bits. |
 | 3 | `reserved` = 0 |
 | 4 | `serviceId` u16 |
 | 6 | `methodId` u16 |
@@ -34,7 +34,7 @@ magic(4) + payloadLen(4) + header(24) + body(N)
 
 ### Body
 
-Raw protobuf bytes. No application-layer checksum. No compression in current release (`flags = 0`).
+Raw protobuf bytes. No application-layer checksum. No frame-level compression or encryption in protocol v1 (`flags = 0`). Use TLS for transport security.
 
 ### Message types
 
