@@ -5,20 +5,16 @@
 
 ## P1：协议与并发模型完善
 
-1. 增强协议完整性校验。
-   - 已有 magic、payload length、version、message type、flags 校验。
-   - Body 仍缺完整校验；如果需要抵抗传输损坏或中间字节篡改，补 CRC32 / xxHash 等全 body checksum。
-
-2. `OrientTask` 取消语义。
+1. `OrientTask` 取消语义。
    - 目前 pending call 超时和连接关闭会 fault，但没有面向调用方的 cancellation token。
    - 如要支持业务取消，必须保证 cancel completion 仍只在 owner `OrientLoop` 线程触发。
 
-3. 跨 loop 调度与多 loop 路由。
+2. 跨 loop 调度与多 loop 路由。
    - A2 后 service 注册表在 `CRpcServer.Services`（`RpcServiceRegistry`），多端点共享一个 `OrientLoop` 已可用。
    - 仍缺 `OrientLoop.InvokeAsync`（跨 loop 业务调用，见 architecture-draft §5.2）。
    - 仍缺按 `serviceId`、连接或 shard 路由到多个业务 loop 的 `RouteLoop` / dispatcher。
 
-4. 连接与重连策略。
+3. 连接与重连策略。
    - 客户端断线会 fault pending calls，并抛 `ConnectionLost`。
    - 是否自动重连、重连期间调用如何排队/失败、服务发现变更如何切换 endpoint，还需要单独设计。
 
