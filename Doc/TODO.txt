@@ -10,7 +10,6 @@
    - 如要支持业务取消，必须保证 cancel completion 仍只在 owner `OrientLoop` 线程触发。
 
 2. 跨 loop 调度与多 loop 路由。
-   - 仍缺 `OrientLoop.InvokeAsync`（跨 loop 业务调用，见 architecture-draft §5.2）。
    - 仍缺按 `serviceId`、连接或 shard 路由到多个业务 loop 的 `RouteLoop` / dispatcher。
 
 3. 连接与重连策略。
