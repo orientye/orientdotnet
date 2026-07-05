@@ -60,7 +60,3 @@
 2. DotNetty 替换路线。
    - DotNetty `0.7.6` 长期维护风险仍在。
    - 当前已有 `TcpChannelHost`、`IChannelPipelineFactory` 等传输边界雏形；继续把协议/业务层与 DotNetty 解耦，为 System.IO.Pipelines、Kestrel transport、SuperSocket 或直接 Socket 留迁移空间。
-
-## 归档（已落地）
-
-- **压缩 / 加密策略（2026-07-05）**：protocol v1 不支持帧级压缩或加密；header `flags` 保留但必须为 `0`，非零拒绝。传输安全用 TLS；未来扩展通过更高 `version` + 新 flag 位定义。见 `Doc/protocol.md` §1 Header / Body。
