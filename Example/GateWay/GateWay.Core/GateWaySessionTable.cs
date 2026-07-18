@@ -31,7 +31,7 @@ public sealed class GateWaySessionTable
     public async OrientTask<GateWayBackendLink?> GetOrCreateAsync(
         CRpcConnection inbound,
         ushort serviceId,
-        OrientExecutor loop)
+        OrientExecutor executor)
     {
         if (links.TryGetValue(inbound.ConnectionId, out var existing))
         {
@@ -49,7 +49,7 @@ public sealed class GateWaySessionTable
             return null;
         }
 
-        var client = backendClientFactory.Create(loop);
+        var client = backendClientFactory.Create(executor);
         try
         {
             await backendConnector.ConnectAsync(client, endpoint);
@@ -64,7 +64,7 @@ public sealed class GateWaySessionTable
         var inboundConnectionId = inbound.ConnectionId;
         client.ConnectionLost += () =>
         {
-            loop.Post(() => HandleBackendConnectionLost(inboundConnectionId, serviceId, endpoint));
+            executor.Post(() => HandleBackendConnectionLost(inboundConnectionId, serviceId, endpoint));
         };
         pushRelay.Attach(link);
         links[inbound.ConnectionId] = link;

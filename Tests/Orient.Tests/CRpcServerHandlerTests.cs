@@ -1,4 +1,4 @@
-﻿using System.Net.Sockets;
+using System.Net.Sockets;
 using Orient.Runtime;
 using Orient.Rpc;
 using Orient.Rpc.Protocol;
@@ -157,12 +157,12 @@ public class CRpcServerHandlerTests : OrientTestBase
         ActivateChannel(executor, channel);
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
-        var loopThreadId = Environment.CurrentManagedThreadId;
+        var executorThreadId = Environment.CurrentManagedThreadId;
 
         executor.Tick();
 
-        Assert.Equal(loopThreadId, service.LastThreadId);
-        Assert.Same(executor, service.LastLoop);
+        Assert.Equal(executorThreadId, service.LastThreadId);
+        Assert.Same(executor, service.LastExecutor);
     }
 
     [Fact]
@@ -386,7 +386,7 @@ public class CRpcServerHandlerTests : OrientTestBase
 
         public int? LastThreadId { get; private set; }
 
-        public OrientExecutor? LastLoop { get; private set; }
+        public OrientExecutor? LastExecutor { get; private set; }
 
         public ushort GetServiceId()
         {
@@ -397,7 +397,7 @@ public class CRpcServerHandlerTests : OrientTestBase
         {
             CallCount++;
             LastThreadId = Environment.CurrentManagedThreadId;
-            LastLoop = OrientExecutor.Current;
+            LastExecutor = OrientExecutor.Current;
             return OrientTask.FromResult((0, Array.Empty<byte>()), OrientExecutor.Current);
         }
     }

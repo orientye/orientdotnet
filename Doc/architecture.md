@@ -76,12 +76,13 @@ CRpc 想要的核心模型是 **单线程业务循环 + 异步状态机**：
 
 这些约束在 `OrientTaskCompletionSource.EnsureExecutorThread`、`OrientExecutor.EnsureInExecutorThread` 中是强制的：
 
-```91:96:Orient.Runtime/Task/OrientTaskCompletionSource.cs
+```91:98:Orient.Runtime/Task/OrientTaskCompletionSource.cs
     private void EnsureExecutorThread()
     {
-        if (!loop.IsInExecutorThread)
+        if (!executor.IsInExecutorThread)
         {
-            throw new InvalidOperationException("OrientTaskCompletionSource must be used from its OrientExecutor executor thread.");
+            throw new InvalidOperationException(
+                "OrientTaskCompletionSource must be used from its OrientExecutor executor thread.");
         }
     }
 ```

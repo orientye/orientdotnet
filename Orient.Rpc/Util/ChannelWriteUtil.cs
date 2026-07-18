@@ -4,7 +4,7 @@ using DotNetty.Transport.Channels;
 namespace Orient.Rpc.Util;
 
 /// <summary>
-/// DotNetty outbound write helpers. Does not await write completion or touch business loop state.
+/// DotNetty outbound write helpers. Does not await write completion or touch business executor state.
 /// Releases the message when <see cref="IChannel.WriteAndFlushAsync"/> throws synchronously.
 /// </summary>
 internal static class ChannelWriteUtil

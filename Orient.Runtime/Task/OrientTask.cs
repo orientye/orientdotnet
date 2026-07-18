@@ -17,39 +17,39 @@ public readonly struct OrientTask
         return new Awaiter(task.GetAwaiter());
     }
 
-    public static OrientTask<T> FromTask<T>(Task<T> task, OrientExecutor? loop = null)
+    public static OrientTask<T> FromTask<T>(Task<T> task, OrientExecutor? executor = null)
     {
         ArgumentNullException.ThrowIfNull(task);
 
-        loop = OrientExecutor.RequireCurrentOr(loop);
-        var source = new OrientTaskCompletionSource<T>(loop);
-        CompleteFromTask(task, source, loop);
+        executor = OrientExecutor.RequireCurrentOr(executor);
+        var source = new OrientTaskCompletionSource<T>(executor);
+        CompleteFromTask(task, source, executor);
         return source.Task;
     }
 
-    public static OrientTask<T> FromResult<T>(T result, OrientExecutor? loop = null)
+    public static OrientTask<T> FromResult<T>(T result, OrientExecutor? executor = null)
     {
-        loop = OrientExecutor.RequireCurrentOr(loop);
-        var source = new OrientTaskCompletionSource<T>(loop);
+        executor = OrientExecutor.RequireCurrentOr(executor);
+        var source = new OrientTaskCompletionSource<T>(executor);
         source.TrySetResult(result);
         return source.Task;
     }
 
-    public static OrientTask CompletedTask(OrientExecutor? loop = null)
+    public static OrientTask CompletedTask(OrientExecutor? executor = null)
     {
-        loop = OrientExecutor.RequireCurrentOr(loop);
-        var source = new OrientTaskCompletionSource<OrientUnit>(loop);
+        executor = OrientExecutor.RequireCurrentOr(executor);
+        var source = new OrientTaskCompletionSource<OrientUnit>(executor);
         source.TrySetResult(OrientUnit.Value);
         return new OrientTask(source.Task);
     }
 
-    public static OrientTask FromTask(Task task, OrientExecutor? loop = null)
+    public static OrientTask FromTask(Task task, OrientExecutor? executor = null)
     {
         ArgumentNullException.ThrowIfNull(task);
 
-        loop = OrientExecutor.RequireCurrentOr(loop);
-        var source = new OrientTaskCompletionSource<OrientUnit>(loop);
-        CompleteFromTask(task, source, loop);
+        executor = OrientExecutor.RequireCurrentOr(executor);
+        var source = new OrientTaskCompletionSource<OrientUnit>(executor);
+        CompleteFromTask(task, source, executor);
         return new OrientTask(source.Task);
     }
 
@@ -58,16 +58,16 @@ public readonly struct OrientTask
     /// Must be called on the bound <see cref="OrientExecutor"/> thread while the executor is driven.
     /// To schedule a delay from another thread, use <see cref="OrientExecutor.Post"/> first.
     /// </summary>
-    public static OrientTask Delay(int millisecondsDelay, OrientExecutor? loop = null)
+    public static OrientTask Delay(int millisecondsDelay, OrientExecutor? executor = null)
     {
         if (millisecondsDelay < -1)
         {
             throw new ArgumentOutOfRangeException(nameof(millisecondsDelay));
         }
 
-        loop = OrientExecutor.RequireCurrentOr(loop);
-        loop.EnsureInExecutorThread();
-        var source = new OrientTaskCompletionSource<OrientUnit>(loop);
+        executor = OrientExecutor.RequireCurrentOr(executor);
+        executor.EnsureInExecutorThread();
+        var source = new OrientTaskCompletionSource<OrientUnit>(executor);
         if (millisecondsDelay == 0)
         {
             source.TrySetResult(OrientUnit.Value);
@@ -76,7 +76,7 @@ public readonly struct OrientTask
 
         if (millisecondsDelay > 0)
         {
-            loop.ScheduleDelay(
+            executor.ScheduleDelay(
                 millisecondsDelay,
                 () => source.TrySetResult(OrientUnit.Value));
         }
@@ -84,16 +84,16 @@ public readonly struct OrientTask
         return new OrientTask(source.Task);
     }
 
-    private static void CompleteFromTask<T>(Task<T> task, OrientTaskCompletionSource<T> source, OrientExecutor loop)
+    private static void CompleteFromTask<T>(Task<T> task, OrientTaskCompletionSource<T> source, OrientExecutor executor)
     {
         if (task.IsCompleted)
         {
-            CompleteOnLoop(loop, () => SetSourceResult(task, source));
+            CompleteOnExecutor(executor, () => SetSourceResult(task, source));
             return;
         }
 
         task.ContinueWith(
-            completedTask => loop.Post(() => SetSourceResult(completedTask, source)),
+            completedTask => executor.Post(() => SetSourceResult(completedTask, source)),
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
@@ -130,30 +130,30 @@ public readonly struct OrientTask
         source.TrySetResult(task.Result);
     }
 
-    private static void CompleteFromTask(Task task, OrientTaskCompletionSource<OrientUnit> source, OrientExecutor loop)
+    private static void CompleteFromTask(Task task, OrientTaskCompletionSource<OrientUnit> source, OrientExecutor executor)
     {
         if (task.IsCompleted)
         {
-            CompleteOnLoop(loop, () => SetSourceResult(task, source));
+            CompleteOnExecutor(executor, () => SetSourceResult(task, source));
             return;
         }
 
         task.ContinueWith(
-            completedTask => loop.Post(() => SetSourceResult(completedTask, source)),
+            completedTask => executor.Post(() => SetSourceResult(completedTask, source)),
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
     }
 
-    private static void CompleteOnLoop(OrientExecutor loop, Action complete)
+    private static void CompleteOnExecutor(OrientExecutor executor, Action complete)
     {
-        if (loop.IsInExecutorThread)
+        if (executor.IsInExecutorThread)
         {
             complete();
             return;
         }
 
-        loop.Post(complete);
+        executor.Post(complete);
     }
 
     private static void SetSourceResult(Task task, OrientTaskCompletionSource<OrientUnit> source)

@@ -8,7 +8,7 @@ namespace Orient.Tests.Transport;
 public sealed class ExecutorInboundHandlerTests : OrientTestBase
 {
     [Fact]
-    public void ChannelReadPostsInboundMessageToOwnerLoop()
+    public void ChannelReadPostsInboundMessageToOwnerExecutor()
     {
         var executor = new OrientExecutor();
         executor.BindToCurrentThread();
@@ -27,7 +27,7 @@ public sealed class ExecutorInboundHandlerTests : OrientTestBase
     }
 
     [Fact]
-    public void ExceptionCaughtPostsExceptionToOwnerLoop()
+    public void ExceptionCaughtPostsExceptionToOwnerExecutor()
     {
         var executor = new OrientExecutor();
         executor.BindToCurrentThread();

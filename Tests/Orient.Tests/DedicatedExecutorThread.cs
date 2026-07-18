@@ -1,12 +1,12 @@
-﻿using Orient.Runtime;
+using Orient.Runtime;
 
 namespace Orient.Tests;
 
 internal static class DedicatedExecutorThread
 {
-    public static void Run(OrientExecutor loop, Action<OrientExecutor> action)
+    public static void Run(OrientExecutor executor, Action<OrientExecutor> action)
     {
-        ArgumentNullException.ThrowIfNull(loop);
+        ArgumentNullException.ThrowIfNull(executor);
         ArgumentNullException.ThrowIfNull(action);
 
         Exception? captured = null;
@@ -14,8 +14,8 @@ internal static class DedicatedExecutorThread
         {
             try
             {
-                loop.BindToCurrentThread();
-                action(loop);
+                executor.BindToCurrentThread();
+                action(executor);
             }
             catch (Exception ex)
             {

@@ -1,12 +1,17 @@
-# OrientLoop.InvokeAsync Implementation Plan
+# OrientExecutor.InvokeAsync Implementation Plan
+
+>
+> **Updated 2026-07-18:** Renamed `OrientLoop` → `OrientExecutor` (and related vocabulary) to match the current Runtime API. Historical date/filename kept.
+>
+
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implement the four `OrientLoop.InvokeAsync` overloads in `Orient.Runtime` so same-process cross-loop business calls schedule on the target loop and complete on the caller loop as `OrientTask`.
+**Goal:** Implement the four `OrientExecutor.InvokeAsync` overloads in `Orient.Runtime` so same-process cross-executor business calls schedule on the target executor and complete on the caller executor as `OrientTask`.
 
-**Architecture:** Add static methods on `OrientLoop` that create a caller-owned `OrientTaskCompletionSource`, post an `async OrientTask` runner to the target loop (or run inline when `callerLoop == targetLoop`), and complete the caller task only via `callerLoop.Post`. Target runners catch all failures locally and never rely on `DrainActions` exception isolation. Tests use a caller `LoopTestDriver` plus a background target-loop pump thread.
+**Architecture:** Add static methods on `OrientExecutor` that create a caller-owned `OrientTaskCompletionSource`, post an `async OrientTask` runner to the target executor (or run inline when `callerExecutor == targetExecutor`), and complete the caller task only via `callerExecutor.Post`. Target runners catch all failures locally and never rely on `DrainActions` exception isolation. Tests use a caller `ExecutorTestDriver` plus a background target-executor pump thread.
 
-**Tech Stack:** C# / .NET 8, `Orient.Runtime`, xUnit, existing `Orient.TestHelper.LoopTestDriver`, `Orient.TestHelper.OrientTestBase`
+**Tech Stack:** C# / .NET 8, `Orient.Runtime`, xUnit, existing `Orient.TestHelper.ExecutorTestDriver`, `Orient.TestHelper.OrientTestBase`
 
 **Spec:** `docs/superpowers/specs/2026-07-05-orientloop-invokeasync-design.md`
 
@@ -18,74 +23,74 @@
 
 | File | Action | Responsibility |
 | --- | --- | --- |
-| `Orient.Runtime/Loop/OrientLoop.InvokeAsync.cs` | Create | `partial` implementation of four public overloads + private helpers |
-| `Orient.Runtime/Loop/OrientLoop.cs` | Modify | Declare `public sealed partial class OrientLoop` (change `class` → `partial class`) |
-| `Tests/Orient.Tests/OrientLoopInvokeAsyncTests.cs` | Create | Cross-loop / same-loop / error propagation tests + local dual-loop harness |
+| `Orient.Runtime/Executor/OrientExecutor.InvokeAsync.cs` | Create | `partial` implementation of four public overloads + private helpers |
+| `Orient.Runtime/Executor/OrientExecutor.cs` | Modify | Declare `public sealed partial class OrientExecutor` (change `class` → `partial class`) |
+| `Tests/Orient.Tests/OrientExecutorInvokeAsyncTests.cs` | Create | Cross-executor / same-executor / error propagation tests + local dual-executor harness |
 | `Doc/architecture.md` | Modify | Mark §5.2 runtime primitive as implemented |
-| `Doc/TODO.txt` | Modify | Remove completed `InvokeAsync` item; keep `LoopRoute` pending |
+| `Doc/TODO.txt` | Modify | Remove completed `InvokeAsync` item; keep `ExecutorRoute` pending |
 
 ---
 
 ### Task 1: Test Harness And Invalid Call-Site Tests
 
 **Files:**
-- Create: `Tests/Orient.Tests/OrientLoopInvokeAsyncTests.cs`
-- Modify: `Orient.Runtime/Loop/OrientLoop.cs` (make class `partial` only)
+- Create: `Tests/Orient.Tests/OrientExecutorInvokeAsyncTests.cs`
+- Modify: `Orient.Runtime/Executor/OrientExecutor.cs` (make class `partial` only)
 
-- [ ] **Step 1: Make `OrientLoop` partial**
+- [ ] **Step 1: Make `OrientExecutor` partial**
 
-In `Orient.Runtime/Loop/OrientLoop.cs`, change:
+In `Orient.Runtime/Executor/OrientExecutor.cs`, change:
 
 ```csharp
-public sealed class OrientLoop
+public sealed class OrientExecutor
 ```
 
 to:
 
 ```csharp
-public sealed partial class OrientLoop
+public sealed partial class OrientExecutor
 ```
 
 - [ ] **Step 2: Write failing invalid call-site tests**
 
-Create `Tests/Orient.Tests/OrientLoopInvokeAsyncTests.cs`:
+Create `Tests/Orient.Tests/OrientExecutorInvokeAsyncTests.cs`:
 
 ```csharp
 using Orient.Runtime;
 
 namespace Orient.Tests;
 
-public class OrientLoopInvokeAsyncTests : OrientTestBase
+public class OrientExecutorInvokeAsyncTests : OrientTestBase
 {
     [Fact]
     public void InvokeAsyncWithoutCurrentLoopThrowsRequireCurrentOrMessage()
     {
-        var targetLoop = new OrientLoop();
+        var targetExecutor = new OrientExecutor();
         var exception = RunOnFreshThread(() =>
-            OrientLoop.InvokeAsync(targetLoop, () => 1));
+            OrientExecutor.InvokeAsync(targetExecutor, () => 1));
 
         Assert.IsType<InvalidOperationException>(exception);
-        Assert.Contains("OrientLoop must be provided", exception!.Message);
+        Assert.Contains("OrientExecutor must be provided", exception!.Message);
     }
 
     [Fact]
     public void InvokeAsyncNullTargetLoopThrows()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
         Assert.Throws<ArgumentNullException>(() =>
-            OrientLoop.InvokeAsync(null!, () => 1));
+            OrientExecutor.InvokeAsync(null!, () => 1));
     }
 
     [Fact]
     public void InvokeAsyncNullActionThrows()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
         Assert.Throws<ArgumentNullException>(() =>
-            OrientLoop.InvokeAsync(loop, (Func<int>)null!));
+            OrientExecutor.InvokeAsync(executor, (Func<int>)null!));
     }
 
     private static Exception? RunOnFreshThread(Action action)
@@ -115,65 +120,65 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
 Run:
 
 ```bash
-dotnet test Tests/Orient.Tests/Orient.Tests.csproj --filter "FullyQualifiedName~OrientLoopInvokeAsyncTests" -v minimal
+dotnet test Tests/Orient.Tests/Orient.Tests.csproj --filter "FullyQualifiedName~OrientExecutorInvokeAsyncTests" -v minimal
 ```
 
-Expected: FAIL — `OrientLoop` does not contain a definition for `InvokeAsync`.
+Expected: FAIL — `OrientExecutor` does not contain a definition for `InvokeAsync`.
 
 - [ ] **Step 4: Add shared validation to all overloads**
 
-Create `Orient.Runtime/Loop/OrientLoop.InvokeAsync.cs` with `RequireCallerLoop()` and parameter validation on every overload. Only the sync-value overload proceeds past validation in this task; the other three overloads throw `NotImplementedException` after validation until their tasks land.
+Create `Orient.Runtime/Executor/OrientExecutor.InvokeAsync.cs` with `RequireCallerExecutor()` and parameter validation on every overload. Only the sync-value overload proceeds past validation in this task; the other three overloads throw `NotImplementedException` after validation until their tasks land.
 
 ```csharp
 namespace Orient.Runtime;
 
-public sealed partial class OrientLoop
+public sealed partial class OrientExecutor
 {
-    public static OrientTask<T> InvokeAsync<T>(OrientLoop targetLoop, Func<OrientTask<T>> action)
+    public static OrientTask<T> InvokeAsync<T>(OrientExecutor targetExecutor, Func<OrientTask<T>> action)
     {
-        ArgumentNullException.ThrowIfNull(targetLoop);
+        ArgumentNullException.ThrowIfNull(targetExecutor);
         ArgumentNullException.ThrowIfNull(action);
-        _ = RequireCallerLoop();
+        _ = RequireCallerExecutor();
         throw new NotImplementedException();
     }
 
-    public static OrientTask InvokeAsync(OrientLoop targetLoop, Func<OrientTask> action)
+    public static OrientTask InvokeAsync(OrientExecutor targetExecutor, Func<OrientTask> action)
     {
-        ArgumentNullException.ThrowIfNull(targetLoop);
+        ArgumentNullException.ThrowIfNull(targetExecutor);
         ArgumentNullException.ThrowIfNull(action);
-        _ = RequireCallerLoop();
+        _ = RequireCallerExecutor();
         throw new NotImplementedException();
     }
 
-    public static OrientTask<T> InvokeAsync<T>(OrientLoop targetLoop, Func<T> action)
+    public static OrientTask<T> InvokeAsync<T>(OrientExecutor targetExecutor, Func<T> action)
     {
-        ArgumentNullException.ThrowIfNull(targetLoop);
+        ArgumentNullException.ThrowIfNull(targetExecutor);
         ArgumentNullException.ThrowIfNull(action);
-        _ = RequireCallerLoop();
+        _ = RequireCallerExecutor();
         throw new NotImplementedException();
     }
 
-    public static OrientTask InvokeAsync(OrientLoop targetLoop, Action action)
+    public static OrientTask InvokeAsync(OrientExecutor targetExecutor, Action action)
     {
-        ArgumentNullException.ThrowIfNull(targetLoop);
+        ArgumentNullException.ThrowIfNull(targetExecutor);
         ArgumentNullException.ThrowIfNull(action);
-        _ = RequireCallerLoop();
+        _ = RequireCallerExecutor();
         throw new NotImplementedException();
     }
 
-    private static OrientLoop RequireCallerLoop()
+    private static OrientExecutor RequireCallerExecutor()
     {
-        var callerLoop = Current
+        var callerExecutor = Current
             ?? throw new InvalidOperationException(
-                "A OrientLoop must be provided explicitly or available via OrientLoop.Current.");
+                "A OrientExecutor must be provided explicitly or available via OrientExecutor.Current.");
 
-        callerLoop.EnsureInLoopThread();
-        return callerLoop;
+        callerExecutor.EnsureInExecutorThread();
+        return callerExecutor;
     }
 }
 ```
 
-Invalid call-site tests use the sync-value overload. `EnsureInLoopThread()` remains internal defense only; there is no separate black-box test for it because `OrientLoop.Current` is `[ThreadStatic]`.
+Invalid call-site tests use the sync-value overload. `EnsureInExecutorThread()` remains internal defense only; there is no separate black-box test for it because `OrientExecutor.Current` is `[ThreadStatic]`.
 
 - [ ] **Step 5: Re-run invalid call-site tests**
 
@@ -183,27 +188,27 @@ Expected: PASS for the three invalid call-site tests; other tests not added yet.
 
 ---
 
-### Task 2: Cross-Loop Synchronous Value Overload
+### Task 2: Cross-Executor Synchronous Value Overload
 
 **Files:**
-- Modify: `Orient.Runtime/Loop/OrientLoop.InvokeAsync.cs`
-- Modify: `Tests/Orient.Tests/OrientLoopInvokeAsyncTests.cs`
+- Modify: `Orient.Runtime/Executor/OrientExecutor.InvokeAsync.cs`
+- Modify: `Tests/Orient.Tests/OrientExecutorInvokeAsyncTests.cs`
 
-- [ ] **Step 1: Add dual-loop pump helper to test file**
+- [ ] **Step 1: Add dual-executor pump helper to test file**
 
-Append to `OrientLoopInvokeAsyncTests.cs`:
+Append to `OrientExecutorInvokeAsyncTests.cs`:
 
 ```csharp
-private sealed class TargetLoopPump : IDisposable
+private sealed class TargetExecutorPump : IDisposable
 {
-    private readonly OrientLoop targetLoop;
+    private readonly OrientExecutor targetExecutor;
     private readonly CancellationTokenSource cancellation = new();
     private readonly Thread thread;
     private volatile Exception? pumpFailure;
 
-    public TargetLoopPump(OrientLoop targetLoop)
+    public TargetExecutorPump(OrientExecutor targetExecutor)
     {
-        this.targetLoop = targetLoop;
+        this.targetExecutor = targetExecutor;
         thread = new Thread(PumpMain)
         {
             IsBackground = true,
@@ -216,7 +221,7 @@ private sealed class TargetLoopPump : IDisposable
     {
         if (pumpFailure is not null)
         {
-            throw new InvalidOperationException("Target loop pump failed.", pumpFailure);
+            throw new InvalidOperationException("Target executor pump failed.", pumpFailure);
         }
     }
 
@@ -225,7 +230,7 @@ private sealed class TargetLoopPump : IDisposable
         cancellation.Cancel();
         if (!thread.Join(TimeSpan.FromSeconds(2)))
         {
-            throw new InvalidOperationException("Target loop pump thread did not exit.");
+            throw new InvalidOperationException("Target executor pump thread did not exit.");
         }
 
         EnsureNoFailure();
@@ -233,12 +238,12 @@ private sealed class TargetLoopPump : IDisposable
 
     private void PumpMain()
     {
-        targetLoop.BindToCurrentThread();
+        targetExecutor.BindToCurrentThread();
         try
         {
             while (!cancellation.Token.IsCancellationRequested)
             {
-                targetLoop.Tick();
+                targetExecutor.Tick();
                 Thread.Sleep(1);
             }
         }
@@ -249,29 +254,29 @@ private sealed class TargetLoopPump : IDisposable
         finally
         {
 #if DEBUG
-            OrientLoop.ResetDebugThreadBindingForTests();
+            OrientExecutor.ResetDebugThreadBindingForTests();
 #endif
         }
     }
 }
 
-private static void PumpCallerUntil(OrientLoop callerLoop, Func<bool> condition, TimeSpan timeout)
+private static void PumpCallerUntil(OrientExecutor callerExecutor, Func<bool> condition, TimeSpan timeout)
 {
     var deadline = DateTime.UtcNow + timeout;
     while (!condition() && DateTime.UtcNow < deadline)
     {
-        callerLoop.Tick();
+        callerExecutor.Tick();
         Thread.Sleep(1);
     }
 
     if (!condition())
     {
-        throw new TimeoutException("Caller loop pump timed out.");
+        throw new TimeoutException("Caller executor pump timed out.");
     }
 }
 ```
 
-- [ ] **Step 2: Write failing cross-loop sync value test**
+- [ ] **Step 2: Write failing cross-executor sync value test**
 
 Add:
 
@@ -279,10 +284,10 @@ Add:
 [Fact]
 public void InvokeAsyncSyncValueRunsOnTargetLoopAndCompletesOnCallerLoop()
 {
-    var callerLoop = new OrientLoop();
-    var targetLoop = new OrientLoop();
-    using var targetPump = new TargetLoopPump(targetLoop);
-    using var callerDriver = new LoopTestDriver(callerLoop);
+    var callerExecutor = new OrientExecutor();
+    var targetExecutor = new OrientExecutor();
+    using var targetPump = new TargetExecutorPump(targetExecutor);
+    using var callerDriver = new ExecutorTestDriver(callerExecutor);
 
     int? actionThreadId = null;
     int? continuationThreadId = null;
@@ -291,8 +296,8 @@ public void InvokeAsyncSyncValueRunsOnTargetLoopAndCompletesOnCallerLoop()
     callerDriver.Run(() =>
     {
         var callerThreadId = Environment.CurrentManagedThreadId;
-        var task = OrientLoop.InvokeAsync(
-            targetLoop,
+        var task = OrientExecutor.InvokeAsync(
+            targetExecutor,
             () =>
             {
                 actionThreadId = Environment.CurrentManagedThreadId;
@@ -306,7 +311,7 @@ public void InvokeAsyncSyncValueRunsOnTargetLoopAndCompletesOnCallerLoop()
             result = awaiter.GetResult();
         });
 
-        PumpCallerUntil(callerLoop, () => result is not null, TimeSpan.FromSeconds(2));
+        PumpCallerUntil(callerExecutor, () => result is not null, TimeSpan.FromSeconds(2));
 
         Assert.Equal(callerThreadId, continuationThreadId);
         Assert.NotEqual(callerThreadId, actionThreadId);
@@ -327,30 +332,30 @@ dotnet test Tests/Orient.Tests/Orient.Tests.csproj --filter "FullyQualifiedName~
 
 Expected: FAIL (`NotImplementedException` or no completion).
 
-- [ ] **Step 4: Implement sync-value cross-loop path**
+- [ ] **Step 4: Implement sync-value cross-executor path**
 
-In `OrientLoop.InvokeAsync.cs`, implement helpers and sync-value overload:
+In `OrientExecutor.InvokeAsync.cs`, implement helpers and sync-value overload:
 
 ```csharp
-public static OrientTask<T> InvokeAsync<T>(OrientLoop targetLoop, Func<T> action)
+public static OrientTask<T> InvokeAsync<T>(OrientExecutor targetExecutor, Func<T> action)
 {
-    ArgumentNullException.ThrowIfNull(targetLoop);
+    ArgumentNullException.ThrowIfNull(targetExecutor);
     ArgumentNullException.ThrowIfNull(action);
 
-    var callerLoop = RequireCallerLoop();
-    var source = new OrientTaskCompletionSource<T>(callerLoop);
+    var callerExecutor = RequireCallerExecutor();
+    var source = new OrientTaskCompletionSource<T>(callerExecutor);
 
-    if (ReferenceEquals(callerLoop, targetLoop))
+    if (ReferenceEquals(callerExecutor, targetExecutor))
     {
-        RunSyncOnSameLoop(action, source);
+        RunSyncOnSameExecutor(action, source);
         return source.Task;
     }
 
-    targetLoop.Post(() => RunSyncOnTargetLoop(action, source, callerLoop));
+    targetExecutor.Post(() => RunSyncOnTargetExecutor(action, source, callerExecutor));
     return source.Task;
 }
 
-private static void RunSyncOnSameLoop<T>(Func<T> action, OrientTaskCompletionSource<T> source)
+private static void RunSyncOnSameExecutor<T>(Func<T> action, OrientTaskCompletionSource<T> source)
 {
     try
     {
@@ -362,19 +367,19 @@ private static void RunSyncOnSameLoop<T>(Func<T> action, OrientTaskCompletionSou
     }
 }
 
-private static void RunSyncOnTargetLoop<T>(
+private static void RunSyncOnTargetExecutor<T>(
     Func<T> action,
     OrientTaskCompletionSource<T> source,
-    OrientLoop callerLoop)
+    OrientExecutor callerExecutor)
 {
     try
     {
         var result = action();
-        callerLoop.Post(() => source.TrySetResult(result));
+        callerExecutor.Post(() => source.TrySetResult(result));
     }
     catch (Exception exception)
     {
-        callerLoop.Post(() => source.TrySetException(exception));
+        callerExecutor.Post(() => source.TrySetException(exception));
     }
 }
 ```
@@ -385,11 +390,11 @@ Expected: PASS.
 
 ---
 
-### Task 3: Cross-Loop Synchronous Void Overload
+### Task 3: Cross-Executor Synchronous Void Overload
 
 **Files:**
-- Modify: `Orient.Runtime/Loop/OrientLoop.InvokeAsync.cs`
-- Modify: `Tests/Orient.Tests/OrientLoopInvokeAsyncTests.cs`
+- Modify: `Orient.Runtime/Executor/OrientExecutor.InvokeAsync.cs`
+- Modify: `Tests/Orient.Tests/OrientExecutorInvokeAsyncTests.cs`
 
 - [ ] **Step 1: Write failing sync void test**
 
@@ -397,10 +402,10 @@ Expected: PASS.
 [Fact]
 public void InvokeAsyncSyncVoidRunsOnTargetLoopAndCompletesOnCallerLoop()
 {
-    var callerLoop = new OrientLoop();
-    var targetLoop = new OrientLoop();
-    using var targetPump = new TargetLoopPump(targetLoop);
-    using var callerDriver = new LoopTestDriver(callerLoop);
+    var callerExecutor = new OrientExecutor();
+    var targetExecutor = new OrientExecutor();
+    using var targetPump = new TargetExecutorPump(targetExecutor);
+    using var callerDriver = new ExecutorTestDriver(callerExecutor);
 
     int? actionThreadId = null;
     var completed = false;
@@ -408,8 +413,8 @@ public void InvokeAsyncSyncVoidRunsOnTargetLoopAndCompletesOnCallerLoop()
     callerDriver.Run(() =>
     {
         var callerThreadId = Environment.CurrentManagedThreadId;
-        var task = OrientLoop.InvokeAsync(
-            targetLoop,
+        var task = OrientExecutor.InvokeAsync(
+            targetExecutor,
             () => actionThreadId = Environment.CurrentManagedThreadId);
 
         var awaiter = task.GetAwaiter();
@@ -419,7 +424,7 @@ public void InvokeAsyncSyncVoidRunsOnTargetLoopAndCompletesOnCallerLoop()
             completed = true;
         });
 
-        PumpCallerUntil(callerLoop, () => completed, TimeSpan.FromSeconds(2));
+        PumpCallerUntil(callerExecutor, () => completed, TimeSpan.FromSeconds(2));
         Assert.NotEqual(callerThreadId, actionThreadId);
     });
 
@@ -434,25 +439,25 @@ Expected: FAIL (`NotImplementedException`).
 - [ ] **Step 3: Implement sync void overload**
 
 ```csharp
-public static OrientTask InvokeAsync(OrientLoop targetLoop, Action action)
+public static OrientTask InvokeAsync(OrientExecutor targetExecutor, Action action)
 {
-    ArgumentNullException.ThrowIfNull(targetLoop);
+    ArgumentNullException.ThrowIfNull(targetExecutor);
     ArgumentNullException.ThrowIfNull(action);
 
-    var callerLoop = RequireCallerLoop();
-    var source = new OrientTaskCompletionSource<OrientUnit>(callerLoop);
+    var callerExecutor = RequireCallerExecutor();
+    var source = new OrientTaskCompletionSource<OrientUnit>(callerExecutor);
 
-    if (ReferenceEquals(callerLoop, targetLoop))
+    if (ReferenceEquals(callerExecutor, targetExecutor))
     {
-        RunVoidOnSameLoop(action, source);
+        RunVoidOnSameExecutor(action, source);
         return new OrientTask(source.Task);
     }
 
-    targetLoop.Post(() => RunVoidOnTargetLoop(action, source, callerLoop));
+    targetExecutor.Post(() => RunVoidOnTargetExecutor(action, source, callerExecutor));
     return new OrientTask(source.Task);
 }
 
-private static void RunVoidOnSameLoop(Action action, OrientTaskCompletionSource<OrientUnit> source)
+private static void RunVoidOnSameExecutor(Action action, OrientTaskCompletionSource<OrientUnit> source)
 {
     try
     {
@@ -465,19 +470,19 @@ private static void RunVoidOnSameLoop(Action action, OrientTaskCompletionSource<
     }
 }
 
-private static void RunVoidOnTargetLoop(
+private static void RunVoidOnTargetExecutor(
     Action action,
     OrientTaskCompletionSource<OrientUnit> source,
-    OrientLoop callerLoop)
+    OrientExecutor callerExecutor)
 {
     try
     {
         action();
-        callerLoop.Post(() => source.TrySetResult(OrientUnit.Value));
+        callerExecutor.Post(() => source.TrySetResult(OrientUnit.Value));
     }
     catch (Exception exception)
     {
-        callerLoop.Post(() => source.TrySetException(exception));
+        callerExecutor.Post(() => source.TrySetException(exception));
     }
 }
 ```
@@ -488,11 +493,11 @@ Expected: PASS.
 
 ---
 
-### Task 4: Cross-Loop Asynchronous Value Overload
+### Task 4: Cross-Executor Asynchronous Value Overload
 
 **Files:**
-- Modify: `Orient.Runtime/Loop/OrientLoop.InvokeAsync.cs`
-- Modify: `Tests/Orient.Tests/OrientLoopInvokeAsyncTests.cs`
+- Modify: `Orient.Runtime/Executor/OrientExecutor.InvokeAsync.cs`
+- Modify: `Tests/Orient.Tests/OrientExecutorInvokeAsyncTests.cs`
 
 - [ ] **Step 1: Write failing async value test**
 
@@ -500,10 +505,10 @@ Expected: PASS.
 [Fact]
 public void InvokeAsyncAsyncValueRunsOnTargetLoopAndResumesOnCallerLoop()
 {
-    var callerLoop = new OrientLoop();
-    var targetLoop = new OrientLoop();
-    using var targetPump = new TargetLoopPump(targetLoop);
-    using var callerDriver = new LoopTestDriver(callerLoop);
+    var callerExecutor = new OrientExecutor();
+    var targetExecutor = new OrientExecutor();
+    using var targetPump = new TargetExecutorPump(targetExecutor);
+    using var callerDriver = new ExecutorTestDriver(callerExecutor);
 
     int? actionThreadId = null;
     int? continuationThreadId = null;
@@ -512,12 +517,12 @@ public void InvokeAsyncAsyncValueRunsOnTargetLoopAndResumesOnCallerLoop()
     callerDriver.Run(() =>
     {
         var callerThreadId = Environment.CurrentManagedThreadId;
-        var task = OrientLoop.InvokeAsync(
-            targetLoop,
+        var task = OrientExecutor.InvokeAsync(
+            targetExecutor,
             async () =>
             {
                 actionThreadId = Environment.CurrentManagedThreadId;
-                await OrientTask.Delay(1, targetLoop);
+                await OrientTask.Delay(1, targetExecutor);
                 return 7;
             });
 
@@ -528,7 +533,7 @@ public void InvokeAsyncAsyncValueRunsOnTargetLoopAndResumesOnCallerLoop()
             result = awaiter.GetResult();
         });
 
-        PumpCallerUntil(callerLoop, () => result is not null, TimeSpan.FromSeconds(2));
+        PumpCallerUntil(callerExecutor, () => result is not null, TimeSpan.FromSeconds(2));
         Assert.Equal(callerThreadId, continuationThreadId);
         Assert.NotEqual(callerThreadId, actionThreadId);
     });
@@ -543,28 +548,28 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement async-value overload + shared async runner**
 
-Important: start cross-loop async runners with `targetLoop.Post(() => RunAsyncOnTargetLoop(...))`. Do **not** use `targetLoop.Post(async () => ...)` because `Post` takes `Action`.
+Important: start cross-executor async runners with `targetExecutor.Post(() => RunAsyncOnTargetExecutor(...))`. Do **not** use `targetExecutor.Post(async () => ...)` because `Post` takes `Action`.
 
 ```csharp
-public static OrientTask<T> InvokeAsync<T>(OrientLoop targetLoop, Func<OrientTask<T>> action)
+public static OrientTask<T> InvokeAsync<T>(OrientExecutor targetExecutor, Func<OrientTask<T>> action)
 {
-    ArgumentNullException.ThrowIfNull(targetLoop);
+    ArgumentNullException.ThrowIfNull(targetExecutor);
     ArgumentNullException.ThrowIfNull(action);
 
-    var callerLoop = RequireCallerLoop();
-    var source = new OrientTaskCompletionSource<T>(callerLoop);
+    var callerExecutor = RequireCallerExecutor();
+    var source = new OrientTaskCompletionSource<T>(callerExecutor);
 
-    if (ReferenceEquals(callerLoop, targetLoop))
+    if (ReferenceEquals(callerExecutor, targetExecutor))
     {
-        RunAsyncOnSameLoop(action, source);
+        RunAsyncOnSameExecutor(action, source);
         return source.Task;
     }
 
-    targetLoop.Post(() => RunAsyncOnTargetLoop(action, source, callerLoop));
+    targetExecutor.Post(() => RunAsyncOnTargetExecutor(action, source, callerExecutor));
     return source.Task;
 }
 
-private static async OrientTask RunAsyncOnSameLoop<T>(
+private static async OrientTask RunAsyncOnSameExecutor<T>(
     Func<OrientTask<T>> action,
     OrientTaskCompletionSource<T> source)
 {
@@ -582,23 +587,23 @@ private static async OrientTask RunAsyncOnSameLoop<T>(
     }
 }
 
-private static async OrientTask RunAsyncOnTargetLoop<T>(
+private static async OrientTask RunAsyncOnTargetExecutor<T>(
     Func<OrientTask<T>> action,
     OrientTaskCompletionSource<T> source,
-    OrientLoop callerLoop)
+    OrientExecutor callerExecutor)
 {
     try
     {
         var result = await action();
-        callerLoop.Post(() => source.TrySetResult(result));
+        callerExecutor.Post(() => source.TrySetResult(result));
     }
     catch (TaskCanceledException)
     {
-        callerLoop.Post(() => source.TrySetCanceled());
+        callerExecutor.Post(() => source.TrySetCanceled());
     }
     catch (Exception exception)
     {
-        callerLoop.Post(() => source.TrySetException(exception));
+        callerExecutor.Post(() => source.TrySetException(exception));
     }
 }
 ```
@@ -609,11 +614,11 @@ Expected: PASS.
 
 ---
 
-### Task 5: Cross-Loop Asynchronous Void Overload
+### Task 5: Cross-Executor Asynchronous Void Overload
 
 **Files:**
-- Modify: `Orient.Runtime/Loop/OrientLoop.InvokeAsync.cs`
-- Modify: `Tests/Orient.Tests/OrientLoopInvokeAsyncTests.cs`
+- Modify: `Orient.Runtime/Executor/OrientExecutor.InvokeAsync.cs`
+- Modify: `Tests/Orient.Tests/OrientExecutorInvokeAsyncTests.cs`
 
 - [ ] **Step 1: Write failing async void test**
 
@@ -621,10 +626,10 @@ Expected: PASS.
 [Fact]
 public void InvokeAsyncAsyncVoidRunsOnTargetLoopAndCompletesOnCallerLoop()
 {
-    var callerLoop = new OrientLoop();
-    var targetLoop = new OrientLoop();
-    using var targetPump = new TargetLoopPump(targetLoop);
-    using var callerDriver = new LoopTestDriver(callerLoop);
+    var callerExecutor = new OrientExecutor();
+    var targetExecutor = new OrientExecutor();
+    using var targetPump = new TargetExecutorPump(targetExecutor);
+    using var callerDriver = new ExecutorTestDriver(callerExecutor);
 
     int? actionThreadId = null;
     var completed = false;
@@ -632,12 +637,12 @@ public void InvokeAsyncAsyncVoidRunsOnTargetLoopAndCompletesOnCallerLoop()
     callerDriver.Run(() =>
     {
         var callerThreadId = Environment.CurrentManagedThreadId;
-        var task = OrientLoop.InvokeAsync(
-            targetLoop,
+        var task = OrientExecutor.InvokeAsync(
+            targetExecutor,
             async () =>
             {
                 actionThreadId = Environment.CurrentManagedThreadId;
-                await OrientTask.Delay(1, targetLoop);
+                await OrientTask.Delay(1, targetExecutor);
             });
 
         var awaiter = task.GetAwaiter();
@@ -647,7 +652,7 @@ public void InvokeAsyncAsyncVoidRunsOnTargetLoopAndCompletesOnCallerLoop()
             completed = true;
         });
 
-        PumpCallerUntil(callerLoop, () => completed, TimeSpan.FromSeconds(2));
+        PumpCallerUntil(callerExecutor, () => completed, TimeSpan.FromSeconds(2));
         Assert.NotEqual(callerThreadId, actionThreadId);
     });
 
@@ -661,28 +666,28 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement async void overload**
 
-Use the same `Post(() => RunAsyncVoidOnTargetLoop(...))` pattern; do not post an `async` lambda directly.
+Use the same `Post(() => RunAsyncVoidOnTargetExecutor(...))` pattern; do not post an `async` lambda directly.
 
 ```csharp
-public static OrientTask InvokeAsync(OrientLoop targetLoop, Func<OrientTask> action)
+public static OrientTask InvokeAsync(OrientExecutor targetExecutor, Func<OrientTask> action)
 {
-    ArgumentNullException.ThrowIfNull(targetLoop);
+    ArgumentNullException.ThrowIfNull(targetExecutor);
     ArgumentNullException.ThrowIfNull(action);
 
-    var callerLoop = RequireCallerLoop();
-    var source = new OrientTaskCompletionSource<OrientUnit>(callerLoop);
+    var callerExecutor = RequireCallerExecutor();
+    var source = new OrientTaskCompletionSource<OrientUnit>(callerExecutor);
 
-    if (ReferenceEquals(callerLoop, targetLoop))
+    if (ReferenceEquals(callerExecutor, targetExecutor))
     {
-        RunAsyncVoidOnSameLoop(action, source);
+        RunAsyncVoidOnSameExecutor(action, source);
         return new OrientTask(source.Task);
     }
 
-    targetLoop.Post(() => RunAsyncVoidOnTargetLoop(action, source, callerLoop));
+    targetExecutor.Post(() => RunAsyncVoidOnTargetExecutor(action, source, callerExecutor));
     return new OrientTask(source.Task);
 }
 
-private static async OrientTask RunAsyncVoidOnSameLoop(
+private static async OrientTask RunAsyncVoidOnSameExecutor(
     Func<OrientTask> action,
     OrientTaskCompletionSource<OrientUnit> source)
 {
@@ -701,23 +706,23 @@ private static async OrientTask RunAsyncVoidOnSameLoop(
     }
 }
 
-private static async OrientTask RunAsyncVoidOnTargetLoop(
+private static async OrientTask RunAsyncVoidOnTargetExecutor(
     Func<OrientTask> action,
     OrientTaskCompletionSource<OrientUnit> source,
-    OrientLoop callerLoop)
+    OrientExecutor callerExecutor)
 {
     try
     {
         await action();
-        callerLoop.Post(() => source.TrySetResult(OrientUnit.Value));
+        callerExecutor.Post(() => source.TrySetResult(OrientUnit.Value));
     }
     catch (TaskCanceledException)
     {
-        callerLoop.Post(() => source.TrySetCanceled());
+        callerExecutor.Post(() => source.TrySetCanceled());
     }
     catch (Exception exception)
     {
-        callerLoop.Post(() => source.TrySetException(exception));
+        callerExecutor.Post(() => source.TrySetException(exception));
     }
 }
 ```
@@ -728,21 +733,21 @@ Expected: PASS.
 
 ---
 
-### Task 6: Same-Loop, Exception, And Cancellation Behavior
+### Task 6: Same-Executor, Exception, And Cancellation Behavior
 
 **Files:**
-- Modify: `Tests/Orient.Tests/OrientLoopInvokeAsyncTests.cs`
+- Modify: `Tests/Orient.Tests/OrientExecutorInvokeAsyncTests.cs`
 
-- [ ] **Step 1: Write failing same-loop sync completion test**
+- [ ] **Step 1: Write failing same-executor sync completion test**
 
 ```csharp
 [Fact]
 public void InvokeAsyncSameLoopSyncCompletesBeforeReturn()
 {
-    var loop = new OrientLoop();
-    loop.BindToCurrentThread();
+    var executor = new OrientExecutor();
+    executor.BindToCurrentThread();
 
-    var task = OrientLoop.InvokeAsync(loop, () => 99);
+    var task = OrientExecutor.InvokeAsync(executor, () => 99);
     var awaiter = task.GetAwaiter();
 
     Assert.True(awaiter.IsCompleted);
@@ -752,7 +757,7 @@ public void InvokeAsyncSameLoopSyncCompletesBeforeReturn()
 
 - [ ] **Step 2: Run test**
 
-Expected: PASS once Task 2 landed; if not, implement same-loop branch already present.
+Expected: PASS once Task 2 landed; if not, implement same-executor branch already present.
 
 - [ ] **Step 3: Write failing sync exception test**
 
@@ -760,18 +765,18 @@ Expected: PASS once Task 2 landed; if not, implement same-loop branch already pr
 [Fact]
 public void InvokeAsyncSyncExceptionFaultsCallerTask()
 {
-    var callerLoop = new OrientLoop();
-    var targetLoop = new OrientLoop();
-    using var targetPump = new TargetLoopPump(targetLoop);
-    using var callerDriver = new LoopTestDriver(callerLoop);
+    var callerExecutor = new OrientExecutor();
+    var targetExecutor = new OrientExecutor();
+    using var targetPump = new TargetExecutorPump(targetExecutor);
+    using var callerDriver = new ExecutorTestDriver(callerExecutor);
 
     Exception? captured = null;
 
     callerDriver.Run(() =>
     {
         var failure = new InvalidOperationException("sync boom");
-        var task = OrientLoop.InvokeAsync<int>(
-            targetLoop,
+        var task = OrientExecutor.InvokeAsync<int>(
+            targetExecutor,
             () => throw failure);
 
         var awaiter = task.GetAwaiter();
@@ -787,7 +792,7 @@ public void InvokeAsyncSyncExceptionFaultsCallerTask()
             }
         });
 
-        PumpCallerUntil(callerLoop, () => captured is not null, TimeSpan.FromSeconds(2));
+        PumpCallerUntil(callerExecutor, () => captured is not null, TimeSpan.FromSeconds(2));
     });
 
     Assert.IsType<InvalidOperationException>(captured);
@@ -801,19 +806,19 @@ public void InvokeAsyncSyncExceptionFaultsCallerTask()
 [Fact]
 public void InvokeAsyncAsyncTargetTaskExceptionFaultsCallerTask()
 {
-    var callerLoop = new OrientLoop();
-    var targetLoop = new OrientLoop();
-    using var targetPump = new TargetLoopPump(targetLoop);
-    using var callerDriver = new LoopTestDriver(callerLoop);
+    var callerExecutor = new OrientExecutor();
+    var targetExecutor = new OrientExecutor();
+    using var targetPump = new TargetExecutorPump(targetExecutor);
+    using var callerDriver = new ExecutorTestDriver(callerExecutor);
 
     Exception? captured = null;
 
     callerDriver.Run(() =>
     {
         var failure = new InvalidOperationException("async boom");
-        var task = OrientLoop.InvokeAsync(
-            targetLoop,
-            () => FaultingTargetAsync(failure, targetLoop));
+        var task = OrientExecutor.InvokeAsync(
+            targetExecutor,
+            () => FaultingTargetAsync(failure, targetExecutor));
 
         var awaiter = task.GetAwaiter();
         awaiter.OnCompleted(() =>
@@ -828,16 +833,16 @@ public void InvokeAsyncAsyncTargetTaskExceptionFaultsCallerTask()
             }
         });
 
-        PumpCallerUntil(callerLoop, () => captured is not null, TimeSpan.FromSeconds(2));
+        PumpCallerUntil(callerExecutor, () => captured is not null, TimeSpan.FromSeconds(2));
     });
 
     Assert.IsType<InvalidOperationException>(captured);
     Assert.Equal("async boom", captured!.Message);
 }
 
-private static async OrientTask<int> FaultingTargetAsync(Exception failure, OrientLoop targetLoop)
+private static async OrientTask<int> FaultingTargetAsync(Exception failure, OrientExecutor targetExecutor)
 {
-    var source = new OrientTaskCompletionSource<int>(targetLoop);
+    var source = new OrientTaskCompletionSource<int>(targetExecutor);
     source.TrySetException(failure);
     return await source.Task;
 }
@@ -851,21 +856,21 @@ This verifies target runner exceptions do not disappear into `UnhandledException
 [Fact]
 public void InvokeAsyncTargetRunnerExceptionFaultsCallerTaskInsteadOfUnhandledException()
 {
-    var callerLoop = new OrientLoop();
-    var targetLoop = new OrientLoop();
-    using var targetPump = new TargetLoopPump(targetLoop);
-    using var callerDriver = new LoopTestDriver(callerLoop);
+    var callerExecutor = new OrientExecutor();
+    var targetExecutor = new OrientExecutor();
+    using var targetPump = new TargetExecutorPump(targetExecutor);
+    using var callerDriver = new ExecutorTestDriver(callerExecutor);
 
     Exception? unhandled = null;
     Exception? captured = null;
 
-    targetLoop.UnhandledException += ex => unhandled = ex;
+    targetExecutor.UnhandledException += ex => unhandled = ex;
 
     callerDriver.Run(() =>
     {
         var failure = new InvalidOperationException("runner boom");
-        var task = OrientLoop.InvokeAsync(
-            targetLoop,
+        var task = OrientExecutor.InvokeAsync(
+            targetExecutor,
             () => throw failure);
 
         var awaiter = task.GetAwaiter();
@@ -881,7 +886,7 @@ public void InvokeAsyncTargetRunnerExceptionFaultsCallerTaskInsteadOfUnhandledEx
             }
         });
 
-        PumpCallerUntil(callerLoop, () => captured is not null, TimeSpan.FromSeconds(2));
+        PumpCallerUntil(callerExecutor, () => captured is not null, TimeSpan.FromSeconds(2));
     });
 
     Assert.Null(unhandled);
@@ -895,20 +900,20 @@ public void InvokeAsyncTargetRunnerExceptionFaultsCallerTaskInsteadOfUnhandledEx
 [Fact]
 public void InvokeAsyncCanceledTargetTaskCancelsCallerTask()
 {
-    var callerLoop = new OrientLoop();
-    var targetLoop = new OrientLoop();
-    using var targetPump = new TargetLoopPump(targetLoop);
-    using var callerDriver = new LoopTestDriver(callerLoop);
+    var callerExecutor = new OrientExecutor();
+    var targetExecutor = new OrientExecutor();
+    using var targetPump = new TargetExecutorPump(targetExecutor);
+    using var callerDriver = new ExecutorTestDriver(callerExecutor);
 
     Exception? captured = null;
 
     callerDriver.Run(() =>
     {
-        var task = OrientLoop.InvokeAsync(
-            targetLoop,
+        var task = OrientExecutor.InvokeAsync(
+            targetExecutor,
             () =>
             {
-                var source = new OrientTaskCompletionSource<OrientUnit>(targetLoop);
+                var source = new OrientTaskCompletionSource<OrientUnit>(targetExecutor);
                 source.TrySetCanceled();
                 return new OrientTask(source.Task);
             });
@@ -926,7 +931,7 @@ public void InvokeAsyncCanceledTargetTaskCancelsCallerTask()
             }
         });
 
-        PumpCallerUntil(callerLoop, () => captured is not null, TimeSpan.FromSeconds(2));
+        PumpCallerUntil(callerExecutor, () => captured is not null, TimeSpan.FromSeconds(2));
     });
 
     Assert.IsType<TaskCanceledException>(captured);
@@ -938,7 +943,7 @@ public void InvokeAsyncCanceledTargetTaskCancelsCallerTask()
 Run:
 
 ```bash
-dotnet test Tests/Orient.Tests/Orient.Tests.csproj --filter "FullyQualifiedName~OrientLoopInvokeAsyncTests" -v minimal
+dotnet test Tests/Orient.Tests/Orient.Tests.csproj --filter "FullyQualifiedName~OrientExecutorInvokeAsyncTests" -v minimal
 ```
 
 Expected: PASS for entire class.
@@ -955,21 +960,21 @@ Expected: PASS for entire class.
 
 In `Doc/architecture.md`, replace phrases such as:
 
-- `OrientLoop.InvokeAsync`（**目标 API，尚未实现**）
-- `InvokeAsync` 是**目标**框架级跨 loop 调度原语（Runtime 尚未实现）
-- `OrientLoop.InvokeAsync`（未来）
+- `OrientExecutor.InvokeAsync`（**目标 API，尚未实现**）
+- `InvokeAsync` 是**目标**框架级跨 executor 调度原语（Runtime 尚未实现）
+- `OrientExecutor.InvokeAsync`（未来）
 
 with implemented wording, for example:
 
-- `OrientLoop.InvokeAsync` 是 Runtime 提供的跨 loop 调度原语（`Orient.Runtime/Loop/OrientLoop.InvokeAsync.cs`）
-- Keep LocalRef / snapshot / `LoopRoute` / cancellation notes as future work
+- `OrientExecutor.InvokeAsync` 是 Runtime 提供的跨 executor 调度原语（`Orient.Runtime/Executor/OrientExecutor.InvokeAsync.cs`）
+- Keep LocalRef / snapshot / `ExecutorRoute` / cancellation notes as future work
 
 - [ ] **Step 2: Update TODO**
 
-In `Doc/TODO.txt` §P1 item 2, remove the `OrientLoop.InvokeAsync` bullet and keep:
+In `Doc/TODO.txt` §P1 item 2, remove the `OrientExecutor.InvokeAsync` bullet and keep:
 
 ```text
-   - 仍缺按 `serviceId`、连接或 shard 路由到多个业务 loop 的 `LoopRoute` / dispatcher。
+   - 仍缺按 `serviceId`、连接或 shard 路由到多个业务 executor 的 `ExecutorRoute` / dispatcher。
 ```
 
 Also fix the architecture reference from `architecture-draft §5.2` to `Doc/architecture.md` §5.2 if still present elsewhere.
@@ -991,13 +996,13 @@ Expected: all tests PASS.
 | Spec requirement | Task |
 | --- | --- |
 | Four public overloads | Tasks 2–5 |
-| Caller must be bound loop thread | Task 1 `RequireCallerLoop()`; public test covers missing `Current` only |
-| Cross-loop uses `targetLoop.Post` + `callerLoop.Post` | Tasks 2–5 |
-| Same-loop direct execution | Tasks 2–5 + Task 6 |
+| Caller must be bound executor thread | Task 1 `RequireCallerExecutor()`; public test covers missing `Current` only |
+| Cross-executor uses `targetExecutor.Post` + `callerExecutor.Post` | Tasks 2–5 |
+| Same-executor direct execution | Tasks 2–5 + Task 6 |
 | Target runner catches all failures | Tasks 2–5 + Task 6 regression test |
 | Cancellation maps to `TrySetCanceled()` | Task 4–5 helpers + Task 6 test |
 | No `System.Threading.Tasks.Task` in implementation | Tasks 2–5 |
-| Tests for success/exception/cancel/same-loop/invalid args | Tasks 1–6 |
+| Tests for success/exception/cancel/same-executor/invalid args | Tasks 1–6 |
 | Documentation updates | Task 7 |
 | Data boundary documented as non-runtime responsibility | Task 7 architecture wording only |
 

@@ -2,16 +2,16 @@ namespace Orient.Runtime;
 
 public static class OrientExecutorHost
 {
-    public static void RunUntilCancelled(OrientExecutor loop, CancellationToken cancellationToken)
+    public static void RunUntilCancelled(OrientExecutor executor, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(loop);
-        loop.BindToCurrentThread();
+        ArgumentNullException.ThrowIfNull(executor);
+        executor.BindToCurrentThread();
 
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                loop.Tick();
+                executor.Tick();
             }
             catch (Exception exception)
             {
@@ -25,7 +25,7 @@ public static class OrientExecutorHost
 
             try
             {
-                loop.WaitForWorkOrTimer(cancellationToken);
+                executor.WaitForWorkOrTimer(cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

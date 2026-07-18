@@ -11,7 +11,7 @@ namespace Example.Http;
 
 public sealed class UnifiedServer
 {
-    private readonly OrientExecutor loop;
+    private readonly OrientExecutor executor;
     private readonly CRpcServer crpcServer;
     private readonly HelloworldServiceImpl greeter;
     private readonly int port;
@@ -21,13 +21,13 @@ public sealed class UnifiedServer
     private IEventLoopGroup? workerGroup;
 
     public UnifiedServer(
-        OrientExecutor loop,
+        OrientExecutor executor,
         CRpcServer crpcServer,
         HelloworldServiceImpl greeter,
         int port,
         int maxFrameLength = CRpcServerOptions.DefaultMaxFrameLength)
     {
-        this.loop = loop;
+        this.executor = executor;
         this.crpcServer = crpcServer;
         this.greeter = greeter;
         this.port = port;
@@ -58,7 +58,7 @@ public sealed class UnifiedServer
         bootstrap.ChildHandler(new ActionChannelInitializer<IChannel>(ch =>
         {
             ch.Pipeline.AddLast(new PortUnificationHandler(
-                loop,
+                executor,
                 crpcServer.Connections,
                 ctx =>
                 {
@@ -70,11 +70,11 @@ public sealed class UnifiedServer
                 {
                     ctx.Channel.Pipeline.AddLast(new HttpServerCodec());
                     ctx.Channel.Pipeline.AddLast(new HttpObjectAggregator(65536));
-                    ctx.Channel.Pipeline.AddLast(new GreeterHttpHandler(loop, crpcServer.Connections, greeter));
+                    ctx.Channel.Pipeline.AddLast(new GreeterHttpHandler(executor, crpcServer.Connections, greeter));
                 }));
         }));
 
-        channel = await OrientTask.FromTask(bootstrap.BindAsync(IPAddress.Loopback, port), loop);
+        channel = await OrientTask.FromTask(bootstrap.BindAsync(IPAddress.Loopback, port), executor);
     }
 
     public OrientTask StopAsync()
@@ -86,7 +86,7 @@ public sealed class UnifiedServer
     {
         if (channel is not null)
         {
-            await OrientTask.FromTask(channel.CloseAsync(), loop);
+            await OrientTask.FromTask(channel.CloseAsync(), executor);
             channel = null;
         }
 
@@ -94,7 +94,7 @@ public sealed class UnifiedServer
         {
             await OrientTask.FromTask(
                 workerGroup.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)),
-                loop);
+                executor);
             workerGroup = null;
         }
 
@@ -102,7 +102,7 @@ public sealed class UnifiedServer
         {
             await OrientTask.FromTask(
                 bossGroup.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)),
-                loop);
+                executor);
             bossGroup = null;
         }
     }

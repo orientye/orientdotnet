@@ -1,4 +1,4 @@
-﻿using Orient.Runtime;
+using Orient.Runtime;
 using Orient.Rpc.Client;
 using Orient.Rpc.Codec;
 using Orient.Rpc.Transport;
@@ -67,11 +67,11 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void CallAsyncThrowsWhenCurrentLoopDiffersFromOwner()
     {
-        var ownerLoop = new OrientExecutor();
+        var ownerExecutor = new OrientExecutor();
         var otherLoop = new OrientExecutor();
         otherLoop.BindToCurrentThread();
 
-        var client = new CRpcClient(ownerLoop);
+        var client = new CRpcClient(ownerExecutor);
         var exception = Assert.Throws<InvalidOperationException>(() =>
             client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 1));
 
@@ -94,7 +94,7 @@ public class CRpcClientTests : OrientTestBase
     }
 
     [Fact]
-    public void ConnectAsyncThrowsWhenNotOnOwnerLoop()
+    public void ConnectAsyncThrowsWhenNotOnOwnerExecutor()
     {
         var executor = new OrientExecutor();
         var client = new CRpcClient(executor);
@@ -110,7 +110,7 @@ public class CRpcClientTests : OrientTestBase
     {
         var executor = new OrientExecutor();
         executor.BindToCurrentThread();
-        var loopThreadId = Environment.CurrentManagedThreadId;
+        var executorThreadId = Environment.CurrentManagedThreadId;
 
         var client = new CRpcClient(executor);
         SetClientHostChannel(client, new EmbeddedChannel());
@@ -137,7 +137,7 @@ public class CRpcClientTests : OrientTestBase
         executor.Tick();
 
         Assert.Same(response, result);
-        Assert.Equal(loopThreadId, continuationThreadId);
+        Assert.Equal(executorThreadId, continuationThreadId);
     }
 
     [Fact]
@@ -336,7 +336,7 @@ public class CRpcClientTests : OrientTestBase
     }
 
     [Fact]
-    public void ChannelInactiveRaisesConnectionLostOnOwnerLoop()
+    public void ChannelInactiveRaisesConnectionLostOnOwnerExecutor()
     {
         var executor = new OrientExecutor();
         executor.BindToCurrentThread();
@@ -498,11 +498,11 @@ public class CRpcClientTests : OrientTestBase
     }
 
     [Fact]
-    public void PushMessageDispatchesRegisteredHandlerOnOwnerLoop()
+    public void PushMessageDispatchesRegisteredHandlerOnOwnerExecutor()
     {
         var executor = new OrientExecutor();
         executor.BindToCurrentThread();
-        var loopThreadId = Environment.CurrentManagedThreadId;
+        var executorThreadId = Environment.CurrentManagedThreadId;
         var client = new CRpcClient(executor);
 
         CRpcPushContext? capturedContext = null;
@@ -533,7 +533,7 @@ public class CRpcClientTests : OrientTestBase
         Assert.Equal(10, capturedContext.ServiceId);
         Assert.Equal(20, capturedContext.MethodId);
         Assert.Equal([1, 2, 3], capturedBody);
-        Assert.Equal(loopThreadId, handlerThreadId);
+        Assert.Equal(executorThreadId, handlerThreadId);
     }
 
     [Fact]

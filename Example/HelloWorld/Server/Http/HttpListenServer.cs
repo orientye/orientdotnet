@@ -10,7 +10,7 @@ namespace Example.Http;
 
 public sealed class HttpListenServer
 {
-    private readonly OrientExecutor loop;
+    private readonly OrientExecutor executor;
     private readonly CRpcServer crpcServer;
     private readonly HelloworldServiceImpl greeter;
     private readonly int port;
@@ -18,9 +18,9 @@ public sealed class HttpListenServer
     private IEventLoopGroup? bossGroup;
     private IEventLoopGroup? workerGroup;
 
-    public HttpListenServer(OrientExecutor loop, CRpcServer crpcServer, HelloworldServiceImpl greeter, int port)
+    public HttpListenServer(OrientExecutor executor, CRpcServer crpcServer, HelloworldServiceImpl greeter, int port)
     {
-        this.loop = loop;
+        this.executor = executor;
         this.crpcServer = crpcServer;
         this.greeter = greeter;
         this.port = port;
@@ -44,10 +44,10 @@ public sealed class HttpListenServer
         {
             ch.Pipeline.AddLast(new HttpServerCodec());
             ch.Pipeline.AddLast(new HttpObjectAggregator(65536));
-            ch.Pipeline.AddLast(new GreeterHttpHandler(loop, crpcServer.Connections, greeter));
+            ch.Pipeline.AddLast(new GreeterHttpHandler(executor, crpcServer.Connections, greeter));
         }));
 
-        channel = await OrientTask.FromTask(bootstrap.BindAsync(IPAddress.Loopback, port), loop);
+        channel = await OrientTask.FromTask(bootstrap.BindAsync(IPAddress.Loopback, port), executor);
     }
 
     public OrientTask StopAsync()
@@ -59,7 +59,7 @@ public sealed class HttpListenServer
     {
         if (channel is not null)
         {
-            await OrientTask.FromTask(channel.CloseAsync(), loop);
+            await OrientTask.FromTask(channel.CloseAsync(), executor);
             channel = null;
         }
 
@@ -67,7 +67,7 @@ public sealed class HttpListenServer
         {
             await OrientTask.FromTask(
                 workerGroup.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)),
-                loop);
+                executor);
             workerGroup = null;
         }
 
@@ -75,7 +75,7 @@ public sealed class HttpListenServer
         {
             await OrientTask.FromTask(
                 bossGroup.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)),
-                loop);
+                executor);
             bossGroup = null;
         }
     }

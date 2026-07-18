@@ -4,10 +4,10 @@ namespace Orient.Runtime;
 
 public static class OrientExecutorRunner
 {
-    public static void RunUntilComplete(OrientExecutor loop, Func<OrientTask> operation)
+    public static void RunUntilComplete(OrientExecutor executor, Func<OrientTask> operation)
     {
         RunUntilComplete(
-            loop,
+            executor,
             async () =>
             {
                 await operation();
@@ -15,12 +15,12 @@ public static class OrientExecutorRunner
             });
     }
 
-    public static T RunUntilComplete<T>(OrientExecutor loop, Func<OrientTask<T>> operation)
+    public static T RunUntilComplete<T>(OrientExecutor executor, Func<OrientTask<T>> operation)
     {
-        ArgumentNullException.ThrowIfNull(loop);
+        ArgumentNullException.ThrowIfNull(executor);
         ArgumentNullException.ThrowIfNull(operation);
 
-        loop.BindToCurrentThread();
+        executor.BindToCurrentThread();
 
         var task = operation();
         var awaiter = task.GetAwaiter();
@@ -53,7 +53,7 @@ public static class OrientExecutorRunner
         {
             try
             {
-                loop.Tick();
+                executor.Tick();
             }
             catch (Exception tickException)
             {
@@ -62,7 +62,7 @@ public static class OrientExecutorRunner
 
             if (!completed)
             {
-                loop.WaitForWorkOrTimer(CancellationToken.None);
+                executor.WaitForWorkOrTimer(CancellationToken.None);
             }
         }
 

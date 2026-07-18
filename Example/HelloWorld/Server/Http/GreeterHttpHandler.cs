@@ -13,26 +13,26 @@ public sealed class GreeterHttpHandler : SimpleChannelInboundHandler<IFullHttpRe
 {
     private const string SayHelloPath = "/api/greeter/say-hello";
 
-    private readonly OrientExecutor loop;
+    private readonly OrientExecutor executor;
     private readonly CRpcConnectionRegistry connections;
     private readonly HelloworldServiceImpl greeter;
 
-    public GreeterHttpHandler(OrientExecutor loop, CRpcConnectionRegistry connections, HelloworldServiceImpl greeter)
+    public GreeterHttpHandler(OrientExecutor executor, CRpcConnectionRegistry connections, HelloworldServiceImpl greeter)
     {
-        this.loop = loop;
+        this.executor = executor;
         this.connections = connections;
         this.greeter = greeter;
     }
 
     public override void ChannelActive(IChannelHandlerContext context)
     {
-        loop.Post(() => connections.Register(context.Channel));
+        executor.Post(() => connections.Register(context.Channel));
         base.ChannelActive(context);
     }
 
     public override void ChannelInactive(IChannelHandlerContext context)
     {
-        loop.Post(() => connections.Unregister(context.Channel));
+        executor.Post(() => connections.Unregister(context.Channel));
         base.ChannelInactive(context);
     }
 
@@ -70,10 +70,10 @@ public sealed class GreeterHttpHandler : SimpleChannelInboundHandler<IFullHttpRe
             return;
         }
 
-        loop.Post(() => ProcessOnLoop(ctx, keepAlive, helloRequest));
+        executor.Post(() => ProcessOnExecutor(ctx, keepAlive, helloRequest));
     }
 
-    private void ProcessOnLoop(IChannelHandlerContext ctx, bool keepAlive, HelloRequest helloRequest)
+    private void ProcessOnExecutor(IChannelHandlerContext ctx, bool keepAlive, HelloRequest helloRequest)
     {
         if (!connections.TryGetByChannel(ctx.Channel, out var connection))
         {

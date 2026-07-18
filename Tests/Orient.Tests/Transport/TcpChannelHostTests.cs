@@ -10,7 +10,7 @@ namespace Orient.Tests.Transport;
 public sealed class TcpChannelHostTests : OrientTestBase
 {
     [Fact]
-    public void ConnectAsyncThrowsWhenNotOnOwnerLoop()
+    public void ConnectAsyncThrowsWhenNotOnOwnerExecutor()
     {
         var executor = new OrientExecutor();
         var host = new TcpChannelHost(executor, new EmptyPipelineFactory());

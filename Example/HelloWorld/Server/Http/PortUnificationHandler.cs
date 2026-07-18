@@ -9,18 +9,18 @@ namespace Example.Http;
 
 public sealed class PortUnificationHandler : ByteToMessageDecoder
 {
-    private readonly OrientExecutor loop;
+    private readonly OrientExecutor executor;
     private readonly CRpcConnectionRegistry connections;
     private readonly Action<IChannelHandlerContext> configureCrpc;
     private readonly Action<IChannelHandlerContext> configureHttp;
 
     public PortUnificationHandler(
-        OrientExecutor loop,
+        OrientExecutor executor,
         CRpcConnectionRegistry connections,
         Action<IChannelHandlerContext> configureCrpc,
         Action<IChannelHandlerContext> configureHttp)
     {
-        this.loop = loop;
+        this.executor = executor;
         this.connections = connections;
         this.configureCrpc = configureCrpc;
         this.configureHttp = configureHttp;
@@ -47,7 +47,7 @@ public sealed class PortUnificationHandler : ByteToMessageDecoder
         }
 
         var channel = context.Channel;
-        loop.Post(() => connections.Register(channel));
+        executor.Post(() => connections.Register(channel));
         context.Channel.Pipeline.Remove(this);
     }
 }

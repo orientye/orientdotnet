@@ -5,18 +5,18 @@ namespace GateWay;
 
 public sealed class GateWayRouter
 {
-    private readonly OrientExecutor loop;
+    private readonly OrientExecutor executor;
     private readonly GateWayConfig config;
     private readonly GateWaySessionTable sessionTable;
     private readonly BackendPoolRegistry poolRegistry;
 
     public GateWayRouter(
-        OrientExecutor loop,
+        OrientExecutor executor,
         GateWayConfig config,
         BackendPoolRegistry poolRegistry,
         GateWaySessionTable sessionTable)
     {
-        this.loop = loop ?? throw new ArgumentNullException(nameof(loop));
+        this.executor = executor ?? throw new ArgumentNullException(nameof(executor));
         this.config = config ?? throw new ArgumentNullException(nameof(config));
         this.poolRegistry = poolRegistry ?? throw new ArgumentNullException(nameof(poolRegistry));
         this.sessionTable = sessionTable ?? throw new ArgumentNullException(nameof(sessionTable));
@@ -35,6 +35,6 @@ public sealed class GateWayRouter
             return null;
         }
 
-        return await sessionTable.GetOrCreateAsync(inbound, serviceId, loop);
+        return await sessionTable.GetOrCreateAsync(inbound, serviceId, executor);
     }
 }

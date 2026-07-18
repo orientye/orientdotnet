@@ -2,16 +2,16 @@ namespace Orient.Runtime;
 
 public sealed class OrientTaskCompletionSource<T>
 {
-    private readonly OrientExecutor loop;
+    private readonly OrientExecutor executor;
     private readonly List<Action> continuations = new();
     private OrientTaskStatus status;
     private T? result;
     private Exception? exception;
 
-    public OrientTaskCompletionSource(OrientExecutor loop)
+    public OrientTaskCompletionSource(OrientExecutor executor)
     {
-        ArgumentNullException.ThrowIfNull(loop);
-        this.loop = loop;
+        ArgumentNullException.ThrowIfNull(executor);
+        this.executor = executor;
         Task = new OrientTask<T>(this);
     }
 
@@ -23,7 +23,7 @@ public sealed class OrientTaskCompletionSource<T>
     /// True when the task has completed and the current thread is the owner <see cref="OrientExecutor"/> thread.
     /// On other threads this is always false, even if the task has already completed.
     /// </summary>
-    internal bool IsCompletedOnCurrentThread => Status != OrientTaskStatus.Pending && loop.IsInExecutorThread;
+    internal bool IsCompletedOnCurrentThread => Status != OrientTaskStatus.Pending && executor.IsInExecutorThread;
 
     public bool TrySetResult(T result)
     {
@@ -63,7 +63,7 @@ public sealed class OrientTaskCompletionSource<T>
             return;
         }
 
-        loop.Post(continuation);
+        executor.Post(continuation);
     }
 
     private bool TryComplete(OrientTaskStatus status, T? result, Exception? exception)
@@ -82,7 +82,7 @@ public sealed class OrientTaskCompletionSource<T>
 
         foreach (var continuation in continuationsToRun)
         {
-            loop.Post(continuation);
+            executor.Post(continuation);
         }
 
         return true;
@@ -90,7 +90,7 @@ public sealed class OrientTaskCompletionSource<T>
 
     private void EnsureExecutorThread()
     {
-        if (!loop.IsInExecutorThread)
+        if (!executor.IsInExecutorThread)
         {
             throw new InvalidOperationException(
                 "OrientTaskCompletionSource must be used from its OrientExecutor executor thread.");
@@ -99,7 +99,7 @@ public sealed class OrientTaskCompletionSource<T>
 
     private void EnsureAwaitOnExecutorThread()
     {
-        if (!loop.IsInExecutorThread)
+        if (!executor.IsInExecutorThread)
         {
             throw new InvalidOperationException("OrientTask must be awaited on its owner OrientExecutor thread.");
         }

@@ -1,4 +1,4 @@
-﻿using Orient.Runtime;
+using Orient.Runtime;
 using Orient.Rpc.Server;
 
 namespace Orient.Tests;
@@ -89,7 +89,7 @@ public class OrientExecutorTests : OrientTestBase
     {
         var executor = new OrientExecutor();
         executor.BindToCurrentThread();
-        var loopThreadId = Environment.CurrentManagedThreadId;
+        var executorThreadId = Environment.CurrentManagedThreadId;
 
         var source = new OrientTaskCompletionSource<int>(executor);
         var task = AddOneAsync(source.Task);
@@ -110,7 +110,7 @@ public class OrientExecutorTests : OrientTestBase
         executor.Tick();
 
         Assert.Equal(42, result);
-        Assert.Equal(loopThreadId, continuationThreadId);
+        Assert.Equal(executorThreadId, continuationThreadId);
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public class OrientExecutorTests : OrientTestBase
     {
         var executor = new OrientExecutor();
         executor.BindToCurrentThread();
-        var loopThreadId = Environment.CurrentManagedThreadId;
+        var executorThreadId = Environment.CurrentManagedThreadId;
 
         var dotNetSource = new TaskCompletionSource<int>();
         var task = OrientTask.FromTask(dotNetSource.Task, executor);
@@ -142,7 +142,7 @@ public class OrientExecutorTests : OrientTestBase
         executor.Tick();
 
         Assert.Equal(7, result);
-        Assert.Equal(loopThreadId, continuationThreadId);
+        Assert.Equal(executorThreadId, continuationThreadId);
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public class OrientExecutorTests : OrientTestBase
     {
         var executor = new OrientExecutor();
         executor.BindToCurrentThread();
-        var loopThreadId = Environment.CurrentManagedThreadId;
+        var executorThreadId = Environment.CurrentManagedThreadId;
 
         var task = GetThreadIdAfterDelayAsync(executor);
         var awaiter = task.GetAwaiter();
@@ -160,7 +160,7 @@ public class OrientExecutorTests : OrientTestBase
 
         PumpUntil(executor, () => continuationThreadId is not null, TimeSpan.FromSeconds(2));
 
-        Assert.Equal(loopThreadId, continuationThreadId);
+        Assert.Equal(executorThreadId, continuationThreadId);
     }
 
     [Fact]

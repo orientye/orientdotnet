@@ -45,7 +45,7 @@ public class CRpcConnectionTests : OrientTestBase
     }
 
     [Fact]
-    public void SendPushAsyncThrowsWhenCalledOutsideOwnerLoop()
+    public void SendPushAsyncThrowsWhenCalledOutsideOwnerExecutor()
     {
         var executor = new OrientExecutor();
         var channel = new EmbeddedChannel();

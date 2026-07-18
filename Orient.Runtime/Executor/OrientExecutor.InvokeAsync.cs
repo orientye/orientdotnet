@@ -2,89 +2,89 @@ namespace Orient.Runtime;
 
 public sealed partial class OrientExecutor
 {
-    public static OrientTask<T> InvokeAsync<T>(OrientExecutor targetLoop, Func<OrientTask<T>> action)
+    public static OrientTask<T> InvokeAsync<T>(OrientExecutor targetExecutor, Func<OrientTask<T>> action)
     {
-        ArgumentNullException.ThrowIfNull(targetLoop);
+        ArgumentNullException.ThrowIfNull(targetExecutor);
         ArgumentNullException.ThrowIfNull(action);
 
-        var callerLoop = RequireCallerLoop();
-        var source = new OrientTaskCompletionSource<T>(callerLoop);
+        var callerExecutor = RequireCallerExecutor();
+        var source = new OrientTaskCompletionSource<T>(callerExecutor);
 
-        if (ReferenceEquals(callerLoop, targetLoop))
+        if (ReferenceEquals(callerExecutor, targetExecutor))
         {
-            StartAsyncRunner(RunAsyncOnSameLoop(action, source));
+            StartAsyncRunner(RunAsyncOnSameExecutor(action, source));
             return source.Task;
         }
 
-        targetLoop.Post(() => StartAsyncRunner(RunAsyncOnTargetLoop(action, source, callerLoop)));
+        targetExecutor.Post(() => StartAsyncRunner(RunAsyncOnTargetExecutor(action, source, callerExecutor)));
         return source.Task;
     }
 
-    public static OrientTask InvokeAsync(OrientExecutor targetLoop, Func<OrientTask> action)
+    public static OrientTask InvokeAsync(OrientExecutor targetExecutor, Func<OrientTask> action)
     {
-        ArgumentNullException.ThrowIfNull(targetLoop);
+        ArgumentNullException.ThrowIfNull(targetExecutor);
         ArgumentNullException.ThrowIfNull(action);
 
-        var callerLoop = RequireCallerLoop();
-        var source = new OrientTaskCompletionSource<OrientUnit>(callerLoop);
+        var callerExecutor = RequireCallerExecutor();
+        var source = new OrientTaskCompletionSource<OrientUnit>(callerExecutor);
 
-        if (ReferenceEquals(callerLoop, targetLoop))
+        if (ReferenceEquals(callerExecutor, targetExecutor))
         {
-            StartAsyncRunner(RunAsyncVoidOnSameLoop(action, source));
+            StartAsyncRunner(RunAsyncVoidOnSameExecutor(action, source));
             return new OrientTask(source.Task);
         }
 
-        targetLoop.Post(() => StartAsyncRunner(RunAsyncVoidOnTargetLoop(action, source, callerLoop)));
+        targetExecutor.Post(() => StartAsyncRunner(RunAsyncVoidOnTargetExecutor(action, source, callerExecutor)));
         return new OrientTask(source.Task);
     }
 
-    public static OrientTask<T> InvokeAsync<T>(OrientExecutor targetLoop, Func<T> action)
+    public static OrientTask<T> InvokeAsync<T>(OrientExecutor targetExecutor, Func<T> action)
     {
-        ArgumentNullException.ThrowIfNull(targetLoop);
+        ArgumentNullException.ThrowIfNull(targetExecutor);
         ArgumentNullException.ThrowIfNull(action);
 
-        var callerLoop = RequireCallerLoop();
-        var source = new OrientTaskCompletionSource<T>(callerLoop);
+        var callerExecutor = RequireCallerExecutor();
+        var source = new OrientTaskCompletionSource<T>(callerExecutor);
 
-        if (ReferenceEquals(callerLoop, targetLoop))
+        if (ReferenceEquals(callerExecutor, targetExecutor))
         {
-            RunSyncOnSameLoop(action, source);
+            RunSyncOnSameExecutor(action, source);
             return source.Task;
         }
 
-        targetLoop.Post(() => RunSyncOnTargetLoop(action, source, callerLoop));
+        targetExecutor.Post(() => RunSyncOnTargetExecutor(action, source, callerExecutor));
         return source.Task;
     }
 
-    public static OrientTask InvokeAsync(OrientExecutor targetLoop, Action action)
+    public static OrientTask InvokeAsync(OrientExecutor targetExecutor, Action action)
     {
-        ArgumentNullException.ThrowIfNull(targetLoop);
+        ArgumentNullException.ThrowIfNull(targetExecutor);
         ArgumentNullException.ThrowIfNull(action);
 
-        var callerLoop = RequireCallerLoop();
-        var source = new OrientTaskCompletionSource<OrientUnit>(callerLoop);
+        var callerExecutor = RequireCallerExecutor();
+        var source = new OrientTaskCompletionSource<OrientUnit>(callerExecutor);
 
-        if (ReferenceEquals(callerLoop, targetLoop))
+        if (ReferenceEquals(callerExecutor, targetExecutor))
         {
-            RunVoidOnSameLoop(action, source);
+            RunVoidOnSameExecutor(action, source);
             return new OrientTask(source.Task);
         }
 
-        targetLoop.Post(() => RunVoidOnTargetLoop(action, source, callerLoop));
+        targetExecutor.Post(() => RunVoidOnTargetExecutor(action, source, callerExecutor));
         return new OrientTask(source.Task);
     }
 
-    private static OrientExecutor RequireCallerLoop()
+    private static OrientExecutor RequireCallerExecutor()
     {
-        var callerLoop = Current
+        var callerExecutor = Current
             ?? throw new InvalidOperationException(
                 "A OrientExecutor must be provided explicitly or available via OrientExecutor.Current.");
 
-        callerLoop.EnsureInExecutorThread();
-        return callerLoop;
+        callerExecutor.EnsureInExecutorThread();
+        return callerExecutor;
     }
 
-    private static void RunSyncOnSameLoop<T>(Func<T> action, OrientTaskCompletionSource<T> source)
+    private static void RunSyncOnSameExecutor<T>(Func<T> action, OrientTaskCompletionSource<T> source)
     {
         try
         {
@@ -96,23 +96,23 @@ public sealed partial class OrientExecutor
         }
     }
 
-    private static void RunSyncOnTargetLoop<T>(
+    private static void RunSyncOnTargetExecutor<T>(
         Func<T> action,
         OrientTaskCompletionSource<T> source,
-        OrientExecutor callerLoop)
+        OrientExecutor callerExecutor)
     {
         try
         {
             var result = action();
-            callerLoop.Post(() => source.TrySetResult(result));
+            callerExecutor.Post(() => source.TrySetResult(result));
         }
         catch (Exception exception)
         {
-            callerLoop.Post(() => source.TrySetException(exception));
+            callerExecutor.Post(() => source.TrySetException(exception));
         }
     }
 
-    private static void RunVoidOnSameLoop(Action action, OrientTaskCompletionSource<OrientUnit> source)
+    private static void RunVoidOnSameExecutor(Action action, OrientTaskCompletionSource<OrientUnit> source)
     {
         try
         {
@@ -125,19 +125,19 @@ public sealed partial class OrientExecutor
         }
     }
 
-    private static void RunVoidOnTargetLoop(
+    private static void RunVoidOnTargetExecutor(
         Action action,
         OrientTaskCompletionSource<OrientUnit> source,
-        OrientExecutor callerLoop)
+        OrientExecutor callerExecutor)
     {
         try
         {
             action();
-            callerLoop.Post(() => source.TrySetResult(OrientUnit.Value));
+            callerExecutor.Post(() => source.TrySetResult(OrientUnit.Value));
         }
         catch (Exception exception)
         {
-            callerLoop.Post(() => source.TrySetException(exception));
+            callerExecutor.Post(() => source.TrySetException(exception));
         }
     }
 
@@ -147,7 +147,7 @@ public sealed partial class OrientExecutor
         _ = runner;
     }
 
-    private static async OrientTask RunAsyncOnSameLoop<T>(
+    private static async OrientTask RunAsyncOnSameExecutor<T>(
         Func<OrientTask<T>> action,
         OrientTaskCompletionSource<T> source)
     {
@@ -165,27 +165,27 @@ public sealed partial class OrientExecutor
         }
     }
 
-    private static async OrientTask RunAsyncOnTargetLoop<T>(
+    private static async OrientTask RunAsyncOnTargetExecutor<T>(
         Func<OrientTask<T>> action,
         OrientTaskCompletionSource<T> source,
-        OrientExecutor callerLoop)
+        OrientExecutor callerExecutor)
     {
         try
         {
             var result = await action();
-            callerLoop.Post(() => source.TrySetResult(result));
+            callerExecutor.Post(() => source.TrySetResult(result));
         }
         catch (TaskCanceledException)
         {
-            callerLoop.Post(() => source.TrySetCanceled());
+            callerExecutor.Post(() => source.TrySetCanceled());
         }
         catch (Exception exception)
         {
-            callerLoop.Post(() => source.TrySetException(exception));
+            callerExecutor.Post(() => source.TrySetException(exception));
         }
     }
 
-    private static async OrientTask RunAsyncVoidOnSameLoop(
+    private static async OrientTask RunAsyncVoidOnSameExecutor(
         Func<OrientTask> action,
         OrientTaskCompletionSource<OrientUnit> source)
     {
@@ -204,23 +204,23 @@ public sealed partial class OrientExecutor
         }
     }
 
-    private static async OrientTask RunAsyncVoidOnTargetLoop(
+    private static async OrientTask RunAsyncVoidOnTargetExecutor(
         Func<OrientTask> action,
         OrientTaskCompletionSource<OrientUnit> source,
-        OrientExecutor callerLoop)
+        OrientExecutor callerExecutor)
     {
         try
         {
             await action();
-            callerLoop.Post(() => source.TrySetResult(OrientUnit.Value));
+            callerExecutor.Post(() => source.TrySetResult(OrientUnit.Value));
         }
         catch (TaskCanceledException)
         {
-            callerLoop.Post(() => source.TrySetCanceled());
+            callerExecutor.Post(() => source.TrySetCanceled());
         }
         catch (Exception exception)
         {
-            callerLoop.Post(() => source.TrySetException(exception));
+            callerExecutor.Post(() => source.TrySetException(exception));
         }
     }
 }

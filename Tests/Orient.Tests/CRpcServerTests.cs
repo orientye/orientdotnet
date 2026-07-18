@@ -44,7 +44,7 @@ public class CRpcServerTests : OrientTestBase
     }
 
     [Fact]
-    public void StartStopRunsOnOwnerLoop()
+    public void StartStopRunsOnOwnerExecutor()
     {
         var executor = new OrientExecutor();
         var server = new CRpcServer(executor, new CRpcServerOptions

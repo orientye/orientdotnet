@@ -16,12 +16,12 @@ public sealed partial class OrientExecutor
     public static OrientExecutor? Current => current;
 
     /// <summary>
-    /// Returns <paramref name="loop"/> when provided; otherwise <see cref="Current"/>.
+    /// Returns <paramref name="executor"/> when provided; otherwise <see cref="Current"/>.
     /// Throws if neither is available.
     /// </summary>
-    public static OrientExecutor RequireCurrentOr(OrientExecutor? loop = null)
+    public static OrientExecutor RequireCurrentOr(OrientExecutor? executor = null)
     {
-        return loop ?? Current
+        return executor ?? Current
             ?? throw new InvalidOperationException(
                 "A OrientExecutor must be provided explicitly or available via OrientExecutor.Current.");
     }
