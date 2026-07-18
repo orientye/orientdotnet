@@ -18,7 +18,7 @@ This design only covers the `Orient.Runtime` primitive. It does not add RPC rout
 
 ## Non-Goals
 
-- Do not implement `CRpcServer` / HTTP `RouteLoop` dispatch.
+- Do not implement `CRpcServer` / HTTP `LoopRoute` dispatch.
 - Do not generate LocalRef wrappers.
 - Do not add cancellation token support or deadlines.
 - Do not add runtime object graph validation for captured closure state.
@@ -243,8 +243,8 @@ For same-loop coverage, prefer behavioral assertions such as "synchronous action
 After implementation:
 
 - Update `Doc/architecture.md` §5.2 from "target, not implemented" to implemented runtime primitive.
-- Keep LocalRef, snapshot generation, `RouteLoop`, cancellation, and ownership-transfer notes marked as future work.
-- Update `Doc/TODO.txt` to remove the `OrientLoop.InvokeAsync` missing item while leaving `RouteLoop` / dispatcher as pending.
+- Keep LocalRef, snapshot generation, `LoopRoute`, cancellation, and ownership-transfer notes marked as future work.
+- Update `Doc/TODO.txt` to remove the `OrientLoop.InvokeAsync` missing item while leaving `LoopRoute` / dispatcher as pending.
 
 ## Acceptance Criteria
 

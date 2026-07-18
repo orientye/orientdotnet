@@ -776,11 +776,11 @@ sequenceDiagram
   - 服务端仍无法复用同一 IO group 给多个 listener（CRpc 端点已可调线程数，但不可注入共享 group）。
 - 方向：
   - `CRpcServerOptions` / `CRpcClientOptions` 注入 `IEventLoopGroup`（CRPC 端注入仍待做）。
-  - 服务端 handler 增加 `RouteLoop` 抽象，按 `serviceId` / channel 路由到不同 `OrientLoop`。
+  - 服务端 handler 增加 `LoopRoute` 抽象，按 `serviceId` / channel 路由到不同 `OrientLoop`。
 
 #### 8.2 `CRpcServerHandler` 的 owner loop 选择不灵活
 
-`ChannelRead` 里固定 `server.Loop.Post(...)` —— 一个 `CRpcServer` 实例只绑一个 loop。若需"按连接 / 按 serviceId / 按用户 ID 路由到不同 loop"，须改 handler 或增加路由抽象（例如在 `CRpcServer` 上加 `Func<CRpcMessage, OrientLoop>? RouteLoop`）。`HttpServerHandler` 同样固定单 loop。
+`ChannelRead` 里固定 `server.Loop.Post(...)` —— 一个 `CRpcServer` 实例只绑一个 loop。若需"按连接 / 按 serviceId / 按用户 ID 路由到不同 loop"，须改 handler 或增加路由抽象（例如在 `CRpcServer` 上加 `Func<CRpcMessage, OrientLoop>? LoopRoute`）。`HttpServerHandler` 同样固定单 loop。
 
 #### 8.3 `CRpcClient` 的 owner loop 绑定
 
@@ -889,7 +889,7 @@ public sealed class CRpcServer {
     public OrientTask StartAsync(CancellationToken ct = default);
     public OrientTask StopAsync();
     public OrientTask RunAsync(IPAddress address, int port, bool registerConsoleCancelHandler = true);
-    public Func<CRpcMessage, OrientLoop>? RouteLoop;            // 可选：按消息路由到不同 loop（未来）
+    public Func<CRpcMessage, OrientLoop>? LoopRoute;            // 可选：按消息路由到不同 loop（未来）
 }
 
 // 其它协议端点同样只负责协议适配，然后投递到 loop
@@ -1205,7 +1205,7 @@ while (!cancellationToken.IsCancellationRequested)
 
 **待做**
 
-1. **`RouteLoop` 钩子**：`CRpcServer` / `HttpServer` 增加 `Func<..., OrientLoop>? RouteLoop`，支持按消息路由到不同 loop（见 §9.2）。
+1. **`LoopRoute` 钩子**：`CRpcServer` / `HttpServer` 增加 `Func<..., OrientLoop>? LoopRoute`，支持按消息路由到不同 loop（见 §9.2）。
 2. **共享 IO group 注入**：`TcpChannelHost` 已支持注入共享 group；`CRpcServerOptions` / `CRpcClientOptions` 对 CRPC 服务端与 Reference 客户端暴露注入仍待做。
 3. **多协议示例变体**：HelloWorld 默认即为纯 CRpc；已支持 `--unified`（**推荐**，单端口 Port Unification）与 `--http`（可选，CRpc 7999 + HTTP 8080）；仍缺管理端口、第二个 CRpc 端口等变体示例。
 4. **多 loop 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 loop"的 demo，覆盖跨 loop 调用 / 路由 / 关闭顺序。

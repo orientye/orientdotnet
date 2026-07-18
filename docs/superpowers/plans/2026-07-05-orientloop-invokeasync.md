@@ -22,7 +22,7 @@
 | `Orient.Runtime/Loop/OrientLoop.cs` | Modify | Declare `public sealed partial class OrientLoop` (change `class` → `partial class`) |
 | `Tests/Orient.Tests/OrientLoopInvokeAsyncTests.cs` | Create | Cross-loop / same-loop / error propagation tests + local dual-loop harness |
 | `Doc/architecture.md` | Modify | Mark §5.2 runtime primitive as implemented |
-| `Doc/TODO.txt` | Modify | Remove completed `InvokeAsync` item; keep `RouteLoop` pending |
+| `Doc/TODO.txt` | Modify | Remove completed `InvokeAsync` item; keep `LoopRoute` pending |
 
 ---
 
@@ -962,14 +962,14 @@ In `Doc/architecture.md`, replace phrases such as:
 with implemented wording, for example:
 
 - `OrientLoop.InvokeAsync` 是 Runtime 提供的跨 loop 调度原语（`Orient.Runtime/Loop/OrientLoop.InvokeAsync.cs`）
-- Keep LocalRef / snapshot / `RouteLoop` / cancellation notes as future work
+- Keep LocalRef / snapshot / `LoopRoute` / cancellation notes as future work
 
 - [ ] **Step 2: Update TODO**
 
 In `Doc/TODO.txt` §P1 item 2, remove the `OrientLoop.InvokeAsync` bullet and keep:
 
 ```text
-   - 仍缺按 `serviceId`、连接或 shard 路由到多个业务 loop 的 `RouteLoop` / dispatcher。
+   - 仍缺按 `serviceId`、连接或 shard 路由到多个业务 loop 的 `LoopRoute` / dispatcher。
 ```
 
 Also fix the architecture reference from `architecture-draft §5.2` to `Doc/architecture.md` §5.2 if still present elsewhere.
