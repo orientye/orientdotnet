@@ -13,14 +13,14 @@ public static class Program
         var config = GateWayConfigLoader.LoadOrDefault(configPath);
         var poolRegistry = config.BuildRegistry();
 
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         var pushRelay = new GateWayPushRelay();
         var sessionTable = new GateWaySessionTable(
             poolRegistry,
             new DefaultBackendClientFactory(),
             new TcpBackendConnector(),
             pushRelay);
-        var router = new GateWayRouter(loop, config, poolRegistry, sessionTable);
+        var router = new GateWayRouter(executor, config, poolRegistry, sessionTable);
         using var cts = new CancellationTokenSource();
 
         Console.CancelKeyPress += (_, e) =>
@@ -29,13 +29,13 @@ public static class Program
             cts.Cancel();
         };
 
-        var server = new CRpcServer(loop, new CRpcServerOptions
+        var server = new CRpcServer(executor, new CRpcServerOptions
         {
             Port = config.ListenPort,
             HandlerFactory = srv => new GateWayServerHandler(srv, sessionTable, config.FallbackServiceId),
         });
 
-        OrientLoopRunner.RunUntilComplete(loop, async () =>
+        OrientExecutorRunner.RunUntilComplete(executor, async () =>
         {
             server.Services.Register(new GateWayServiceImpl(router));
             await server.StartAsync(cts.Token);
@@ -53,11 +53,11 @@ public static class Program
 
         try
         {
-            OrientLoopHost.RunUntilCancelled(loop, cts.Token);
+            OrientExecutorHost.RunUntilCancelled(executor, cts.Token);
         }
         finally
         {
-            OrientLoopRunner.RunUntilComplete(loop, async () =>
+            OrientExecutorRunner.RunUntilComplete(executor, async () =>
             {
                 await sessionTable.DisposeAllAsync();
                 await server.StopAsync();

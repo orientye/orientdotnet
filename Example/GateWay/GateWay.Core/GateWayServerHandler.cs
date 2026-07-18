@@ -24,7 +24,7 @@ public class GateWayServerHandler : ChannelHandlerAdapter
 
     public override void ChannelActive(IChannelHandlerContext context)
     {
-        server.Loop.Post(() => server.Connections.Register(context.Channel));
+        server.Executor.Post(() => server.Connections.Register(context.Channel));
         base.ChannelActive(context);
     }
 
@@ -37,7 +37,7 @@ public class GateWayServerHandler : ChannelHandlerAdapter
             return;
         }
 
-        server.Loop.Post(() =>
+        server.Executor.Post(() =>
         {
             if (server.Services.TryGet(message.ServiceId, out var rpcService))
             {
@@ -100,7 +100,7 @@ public class GateWayServerHandler : ChannelHandlerAdapter
 
     public override void ChannelInactive(IChannelHandlerContext context)
     {
-        server.Loop.Post(() =>
+        server.Executor.Post(() =>
         {
             long? connectionId = null;
             if (server.Connections.TryGetByChannel(context.Channel, out var connection))

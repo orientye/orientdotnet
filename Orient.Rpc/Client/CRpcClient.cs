@@ -12,7 +12,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     private readonly CRpcClientOptions options;
     private readonly TcpChannelHost host;
     private long reqSequence;
-    private readonly OrientLoop ownerLoop;
+    private readonly OrientExecutor ownerExecutor;
 
     public Action<CRpcPushContext, Exception>? OnPushException { get; set; }
 
@@ -20,27 +20,27 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     public event Action? ConnectionLost;
 
-    public CRpcClient(OrientLoop loop, CRpcClientOptions? options = null)
-        : this(loop, options ?? new CRpcClientOptions(), createHost: true)
+    public CRpcClient(OrientExecutor executor, CRpcClientOptions? options = null)
+        : this(executor, options ?? new CRpcClientOptions(), createHost: true)
     {
     }
 
-    internal CRpcClient(OrientLoop loop, CRpcClientOptions options, TcpChannelHost host)
+    internal CRpcClient(OrientExecutor executor, CRpcClientOptions options, TcpChannelHost host)
     {
-        ArgumentNullException.ThrowIfNull(loop);
+        ArgumentNullException.ThrowIfNull(executor);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(host);
 
         options.Validate();
 
-        ownerLoop = loop;
+        ownerExecutor = executor;
         this.options = options;
         this.host = host;
         ConfigureHostCallbacks();
     }
 
-    private CRpcClient(OrientLoop loop, CRpcClientOptions options, bool createHost)
-        : this(loop, options, CreateHost(loop, options))
+    private CRpcClient(OrientExecutor executor, CRpcClientOptions options, bool createHost)
+        : this(executor, options, CreateHost(executor, options))
     {
     }
 
@@ -48,12 +48,12 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     /// <summary>
     /// Connects to the remote host. DotNetty connect runs on IO threads; the connected
-    /// <see cref="IChannel"/> is assigned on the owner loop thread before this task completes.
-    /// Must be called on the owner's bound <see cref="OrientLoop"/> thread while the loop is driven.
+    /// <see cref="IChannel"/> is assigned on the owner executor thread before this task completes.
+    /// Must be called on the owner's bound <see cref="OrientExecutor"/> thread while the executor is driven.
     /// </summary>
     public OrientTask<IChannel> ConnectAsync(string host, int port)
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
 
         if (this.host.IsConnected)
         {
@@ -64,12 +64,12 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     }
 
     /// <summary>
-    /// Clears the loop-owned channel on the owner loop thread, then closes the underlying
-    /// DotNetty channel via <see cref="OrientTask.FromTask(System.Threading.Tasks.Task, OrientLoop?)"/>.
+    /// Clears the executor-owned channel on the owner executor thread, then closes the underlying
+    /// DotNetty channel via <see cref="OrientTask.FromTask(System.Threading.Tasks.Task, OrientExecutor?)"/>.
     /// </summary>
     public OrientTask CloseAsync()
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
 
         FailPendingCalls(new ConnectionClosedException("CRpcClient channel was closed."));
         return this.host.CloseAsync();
@@ -80,27 +80,27 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     /// </summary>
     public OrientTask ShutdownIoAsync()
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
         return host.ShutdownIoAsync();
     }
 
     /// <summary>
     /// Closes the client and shuts down IO. Prefer awaiting <see cref="CloseAsync"/> and
-    /// <see cref="ShutdownIoAsync"/> from CRpc async code while driving the loop.
+    /// <see cref="ShutdownIoAsync"/> from CRpc async code while driving the executor.
     /// <see cref="IAsyncDisposable"/> is kept for compatibility; it requires close to complete
-    /// synchronously on the owner loop thread.
+    /// synchronously on the owner executor thread.
     /// </summary>
     public ValueTask DisposeAsync()
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
 
         var closeTask = CloseAsync();
         var closeAwaiter = closeTask.GetAwaiter();
         if (!closeAwaiter.IsCompleted)
         {
             throw new InvalidOperationException(
-                "CRpcClient.DisposeAsync requires CloseAsync to complete synchronously on the owner loop thread. " +
-                "Await CloseAsync() while driving the loop, then call ShutdownIoAsync().");
+                "CRpcClient.DisposeAsync requires CloseAsync to complete synchronously on the owner executor thread. " +
+                "Await CloseAsync() while driving the executor, then call ShutdownIoAsync().");
         }
 
         closeAwaiter.GetResult();
@@ -109,10 +109,10 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         var shutdownAwaiter = shutdownTask.GetAwaiter();
         while (!shutdownAwaiter.IsCompleted)
         {
-            ownerLoop.Tick();
+            ownerExecutor.Tick();
             if (!shutdownAwaiter.IsCompleted)
             {
-                ownerLoop.WaitForWorkOrTimer(CancellationToken.None);
+                ownerExecutor.WaitForWorkOrTimer(CancellationToken.None);
             }
         }
 
@@ -122,12 +122,12 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     /// <summary>
     /// Sends an RPC request and returns a task that completes when the response arrives or the call times out.
-    /// <paramref name="timeout"/> must be a positive value; a timer is registered on the owner loop.
-    /// Must be called on the bound owner <see cref="OrientLoop"/> thread while the loop is driven.
+    /// <paramref name="timeout"/> must be a positive value; a timer is registered on the owner executor.
+    /// Must be called on the bound owner <see cref="OrientExecutor"/> thread while the executor is driven.
     /// </summary>
     public OrientTask<CRpcMessage> CallAsync(ushort serviceId, ushort methodId, byte[] body, int timeout)
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
 
         if (timeout <= 0)
         {
@@ -143,7 +143,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         }
 
         long reqSeq = __IncrementReqId();
-        var pendingCall = __AddResultTaskAsync(reqSeq, timeout, ownerLoop);
+        var pendingCall = __AddResultTaskAsync(reqSeq, timeout, ownerExecutor);
 
         try
         {
@@ -160,14 +160,14 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     public void RegisterPushHandler(ushort serviceId, ushort methodId, CRpcPushHandler handler)
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
         ArgumentNullException.ThrowIfNull(handler);
         pushHandlers[(serviceId, methodId)] = handler;
     }
 
     internal void OnReceiveResponse(CRpcMessage message)
     {
-        ownerLoop.Post(() => CompleteReceiveResponse(message));
+        ownerExecutor.Post(() => CompleteReceiveResponse(message));
     }
 
     private void ConfigureHostCallbacks()
@@ -177,12 +177,12 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         host.ChannelExceptionCaught = OnHostChannelException;
     }
 
-    private static TcpChannelHost CreateHost(OrientLoop loop, CRpcClientOptions options)
+    private static TcpChannelHost CreateHost(OrientExecutor executor, CRpcClientOptions options)
     {
         options.Validate();
 
         return new TcpChannelHost(
-            loop,
+            executor,
             new CRpcClientPipelineFactory(options),
             new TcpChannelHostOptions
             {
@@ -252,7 +252,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     {
         var serviceId = message.ServiceId;
         var methodId = message.MethodId;
-        var context = new CRpcPushContext(ownerLoop, serviceId, methodId);
+        var context = new CRpcPushContext(ownerExecutor, serviceId, methodId);
 
         if (!pushHandlers.TryGetValue((serviceId, methodId), out var handler))
         {
@@ -333,10 +333,10 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         }
     }
 
-    private PendingCall __AddResultTaskAsync(long reqSeq, int timeout, OrientLoop loop)
+    private PendingCall __AddResultTaskAsync(long reqSeq, int timeout, OrientExecutor executor)
     {
-        var pendingCall = new PendingCall(loop, new OrientTaskCompletionSource<CRpcMessage>(loop));
-        pendingCall.TimeoutTimer = loop.ScheduleDelay(
+        var pendingCall = new PendingCall(executor, new OrientTaskCompletionSource<CRpcMessage>(executor));
+        pendingCall.TimeoutTimer = executor.ScheduleDelay(
             timeout,
             () =>
             {
@@ -377,13 +377,13 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         }
     }
 
-    private void EnsureOwnerLoopThread()
+    private void EnsureOwnerExecutorThread()
     {
-        var loop = OrientLoop.Current
-            ?? throw new InvalidOperationException("CRpcClient operations must be called from a bound OrientLoop thread.");
-        if (!ReferenceEquals(ownerLoop, loop))
+        var executor = OrientExecutor.Current
+            ?? throw new InvalidOperationException("CRpcClient operations must be called from a bound OrientExecutor thread.");
+        if (!ReferenceEquals(ownerExecutor, executor))
         {
-            throw new InvalidOperationException("CRpcClient operations must be called on the client's owner OrientLoop thread.");
+            throw new InvalidOperationException("CRpcClient operations must be called on the client's owner OrientExecutor thread.");
         }
     }
 
@@ -395,16 +395,16 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 
     private sealed class PendingCall
     {
-        public PendingCall(OrientLoop loop, OrientTaskCompletionSource<CRpcMessage> source)
+        public PendingCall(OrientExecutor executor, OrientTaskCompletionSource<CRpcMessage> source)
         {
-            Loop = loop;
+            Executor = executor;
             Source = source;
         }
 
-        public OrientLoop Loop { get; }
+        public OrientExecutor Executor { get; }
 
         public OrientTaskCompletionSource<CRpcMessage> Source { get; }
 
-        public OrientLoopTimer? TimeoutTimer { get; set; }
+        public OrientExecutorTimer? TimeoutTimer { get; set; }
     }
 }

@@ -6,14 +6,14 @@ using Example;
 
 Console.WriteLine("Hello, RPC Client!");
 
-var loop = new OrientLoop();
+var executor = new OrientExecutor();
 
-OrientLoopRunner.RunUntilComplete(loop, async () =>
+OrientExecutorRunner.RunUntilComplete(executor, async () =>
 {
     var reference = await CRpcReference
         .For<GreeterClient>()
         .Url("crpc://127.0.0.1:7999")
-        .ConnectAsync(loop);
+        .ConnectAsync(executor);
 
     try
     {

@@ -9,7 +9,7 @@ namespace Orient.Rpc.Transport;
 
 public sealed class TcpChannelHost : IAsyncDisposable
 {
-    private readonly OrientLoop ownerLoop;
+    private readonly OrientExecutor ownerExecutor;
     private readonly IChannelPipelineFactory pipelineFactory;
     private readonly TcpChannelHostOptions options;
     private readonly IEventLoopGroup group;
@@ -22,12 +22,12 @@ public sealed class TcpChannelHost : IAsyncDisposable
     /// <see cref="DisposeAsync"/>. <see cref="TcpChannelHostOptions.IoThreadCount"/> is ignored for sizing.
     /// </param>
     public TcpChannelHost(
-        OrientLoop ownerLoop,
+        OrientExecutor ownerExecutor,
         IChannelPipelineFactory pipelineFactory,
         TcpChannelHostOptions? options = null,
         IEventLoopGroup? sharedEventLoopGroup = null)
     {
-        this.ownerLoop = ownerLoop ?? throw new ArgumentNullException(nameof(ownerLoop));
+        this.ownerExecutor = ownerExecutor ?? throw new ArgumentNullException(nameof(ownerExecutor));
         this.pipelineFactory = pipelineFactory ?? throw new ArgumentNullException(nameof(pipelineFactory));
         this.options = options ?? new TcpChannelHostOptions();
         this.options.Validate();
@@ -46,7 +46,7 @@ public sealed class TcpChannelHost : IAsyncDisposable
             }));
     }
 
-    public OrientLoop OwnerLoop => ownerLoop;
+    public OrientExecutor OwnerExecutor => ownerExecutor;
 
     public IChannelPipelineFactory PipelineFactory => pipelineFactory;
 
@@ -64,7 +64,7 @@ public sealed class TcpChannelHost : IAsyncDisposable
 
     public OrientTask<IChannel> ConnectAsync(string host, int port)
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
         ArgumentException.ThrowIfNullOrWhiteSpace(host);
         if (port <= 0 || port > 65535)
         {
@@ -85,57 +85,57 @@ public sealed class TcpChannelHost : IAsyncDisposable
             ? bootstrap.ConnectAsync(new IPEndPoint(ipAddress, port))
             : bootstrap.ConnectAsync(host, port);
 
-        var connected = await OrientTask.FromTask(connectTask, ownerLoop);
+        var connected = await OrientTask.FromTask(connectTask, ownerExecutor);
         channel = connected;
         return connected;
     }
 
     public OrientTask WriteAndFlushAsync(object message)
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
         ArgumentNullException.ThrowIfNull(message);
 
         var currentChannel = channel
             ?? throw new InvalidOperationException("TcpChannelHost is not connected.");
 
-        return OrientTask.FromTask(currentChannel.WriteAndFlushAsync(message), ownerLoop);
+        return OrientTask.FromTask(currentChannel.WriteAndFlushAsync(message), ownerExecutor);
     }
 
     public OrientTask CloseAsync()
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
 
         var currentChannel = channel;
         channel = null;
 
         if (currentChannel is null)
         {
-            return OrientTask.CompletedTask(ownerLoop);
+            return OrientTask.CompletedTask(ownerExecutor);
         }
 
-        return OrientTask.FromTask(currentChannel.CloseAsync(), ownerLoop);
+        return OrientTask.FromTask(currentChannel.CloseAsync(), ownerExecutor);
     }
 
     public OrientTask ShutdownIoAsync()
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
         if (!ownsEventLoopGroup)
         {
-            return OrientTask.CompletedTask(ownerLoop);
+            return OrientTask.CompletedTask(ownerExecutor);
         }
 
-        return OrientTask.FromTask(group.ShutdownGracefullyAsync(), ownerLoop);
+        return OrientTask.FromTask(group.ShutdownGracefullyAsync(), ownerExecutor);
     }
 
     internal void PostInboundMessage(object message)
     {
-        ownerLoop.Post(() => InboundMessageReceived?.Invoke(message));
+        ownerExecutor.Post(() => InboundMessageReceived?.Invoke(message));
     }
 
     internal void PostChannelInactive(IChannel eventChannel)
     {
         ArgumentNullException.ThrowIfNull(eventChannel);
-        ownerLoop.Post(() =>
+        ownerExecutor.Post(() =>
         {
             if (!ReferenceEquals(channel, eventChannel))
             {
@@ -150,7 +150,7 @@ public sealed class TcpChannelHost : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(eventChannel);
         ArgumentNullException.ThrowIfNull(exception);
-        ownerLoop.Post(() =>
+        ownerExecutor.Post(() =>
         {
             if (!ReferenceEquals(channel, eventChannel))
             {
@@ -163,39 +163,39 @@ public sealed class TcpChannelHost : IAsyncDisposable
 
     public ValueTask DisposeAsync()
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
 
-        PumpAwaitableOnOwnerLoop(CloseAsync());
+        PumpAwaitableOnOwnerExecutor(CloseAsync());
 
         if (ownsEventLoopGroup)
         {
-            PumpAwaitableOnOwnerLoop(ShutdownIoAsync());
+            PumpAwaitableOnOwnerExecutor(ShutdownIoAsync());
         }
 
         return ValueTask.CompletedTask;
     }
 
-    private void PumpAwaitableOnOwnerLoop(OrientTask task)
+    private void PumpAwaitableOnOwnerExecutor(OrientTask task)
     {
         var awaiter = task.GetAwaiter();
         while (!awaiter.IsCompleted)
         {
-            ownerLoop.Tick();
+            ownerExecutor.Tick();
             if (!awaiter.IsCompleted)
             {
-                ownerLoop.WaitForWorkOrTimer(CancellationToken.None);
+                ownerExecutor.WaitForWorkOrTimer(CancellationToken.None);
             }
         }
 
         awaiter.GetResult();
     }
 
-    private void EnsureOwnerLoopThread()
+    private void EnsureOwnerExecutorThread()
     {
-        if (!ownerLoop.IsInLoopThread)
+        if (!ownerExecutor.IsInExecutorThread)
         {
             throw new InvalidOperationException(
-                "TcpChannelHost operations must run on the owner OrientLoop thread.");
+                "TcpChannelHost operations must run on the owner OrientExecutor thread.");
         }
     }
 }

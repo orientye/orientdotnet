@@ -41,7 +41,7 @@ public abstract class GreeterClientBase : ICRpcGeneratedClient
 
     protected virtual OrientTask OnPushServerPushHelloAsync(CRpcPushContext context, Example.ServerHelloPush message)
     {
-        return OrientTask.CompletedTask(context.Loop);
+        return OrientTask.CompletedTask(context.Executor);
     }
 
 }

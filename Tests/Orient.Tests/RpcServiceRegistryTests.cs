@@ -9,8 +9,8 @@ public class RpcServiceRegistryTests : OrientTestBase
     [Fact]
     public void RegisterRequiresLoopThread()
     {
-        var loop = new OrientLoop();
-        var registry = new RpcServiceRegistry(loop);
+        var executor = new OrientExecutor();
+        var registry = new RpcServiceRegistry(executor);
         var service = new RecordingService(1000);
 
         Assert.Throws<InvalidOperationException>(() => { registry.Register(service); });
@@ -19,43 +19,43 @@ public class RpcServiceRegistryTests : OrientTestBase
     [Fact]
     public void RegisterAndTryGetOnLoopThread()
     {
-        var loop = new OrientLoop();
-        var registry = new RpcServiceRegistry(loop);
+        var executor = new OrientExecutor();
+        var registry = new RpcServiceRegistry(executor);
         var service = new RecordingService(1000);
-        loop.Post(() => registry.Register(service));
-        loop.Tick();
-        loop.Post(() =>
+        executor.Post(() => registry.Register(service));
+        executor.Tick();
+        executor.Post(() =>
         {
             Assert.True(registry.TryGet(1000, out var found));
             Assert.Same(service, found);
         });
-        loop.Tick();
+        executor.Tick();
     }
 
     [Fact]
     public void UnregisterRemovesService()
     {
-        var loop = new OrientLoop();
-        var registry = new RpcServiceRegistry(loop);
+        var executor = new OrientExecutor();
+        var registry = new RpcServiceRegistry(executor);
         var service = new RecordingService(1000);
-        loop.Post(() =>
+        executor.Post(() =>
         {
             registry.Register(service);
             registry.Unregister(service);
             Assert.False(registry.TryGet(1000, out _));
         });
-        loop.Tick();
+        executor.Tick();
     }
 
     [Fact]
     public void UnregisterDoesNotRemoveReplacementForSameServiceId()
     {
         const ushort serviceId = 1001;
-        var loop = new OrientLoop();
-        var registry = new RpcServiceRegistry(loop);
+        var executor = new OrientExecutor();
+        var registry = new RpcServiceRegistry(executor);
         var oldService = new RecordingService(serviceId);
         var newService = new RecordingService(serviceId);
-        loop.Post(() =>
+        executor.Post(() =>
         {
             registry.Register(oldService);
             registry.Register(newService);
@@ -63,32 +63,32 @@ public class RpcServiceRegistryTests : OrientTestBase
             Assert.True(registry.TryGet(serviceId, out var found));
             Assert.Same(newService, found);
         });
-        loop.Tick();
+        executor.Tick();
     }
 
     [Fact]
     public void DifferentRegistriesOnDifferentLoopsDoNotCollide()
     {
         const ushort serviceId = 1002;
-        var firstLoop = new OrientLoop();
-        var secondLoop = new OrientLoop();
+        var firstLoop = new OrientExecutor();
+        var secondLoop = new OrientExecutor();
         var firstRegistry = new RpcServiceRegistry(firstLoop);
         var secondRegistry = new RpcServiceRegistry(secondLoop);
         var firstService = new RecordingService(serviceId);
         var secondService = new RecordingService(serviceId);
 
-        DedicatedLoopThread.Run(firstLoop, loop =>
+        DedicatedExecutorThread.Run(firstLoop, executor =>
         {
-            loop.Post(() => firstRegistry.Register(firstService));
-            loop.Tick();
+            executor.Post(() => firstRegistry.Register(firstService));
+            executor.Tick();
             Assert.True(firstRegistry.TryGet(serviceId, out var found));
             Assert.Same(firstService, found);
         });
 
-        DedicatedLoopThread.Run(secondLoop, loop =>
+        DedicatedExecutorThread.Run(secondLoop, executor =>
         {
-            loop.Post(() => secondRegistry.Register(secondService));
-            loop.Tick();
+            executor.Post(() => secondRegistry.Register(secondService));
+            executor.Tick();
             Assert.True(secondRegistry.TryGet(serviceId, out var found));
             Assert.Same(secondService, found);
         });
@@ -97,16 +97,16 @@ public class RpcServiceRegistryTests : OrientTestBase
     [Fact]
     public void ClearRemovesAllServices()
     {
-        var loop = new OrientLoop();
-        var registry = new RpcServiceRegistry(loop);
+        var executor = new OrientExecutor();
+        var registry = new RpcServiceRegistry(executor);
         var service = new RecordingService(1003);
-        loop.Post(() =>
+        executor.Post(() =>
         {
             registry.Register(service);
             registry.Clear();
             Assert.False(registry.TryGet(service.GetServiceId(), out _));
         });
-        loop.Tick();
+        executor.Tick();
     }
 
     private sealed class RecordingService : IRpcService

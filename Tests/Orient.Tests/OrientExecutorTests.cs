@@ -3,31 +3,31 @@ using Orient.Rpc.Server;
 
 namespace Orient.Tests;
 
-public class OrientLoopTests : OrientTestBase
+public class OrientExecutorTests : OrientTestBase
 {
     [Fact]
     public void FromResultWithoutLoopOrCurrentThrows()
     {
         var exception = RunOnFreshThread(() => OrientTask.FromResult(1));
         Assert.IsType<InvalidOperationException>(exception);
-        Assert.Contains("OrientLoop", exception!.Message);
+        Assert.Contains("OrientExecutor", exception!.Message);
     }
 
     [Fact]
     public void RequireCurrentOrWithoutLoopOrCurrentThrows()
     {
-        var exception = RunOnFreshThread(() => OrientLoop.RequireCurrentOr());
+        var exception = RunOnFreshThread(() => OrientExecutor.RequireCurrentOr());
         Assert.IsType<InvalidOperationException>(exception);
-        Assert.Contains("OrientLoop", exception!.Message);
+        Assert.Contains("OrientExecutor", exception!.Message);
     }
 
     [Fact]
     public void AwaitOnWrongThreadThrowsWithAwaitSpecificMessage()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var source = new OrientTaskCompletionSource<int>(loop);
+        var source = new OrientTaskCompletionSource<int>(executor);
         source.TrySetResult(42);
         var task = source.Task;
 
@@ -54,16 +54,16 @@ public class OrientLoopTests : OrientTestBase
         Assert.False(isCompletedOnWrongThread);
         Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("awaited", exception!.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("OrientLoop", exception.Message);
+        Assert.Contains("OrientExecutor", exception.Message);
     }
 
     [Fact]
     public void CompletionSourceRejectsCompletionFromNonLoopThread()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var source = new OrientTaskCompletionSource<int>(loop);
+        var source = new OrientTaskCompletionSource<int>(executor);
         Exception? exception = null;
 
         var worker = new Thread(() =>
@@ -81,17 +81,17 @@ public class OrientLoopTests : OrientTestBase
         worker.Start();
         worker.Join();
 
-        Assert.Contains("loop thread", exception?.Message);
+        Assert.Contains("executor thread", exception?.Message);
     }
 
     [Fact]
     public void AsyncOrientTaskMethodResumesOnLoopThread()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var loopThreadId = Environment.CurrentManagedThreadId;
 
-        var source = new OrientTaskCompletionSource<int>(loop);
+        var source = new OrientTaskCompletionSource<int>(executor);
         var task = AddOneAsync(source.Task);
         int? result = null;
         int? continuationThreadId = null;
@@ -107,7 +107,7 @@ public class OrientLoopTests : OrientTestBase
 
         Assert.Null(result);
 
-        loop.Tick();
+        executor.Tick();
 
         Assert.Equal(42, result);
         Assert.Equal(loopThreadId, continuationThreadId);
@@ -116,12 +116,12 @@ public class OrientLoopTests : OrientTestBase
     [Fact]
     public void FromTaskContinuationRunsOnLoopThread()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var loopThreadId = Environment.CurrentManagedThreadId;
 
         var dotNetSource = new TaskCompletionSource<int>();
-        var task = OrientTask.FromTask(dotNetSource.Task, loop);
+        var task = OrientTask.FromTask(dotNetSource.Task, executor);
         var awaiter = task.GetAwaiter();
         int? result = null;
         int? continuationThreadId = null;
@@ -139,7 +139,7 @@ public class OrientLoopTests : OrientTestBase
         Assert.Null(result);
         Assert.False(awaiter.IsCompleted);
 
-        loop.Tick();
+        executor.Tick();
 
         Assert.Equal(7, result);
         Assert.Equal(loopThreadId, continuationThreadId);
@@ -148,17 +148,17 @@ public class OrientLoopTests : OrientTestBase
     [Fact]
     public void DelayContinuationRunsOnLoopThread()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var loopThreadId = Environment.CurrentManagedThreadId;
 
-        var task = GetThreadIdAfterDelayAsync(loop);
+        var task = GetThreadIdAfterDelayAsync(executor);
         var awaiter = task.GetAwaiter();
         int? continuationThreadId = null;
 
         awaiter.OnCompleted(() => continuationThreadId = awaiter.GetResult());
 
-        PumpUntil(loop, () => continuationThreadId is not null, TimeSpan.FromSeconds(2));
+        PumpUntil(executor, () => continuationThreadId is not null, TimeSpan.FromSeconds(2));
 
         Assert.Equal(loopThreadId, continuationThreadId);
     }
@@ -166,37 +166,37 @@ public class OrientLoopTests : OrientTestBase
     [Fact]
     public void DelayThrowsWhenExplicitLoopFromNonLoopThread()
     {
-        var loop = new OrientLoop();
-        var exception = RunOnFreshThread(() => OrientTask.Delay(1, loop));
+        var executor = new OrientExecutor();
+        var exception = RunOnFreshThread(() => OrientTask.Delay(1, executor));
 
         Assert.IsType<InvalidOperationException>(exception);
-        Assert.Contains("loop thread", exception!.Message);
+        Assert.Contains("executor thread", exception!.Message);
     }
 
     [Fact]
     public void DelayZeroThrowsWhenExplicitLoopFromNonLoopThread()
     {
-        var loop = new OrientLoop();
-        var exception = RunOnFreshThread(() => OrientTask.Delay(0, loop));
+        var executor = new OrientExecutor();
+        var exception = RunOnFreshThread(() => OrientTask.Delay(0, executor));
 
         Assert.IsType<InvalidOperationException>(exception);
-        Assert.Contains("loop thread", exception!.Message);
+        Assert.Contains("executor thread", exception!.Message);
     }
 
     [Fact]
     public void DelayDoesNotCompleteUntilLoopTicksExpiredTimer()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var task = OrientTask.Delay(1, loop);
+        var task = OrientTask.Delay(1, executor);
         var awaiter = task.GetAwaiter();
 
         Thread.Sleep(20);
 
         Assert.False(awaiter.IsCompleted);
 
-        loop.Tick();
+        executor.Tick();
 
         Assert.True(awaiter.IsCompleted);
     }
@@ -204,17 +204,17 @@ public class OrientLoopTests : OrientTestBase
     [Fact]
     public void ServerLoopPumpsUntilCancellationWithoutReadingConsoleKeys()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         using var cts = new CancellationTokenSource();
         var pumped = false;
 
-        loop.Post(() =>
+        executor.Post(() =>
         {
             pumped = true;
             cts.Cancel();
         });
 
-        OrientLoopHost.RunUntilCancelled(loop, cts.Token);
+        OrientExecutorHost.RunUntilCancelled(executor, cts.Token);
 
         Assert.True(pumped);
     }
@@ -225,18 +225,18 @@ public class OrientLoopTests : OrientTestBase
         return value + 1;
     }
 
-    private static async OrientTask<int> GetThreadIdAfterDelayAsync(OrientLoop loop)
+    private static async OrientTask<int> GetThreadIdAfterDelayAsync(OrientExecutor executor)
     {
-        await OrientTask.Delay(1, loop);
+        await OrientTask.Delay(1, executor);
         return Environment.CurrentManagedThreadId;
     }
 
-    private static void PumpUntil(OrientLoop loop, Func<bool> condition, TimeSpan timeout)
+    private static void PumpUntil(OrientExecutor executor, Func<bool> condition, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (!condition() && DateTime.UtcNow < deadline)
         {
-            loop.Tick();
+            executor.Tick();
             Thread.Sleep(1);
         }
     }

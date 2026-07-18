@@ -35,6 +35,6 @@ internal sealed class CRpcClientPipelineFactory : IChannelPipelineFactory
         pipeline.AddLast(
             "encoder",
             new CRpcMessageEncoder());
-        pipeline.AddLast("handler", new LoopInboundHandler(host));
+        pipeline.AddLast("handler", new ExecutorInboundHandler(host));
     }
 }

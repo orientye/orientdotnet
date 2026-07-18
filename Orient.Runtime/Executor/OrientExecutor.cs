@@ -3,63 +3,63 @@ using System.Diagnostics;
 
 namespace Orient.Runtime;
 
-public sealed partial class OrientLoop
+public sealed partial class OrientExecutor
 {
     [ThreadStatic]
-    private static OrientLoop? current;
+    private static OrientExecutor? current;
 
 #if DEBUG
     [ThreadStatic]
-    private static OrientLoop? boundLoopOnThread;
+    private static OrientExecutor? boundExecutorOnThread;
 #endif
 
-    public static OrientLoop? Current => current;
+    public static OrientExecutor? Current => current;
 
     /// <summary>
     /// Returns <paramref name="loop"/> when provided; otherwise <see cref="Current"/>.
     /// Throws if neither is available.
     /// </summary>
-    public static OrientLoop RequireCurrentOr(OrientLoop? loop = null)
+    public static OrientExecutor RequireCurrentOr(OrientExecutor? loop = null)
     {
         return loop ?? Current
             ?? throw new InvalidOperationException(
-                "A OrientLoop must be provided explicitly or available via OrientLoop.Current.");
+                "A OrientExecutor must be provided explicitly or available via OrientExecutor.Current.");
     }
 
     private readonly ConcurrentQueue<Action> actions = new();
-    private readonly IOrientLoopTimerScheduler timerScheduler;
+    private readonly IOrientExecutorTimerScheduler timerScheduler;
     private readonly ManualResetEventSlim wakeup = new(initialState: false);
     private int threadId;
 
-    public OrientLoop()
+    public OrientExecutor()
         : this(null)
     {
     }
 
-    public OrientLoop(OrientLoopOptions? options)
+    public OrientExecutor(OrientExecutorOptions? options)
     {
-        timerScheduler = (options ?? new OrientLoopOptions()).CreateTimerScheduler();
+        timerScheduler = (options ?? new OrientExecutorOptions()).CreateTimerScheduler();
     }
 
-    public bool IsInLoopThread => threadId != 0 && Environment.CurrentManagedThreadId == threadId;
+    public bool IsInExecutorThread => threadId != 0 && Environment.CurrentManagedThreadId == threadId;
 
     /// <summary>
-    /// Raised on the loop thread when an action or timer callback throws.
+    /// Raised on the executor thread when an action or timer callback throws.
     /// Exceptions thrown from this handler are caught and written to <see cref="Console.Error"/>
-    /// to keep the loop alive.
+    /// to keep the executor alive.
     /// </summary>
     public event Action<Exception>? UnhandledException;
 
     public void BindToCurrentThread()
     {
 #if DEBUG
-        if (boundLoopOnThread is not null && !ReferenceEquals(boundLoopOnThread, this))
+        if (boundExecutorOnThread is not null && !ReferenceEquals(boundExecutorOnThread, this))
         {
             throw new InvalidOperationException(
-                "This thread is already bound to a different OrientLoop. Use one business thread per loop.");
+                "This thread is already bound to a different OrientExecutor. Use one business thread per executor.");
         }
 
-        boundLoopOnThread = this;
+        boundExecutorOnThread = this;
 #endif
         threadId = Environment.CurrentManagedThreadId;
         current = this;
@@ -71,13 +71,13 @@ public sealed partial class OrientLoop
     /// </summary>
     public static void ResetDebugThreadBindingForTests()
     {
-        if (boundLoopOnThread is not null
-            && boundLoopOnThread.threadId == Environment.CurrentManagedThreadId)
+        if (boundExecutorOnThread is not null
+            && boundExecutorOnThread.threadId == Environment.CurrentManagedThreadId)
         {
-            boundLoopOnThread.threadId = 0;
+            boundExecutorOnThread.threadId = 0;
         }
 
-        boundLoopOnThread = null;
+        boundExecutorOnThread = null;
         current = null;
     }
 #endif
@@ -89,7 +89,7 @@ public sealed partial class OrientLoop
         wakeup.Set();
     }
 
-    internal OrientLoopTimer ScheduleDelay(int millisecondsDelay, Action action)
+    internal OrientExecutorTimer ScheduleDelay(int millisecondsDelay, Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
         if (millisecondsDelay < 0)
@@ -97,15 +97,15 @@ public sealed partial class OrientLoop
             throw new ArgumentOutOfRangeException(nameof(millisecondsDelay));
         }
 
-        EnsureLoopThread();
+        EnsureExecutorThread();
         var dueTimestamp = Stopwatch.GetTimestamp() + MillisecondsToStopwatchTicks(millisecondsDelay);
         return ScheduleAt(dueTimestamp, action);
     }
 
-    internal OrientLoopTimer ScheduleAt(long dueTimestamp, Action action)
+    internal OrientExecutorTimer ScheduleAt(long dueTimestamp, Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        EnsureLoopThread();
+        EnsureExecutorThread();
         return timerScheduler.ScheduleAt(dueTimestamp, action);
     }
 
@@ -117,7 +117,7 @@ public sealed partial class OrientLoop
         }
         else
         {
-            EnsureLoopThread();
+            EnsureExecutorThread();
         }
 
         DrainActions(maxActions);
@@ -127,7 +127,7 @@ public sealed partial class OrientLoop
 
     public void WaitForWorkOrTimer(CancellationToken cancellationToken)
     {
-        EnsureLoopThread();
+        EnsureExecutorThread();
 
         // Reset clears a prior Set so Wait can block; re-check queue/timer after Reset.
         wakeup.Reset();
@@ -202,7 +202,7 @@ public sealed partial class OrientLoop
         var handler = UnhandledException;
         if (handler is null)
         {
-            Console.Error.WriteLine($"OrientLoop unhandled exception: {exception}");
+            Console.Error.WriteLine($"OrientExecutor unhandled exception: {exception}");
             return;
         }
 
@@ -212,7 +212,7 @@ public sealed partial class OrientLoop
         }
         catch (Exception handlerException)
         {
-            Console.Error.WriteLine($"OrientLoop unhandled exception handler threw: {handlerException}");
+            Console.Error.WriteLine($"OrientExecutor unhandled exception handler threw: {handlerException}");
             Console.Error.WriteLine($"original exception: {exception}");
         }
     }
@@ -222,13 +222,13 @@ public sealed partial class OrientLoop
         return millisecondsDelay * Stopwatch.Frequency / 1000;
     }
 
-    internal void EnsureInLoopThread()
+    internal void EnsureInExecutorThread()
     {
-        if (!IsInLoopThread)
+        if (!IsInExecutorThread)
         {
-            throw new InvalidOperationException("OrientLoop operations must run on the loop thread.");
+            throw new InvalidOperationException("OrientExecutor operations must run on the executor thread.");
         }
     }
 
-    private void EnsureLoopThread() => EnsureInLoopThread();
+    private void EnsureExecutorThread() => EnsureInExecutorThread();
 }

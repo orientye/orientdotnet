@@ -5,23 +5,23 @@ using DotNetty.Transport.Channels.Embedded;
 
 namespace Orient.Tests.Transport;
 
-public sealed class LoopInboundHandlerTests : OrientTestBase
+public sealed class ExecutorInboundHandlerTests : OrientTestBase
 {
     [Fact]
     public void ChannelReadPostsInboundMessageToOwnerLoop()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         object? received = null;
-        var host = new TcpChannelHost(loop, new EmptyPipelineFactory())
+        var host = new TcpChannelHost(executor, new EmptyPipelineFactory())
         {
             InboundMessageReceived = message => received = message
         };
-        var channel = new EmbeddedChannel(new LoopInboundHandler(host));
+        var channel = new EmbeddedChannel(new ExecutorInboundHandler(host));
         var payload = new object();
 
         channel.WriteInbound(payload);
-        loop.Tick();
+        executor.Tick();
 
         Assert.Same(payload, received);
     }
@@ -29,19 +29,19 @@ public sealed class LoopInboundHandlerTests : OrientTestBase
     [Fact]
     public void ExceptionCaughtPostsExceptionToOwnerLoop()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         Exception? received = null;
-        var host = new TcpChannelHost(loop, new EmptyPipelineFactory())
+        var host = new TcpChannelHost(executor, new EmptyPipelineFactory())
         {
             ChannelExceptionCaught = exception => received = exception
         };
-        var channel = new EmbeddedChannel(new LoopInboundHandler(host));
+        var channel = new EmbeddedChannel(new ExecutorInboundHandler(host));
         SetHostChannel(host, channel);
         var expected = new InvalidOperationException("boom");
 
         channel.Pipeline.FireExceptionCaught(expected);
-        loop.Tick();
+        executor.Tick();
 
         Assert.Same(expected, received);
     }

@@ -17,56 +17,56 @@ public readonly struct OrientTask
         return new Awaiter(task.GetAwaiter());
     }
 
-    public static OrientTask<T> FromTask<T>(Task<T> task, OrientLoop? loop = null)
+    public static OrientTask<T> FromTask<T>(Task<T> task, OrientExecutor? loop = null)
     {
         ArgumentNullException.ThrowIfNull(task);
 
-        loop = OrientLoop.RequireCurrentOr(loop);
+        loop = OrientExecutor.RequireCurrentOr(loop);
         var source = new OrientTaskCompletionSource<T>(loop);
         CompleteFromTask(task, source, loop);
         return source.Task;
     }
 
-    public static OrientTask<T> FromResult<T>(T result, OrientLoop? loop = null)
+    public static OrientTask<T> FromResult<T>(T result, OrientExecutor? loop = null)
     {
-        loop = OrientLoop.RequireCurrentOr(loop);
+        loop = OrientExecutor.RequireCurrentOr(loop);
         var source = new OrientTaskCompletionSource<T>(loop);
         source.TrySetResult(result);
         return source.Task;
     }
 
-    public static OrientTask CompletedTask(OrientLoop? loop = null)
+    public static OrientTask CompletedTask(OrientExecutor? loop = null)
     {
-        loop = OrientLoop.RequireCurrentOr(loop);
+        loop = OrientExecutor.RequireCurrentOr(loop);
         var source = new OrientTaskCompletionSource<OrientUnit>(loop);
         source.TrySetResult(OrientUnit.Value);
         return new OrientTask(source.Task);
     }
 
-    public static OrientTask FromTask(Task task, OrientLoop? loop = null)
+    public static OrientTask FromTask(Task task, OrientExecutor? loop = null)
     {
         ArgumentNullException.ThrowIfNull(task);
 
-        loop = OrientLoop.RequireCurrentOr(loop);
+        loop = OrientExecutor.RequireCurrentOr(loop);
         var source = new OrientTaskCompletionSource<OrientUnit>(loop);
         CompleteFromTask(task, source, loop);
         return new OrientTask(source.Task);
     }
 
     /// <summary>
-    /// Returns a task that completes after the delay on the target loop's timer scheduler.
-    /// Must be called on the bound <see cref="OrientLoop"/> thread while the loop is driven.
-    /// To schedule a delay from another thread, use <see cref="OrientLoop.Post"/> first.
+    /// Returns a task that completes after the delay on the target executor's timer scheduler.
+    /// Must be called on the bound <see cref="OrientExecutor"/> thread while the executor is driven.
+    /// To schedule a delay from another thread, use <see cref="OrientExecutor.Post"/> first.
     /// </summary>
-    public static OrientTask Delay(int millisecondsDelay, OrientLoop? loop = null)
+    public static OrientTask Delay(int millisecondsDelay, OrientExecutor? loop = null)
     {
         if (millisecondsDelay < -1)
         {
             throw new ArgumentOutOfRangeException(nameof(millisecondsDelay));
         }
 
-        loop = OrientLoop.RequireCurrentOr(loop);
-        loop.EnsureInLoopThread();
+        loop = OrientExecutor.RequireCurrentOr(loop);
+        loop.EnsureInExecutorThread();
         var source = new OrientTaskCompletionSource<OrientUnit>(loop);
         if (millisecondsDelay == 0)
         {
@@ -84,7 +84,7 @@ public readonly struct OrientTask
         return new OrientTask(source.Task);
     }
 
-    private static void CompleteFromTask<T>(Task<T> task, OrientTaskCompletionSource<T> source, OrientLoop loop)
+    private static void CompleteFromTask<T>(Task<T> task, OrientTaskCompletionSource<T> source, OrientExecutor loop)
     {
         if (task.IsCompleted)
         {
@@ -130,7 +130,7 @@ public readonly struct OrientTask
         source.TrySetResult(task.Result);
     }
 
-    private static void CompleteFromTask(Task task, OrientTaskCompletionSource<OrientUnit> source, OrientLoop loop)
+    private static void CompleteFromTask(Task task, OrientTaskCompletionSource<OrientUnit> source, OrientExecutor loop)
     {
         if (task.IsCompleted)
         {
@@ -145,9 +145,9 @@ public readonly struct OrientTask
             TaskScheduler.Default);
     }
 
-    private static void CompleteOnLoop(OrientLoop loop, Action complete)
+    private static void CompleteOnLoop(OrientExecutor loop, Action complete)
     {
-        if (loop.IsInLoopThread)
+        if (loop.IsInExecutorThread)
         {
             complete();
             return;

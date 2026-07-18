@@ -4,7 +4,7 @@ Normative wire format for CRpc TCP clients and servers. Wire magic and frame lay
 
 Architecture: `Doc/architecture.md`
 
-**Implementation:** `Orient.Rpc` (`Orient.Rpc/Codec/`, `Orient.Rpc/Protocol/`). Execution runtime: `Orient.Runtime` (`OrientLoop`, `OrientTask`).
+**Implementation:** `Orient.Rpc` (`Orient.Rpc/Codec/`, `Orient.Rpc/Protocol/`). Execution runtime: `Orient.Runtime` (`OrientExecutor`, `OrientTask`).
 
 ## 1. CRpc
 
@@ -112,14 +112,14 @@ Optional application-layer pattern: read the first bytes of each new connection,
 Rules:
 
 1. Sniff once per connection; remove the sniff handler after branching.
-2. Share one `OrientLoop`, one `CRpcServer.Services` registry, and one `CRpcConnectionRegistry` on a unified server.
+2. Share one `OrientExecutor`, one `CRpcServer.Services` registry, and one `CRpcConnectionRegistry` on a unified server.
 3. Not part of `Orient.Rpc` core — see `PortUnificationHandler.cs` and `UnifiedServer.cs` in the HelloWorld example.
 
 Service registration (A2):
 
 ```csharp
-var loop = new OrientLoop();
-var crpcServer = new CRpcServer(loop, new CRpcServerOptions { Port = 7999 });
+var executor = new OrientExecutor();
+var crpcServer = new CRpcServer(executor, new CRpcServerOptions { Port = 7999 });
 crpcServer.Services.Register(serviceImpl);
 ```
 

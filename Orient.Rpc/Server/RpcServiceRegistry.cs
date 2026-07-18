@@ -8,31 +8,31 @@ public sealed class RpcServiceRegistry
 {
     private const int InitialServiceCapacity = 106;
 
-    private readonly OrientLoop loop;
+    private readonly OrientExecutor executor;
     private readonly Dictionary<ushort, IRpcService> services = new(InitialServiceCapacity);
 
-    public RpcServiceRegistry(OrientLoop loop)
+    public RpcServiceRegistry(OrientExecutor executor)
     {
-        ArgumentNullException.ThrowIfNull(loop);
-        this.loop = loop;
+        ArgumentNullException.ThrowIfNull(executor);
+        this.executor = executor;
     }
 
     public void Register(IRpcService service)
     {
-        loop.EnsureInLoopThread();
+        executor.EnsureInExecutorThread();
         ArgumentNullException.ThrowIfNull(service);
         services[service.GetServiceId()] = service;
     }
 
     public bool TryGet(ushort serviceId, [MaybeNullWhen(false)] out IRpcService service)
     {
-        loop.EnsureInLoopThread();
+        executor.EnsureInExecutorThread();
         return services.TryGetValue(serviceId, out service);
     }
 
     public void Unregister(IRpcService service)
     {
-        loop.EnsureInLoopThread();
+        executor.EnsureInExecutorThread();
         ArgumentNullException.ThrowIfNull(service);
         var serviceId = service.GetServiceId();
         if (services.TryGetValue(serviceId, out var registeredService)
@@ -44,7 +44,7 @@ public sealed class RpcServiceRegistry
 
     public void Clear()
     {
-        loop.EnsureInLoopThread();
+        executor.EnsureInExecutorThread();
         services.Clear();
     }
 }

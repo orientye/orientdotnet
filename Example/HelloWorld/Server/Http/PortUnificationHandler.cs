@@ -9,13 +9,13 @@ namespace Example.Http;
 
 public sealed class PortUnificationHandler : ByteToMessageDecoder
 {
-    private readonly OrientLoop loop;
+    private readonly OrientExecutor loop;
     private readonly CRpcConnectionRegistry connections;
     private readonly Action<IChannelHandlerContext> configureCrpc;
     private readonly Action<IChannelHandlerContext> configureHttp;
 
     public PortUnificationHandler(
-        OrientLoop loop,
+        OrientExecutor loop,
         CRpcConnectionRegistry connections,
         Action<IChannelHandlerContext> configureCrpc,
         Action<IChannelHandlerContext> configureHttp)

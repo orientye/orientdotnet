@@ -5,10 +5,10 @@ namespace GateWay;
 
 public interface IBackendClientFactory
 {
-    CRpcClient Create(OrientLoop loop);
+    CRpcClient Create(OrientExecutor loop);
 }
 
 public sealed class DefaultBackendClientFactory : IBackendClientFactory
 {
-    public CRpcClient Create(OrientLoop loop) => new CRpcClient(loop);
+    public CRpcClient Create(OrientExecutor loop) => new CRpcClient(loop);
 }

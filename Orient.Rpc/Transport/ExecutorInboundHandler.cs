@@ -2,11 +2,11 @@ using DotNetty.Transport.Channels;
 
 namespace Orient.Rpc.Transport;
 
-public sealed class LoopInboundHandler : ChannelHandlerAdapter
+public sealed class ExecutorInboundHandler : ChannelHandlerAdapter
 {
     private readonly TcpChannelHost host;
 
-    public LoopInboundHandler(TcpChannelHost host)
+    public ExecutorInboundHandler(TcpChannelHost host)
     {
         this.host = host ?? throw new ArgumentNullException(nameof(host));
     }

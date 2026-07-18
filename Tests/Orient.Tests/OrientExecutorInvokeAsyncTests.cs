@@ -2,46 +2,46 @@ using Orient.Runtime;
 
 namespace Orient.Tests;
 
-public class OrientLoopInvokeAsyncTests : OrientTestBase
+public class OrientExecutorInvokeAsyncTests : OrientTestBase
 {
     [Fact]
     public void InvokeAsyncWithoutCurrentLoopThrowsRequireCurrentOrMessage()
     {
-        var targetLoop = new OrientLoop();
+        var targetLoop = new OrientExecutor();
         var exception = RunOnFreshThread(() =>
-            OrientLoop.InvokeAsync(targetLoop, () => 1));
+            OrientExecutor.InvokeAsync(targetLoop, () => 1));
 
         Assert.IsType<InvalidOperationException>(exception);
-        Assert.Contains("OrientLoop must be provided", exception!.Message);
+        Assert.Contains("OrientExecutor must be provided", exception!.Message);
     }
 
     [Fact]
     public void InvokeAsyncNullTargetLoopThrows()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
         Assert.Throws<ArgumentNullException>(() =>
-            OrientLoop.InvokeAsync(null!, () => 1));
+            OrientExecutor.InvokeAsync(null!, () => 1));
     }
 
     [Fact]
     public void InvokeAsyncNullActionThrows()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
         Assert.Throws<ArgumentNullException>(() =>
-            OrientLoop.InvokeAsync(loop, (Func<int>)null!));
+            OrientExecutor.InvokeAsync(executor, (Func<int>)null!));
     }
 
     [Fact]
     public void InvokeAsyncSyncValueRunsOnTargetLoopAndCompletesOnCallerLoop()
     {
-        var callerLoop = new OrientLoop();
-        var targetLoop = new OrientLoop();
+        var callerLoop = new OrientExecutor();
+        var targetLoop = new OrientExecutor();
         using var targetPump = new TargetLoopPump(targetLoop);
-        using var callerDriver = new LoopTestDriver(callerLoop);
+        using var callerDriver = new ExecutorTestDriver(callerLoop);
 
         int? actionThreadId = null;
         int? continuationThreadId = null;
@@ -50,7 +50,7 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
         callerDriver.Run(() =>
         {
             var callerThreadId = Environment.CurrentManagedThreadId;
-            var task = OrientLoop.InvokeAsync(
+            var task = OrientExecutor.InvokeAsync(
                 targetLoop,
                 () =>
                 {
@@ -78,10 +78,10 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
     [Fact]
     public void InvokeAsyncSyncVoidRunsOnTargetLoopAndCompletesOnCallerLoop()
     {
-        var callerLoop = new OrientLoop();
-        var targetLoop = new OrientLoop();
+        var callerLoop = new OrientExecutor();
+        var targetLoop = new OrientExecutor();
         using var targetPump = new TargetLoopPump(targetLoop);
-        using var callerDriver = new LoopTestDriver(callerLoop);
+        using var callerDriver = new ExecutorTestDriver(callerLoop);
 
         int? actionThreadId = null;
         var completed = false;
@@ -89,7 +89,7 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
         callerDriver.Run(() =>
         {
             var callerThreadId = Environment.CurrentManagedThreadId;
-            var task = OrientLoop.InvokeAsync(
+            var task = OrientExecutor.InvokeAsync(
                 targetLoop,
                 () => actionThreadId = Environment.CurrentManagedThreadId);
 
@@ -110,10 +110,10 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
     [Fact]
     public void InvokeAsyncAsyncValueRunsOnTargetLoopAndResumesOnCallerLoop()
     {
-        var callerLoop = new OrientLoop();
-        var targetLoop = new OrientLoop();
+        var callerLoop = new OrientExecutor();
+        var targetLoop = new OrientExecutor();
         using var targetPump = new TargetLoopPump(targetLoop);
-        using var callerDriver = new LoopTestDriver(callerLoop);
+        using var callerDriver = new ExecutorTestDriver(callerLoop);
 
         int? actionThreadId = null;
         int? continuationThreadId = null;
@@ -122,7 +122,7 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
         callerDriver.Run(() =>
         {
             var callerThreadId = Environment.CurrentManagedThreadId;
-            var task = OrientLoop.InvokeAsync(
+            var task = OrientExecutor.InvokeAsync(
                 targetLoop,
                 async () =>
                 {
@@ -149,10 +149,10 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
     [Fact]
     public void InvokeAsyncAsyncVoidRunsOnTargetLoopAndCompletesOnCallerLoop()
     {
-        var callerLoop = new OrientLoop();
-        var targetLoop = new OrientLoop();
+        var callerLoop = new OrientExecutor();
+        var targetLoop = new OrientExecutor();
         using var targetPump = new TargetLoopPump(targetLoop);
-        using var callerDriver = new LoopTestDriver(callerLoop);
+        using var callerDriver = new ExecutorTestDriver(callerLoop);
 
         int? actionThreadId = null;
         var completed = false;
@@ -160,7 +160,7 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
         callerDriver.Run(() =>
         {
             var callerThreadId = Environment.CurrentManagedThreadId;
-            var task = OrientLoop.InvokeAsync(
+            var task = OrientExecutor.InvokeAsync(
                 targetLoop,
                 async () =>
                 {
@@ -185,10 +185,10 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
     [Fact]
     public void InvokeAsyncSameLoopSyncCompletesBeforeReturn()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var task = OrientLoop.InvokeAsync(loop, () => 99);
+        var task = OrientExecutor.InvokeAsync(executor, () => 99);
         var awaiter = task.GetAwaiter();
 
         Assert.True(awaiter.IsCompleted);
@@ -198,17 +198,17 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
     [Fact]
     public void InvokeAsyncSyncExceptionFaultsCallerTask()
     {
-        var callerLoop = new OrientLoop();
-        var targetLoop = new OrientLoop();
+        var callerLoop = new OrientExecutor();
+        var targetLoop = new OrientExecutor();
         using var targetPump = new TargetLoopPump(targetLoop);
-        using var callerDriver = new LoopTestDriver(callerLoop);
+        using var callerDriver = new ExecutorTestDriver(callerLoop);
 
         Exception? captured = null;
 
         callerDriver.Run(() =>
         {
             var failure = new InvalidOperationException("sync boom");
-            var task = OrientLoop.InvokeAsync<int>(
+            var task = OrientExecutor.InvokeAsync<int>(
                 targetLoop,
                 (Func<int>)(() => throw failure));
 
@@ -235,17 +235,17 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
     [Fact]
     public void InvokeAsyncAsyncTargetTaskExceptionFaultsCallerTask()
     {
-        var callerLoop = new OrientLoop();
-        var targetLoop = new OrientLoop();
+        var callerLoop = new OrientExecutor();
+        var targetLoop = new OrientExecutor();
         using var targetPump = new TargetLoopPump(targetLoop);
-        using var callerDriver = new LoopTestDriver(callerLoop);
+        using var callerDriver = new ExecutorTestDriver(callerLoop);
 
         Exception? captured = null;
 
         callerDriver.Run(() =>
         {
             var failure = new InvalidOperationException("async boom");
-            var task = OrientLoop.InvokeAsync(
+            var task = OrientExecutor.InvokeAsync(
                 targetLoop,
                 () => FaultingTargetAsync(failure, targetLoop));
 
@@ -272,10 +272,10 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
     [Fact]
     public void InvokeAsyncTargetRunnerExceptionFaultsCallerTaskInsteadOfUnhandledException()
     {
-        var callerLoop = new OrientLoop();
-        var targetLoop = new OrientLoop();
+        var callerLoop = new OrientExecutor();
+        var targetLoop = new OrientExecutor();
         using var targetPump = new TargetLoopPump(targetLoop);
-        using var callerDriver = new LoopTestDriver(callerLoop);
+        using var callerDriver = new ExecutorTestDriver(callerLoop);
 
         Exception? unhandled = null;
         Exception? captured = null;
@@ -285,7 +285,7 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
         callerDriver.Run(() =>
         {
             var failure = new InvalidOperationException("runner boom");
-            var task = OrientLoop.InvokeAsync(
+            var task = OrientExecutor.InvokeAsync(
                 targetLoop,
                 () => throw failure);
 
@@ -312,16 +312,16 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
     [Fact]
     public void InvokeAsyncCanceledTargetTaskCancelsCallerTask()
     {
-        var callerLoop = new OrientLoop();
-        var targetLoop = new OrientLoop();
+        var callerLoop = new OrientExecutor();
+        var targetLoop = new OrientExecutor();
         using var targetPump = new TargetLoopPump(targetLoop);
-        using var callerDriver = new LoopTestDriver(callerLoop);
+        using var callerDriver = new ExecutorTestDriver(callerLoop);
 
         Exception? captured = null;
 
         callerDriver.Run(() =>
         {
-            var task = OrientLoop.InvokeAsync(
+            var task = OrientExecutor.InvokeAsync(
                 targetLoop,
                 () =>
                 {
@@ -349,7 +349,7 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
         Assert.IsType<TaskCanceledException>(captured);
     }
 
-    private static async OrientTask<int> FaultingTargetAsync(Exception failure, OrientLoop targetLoop)
+    private static async OrientTask<int> FaultingTargetAsync(Exception failure, OrientExecutor targetLoop)
     {
         var source = new OrientTaskCompletionSource<int>(targetLoop);
         source.TrySetException(failure);
@@ -376,7 +376,7 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
         return captured;
     }
 
-    private static void PumpCallerUntil(OrientLoop callerLoop, Func<bool> condition, TimeSpan timeout)
+    private static void PumpCallerUntil(OrientExecutor callerLoop, Func<bool> condition, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (!condition() && DateTime.UtcNow < deadline)
@@ -387,18 +387,18 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
 
         if (!condition())
         {
-            throw new TimeoutException("Caller loop pump timed out.");
+            throw new TimeoutException("Caller executor pump timed out.");
         }
     }
 
     private sealed class TargetLoopPump : IDisposable
     {
-        private readonly OrientLoop targetLoop;
+        private readonly OrientExecutor targetLoop;
         private readonly CancellationTokenSource cancellation = new();
         private readonly Thread thread;
         private volatile Exception? pumpFailure;
 
-        public TargetLoopPump(OrientLoop targetLoop)
+        public TargetLoopPump(OrientExecutor targetLoop)
         {
             this.targetLoop = targetLoop;
             thread = new Thread(PumpMain)
@@ -413,7 +413,7 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
         {
             if (pumpFailure is not null)
             {
-                throw new InvalidOperationException("Target loop pump failed.", pumpFailure);
+                throw new InvalidOperationException("Target executor pump failed.", pumpFailure);
             }
         }
 
@@ -422,7 +422,7 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
             cancellation.Cancel();
             if (!thread.Join(TimeSpan.FromSeconds(2)))
             {
-                throw new InvalidOperationException("Target loop pump thread did not exit.");
+                throw new InvalidOperationException("Target executor pump thread did not exit.");
             }
 
             EnsureNoFailure();
@@ -446,7 +446,7 @@ public class OrientLoopInvokeAsyncTests : OrientTestBase
             finally
             {
 #if DEBUG
-                OrientLoop.ResetDebugThreadBindingForTests();
+                OrientExecutor.ResetDebugThreadBindingForTests();
 #endif
             }
         }

@@ -19,10 +19,10 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void CallAsyncClearsPendingCallWhenWriteFailsImmediately()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var client = new CRpcClient(loop);
+        var client = new CRpcClient(executor);
         var writeFailure = new InvalidOperationException("write submission failed");
         SetClientHostChannel(client, new EmbeddedChannel(new ThrowOnWriteHandler(writeFailure)));
 
@@ -36,10 +36,10 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void CallAsyncThrowsWhenNotConnected()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var client = new CRpcClient(loop);
+        var client = new CRpcClient(executor);
         var exception = Assert.Throws<InvalidOperationException>(() =>
             client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 1));
 
@@ -47,13 +47,13 @@ public class CRpcClientTests : OrientTestBase
     }
 
     [Fact]
-    public void CallAsyncThrowsWhenNoOrientLoopIsBound()
+    public void CallAsyncThrowsWhenNoOrientExecutorIsBound()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         Exception? exception = null;
         var worker = new Thread(() =>
         {
-            var client = new CRpcClient(loop);
+            var client = new CRpcClient(executor);
             exception = Assert.Throws<InvalidOperationException>(() =>
                 client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 0));
         });
@@ -61,30 +61,30 @@ public class CRpcClientTests : OrientTestBase
         worker.Start();
         worker.Join();
 
-        Assert.Contains("OrientLoop", exception!.Message);
+        Assert.Contains("OrientExecutor", exception!.Message);
     }
 
     [Fact]
     public void CallAsyncThrowsWhenCurrentLoopDiffersFromOwner()
     {
-        var ownerLoop = new OrientLoop();
-        var otherLoop = new OrientLoop();
+        var ownerLoop = new OrientExecutor();
+        var otherLoop = new OrientExecutor();
         otherLoop.BindToCurrentThread();
 
         var client = new CRpcClient(ownerLoop);
         var exception = Assert.Throws<InvalidOperationException>(() =>
             client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 1));
 
-        Assert.Contains("owner OrientLoop", exception.Message);
+        Assert.Contains("owner OrientExecutor", exception.Message);
     }
 
     [Fact]
     public void CallAsyncThrowsWhenTimeoutIsNotPositive()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var client = new CRpcClient(loop);
+        var client = new CRpcClient(executor);
         SetClientHostChannel(client, new EmbeddedChannel());
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
@@ -96,23 +96,23 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void ConnectAsyncThrowsWhenNotOnOwnerLoop()
     {
-        var loop = new OrientLoop();
-        var client = new CRpcClient(loop);
+        var executor = new OrientExecutor();
+        var client = new CRpcClient(executor);
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             client.ConnectAsync("127.0.0.1", 7999));
 
-        Assert.Contains("OrientLoop", exception.Message);
+        Assert.Contains("OrientExecutor", exception.Message);
     }
 
     [Fact]
     public void CallAsyncResponseContinuationRunsOnCallingLoop()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var loopThreadId = Environment.CurrentManagedThreadId;
 
-        var client = new CRpcClient(loop);
+        var client = new CRpcClient(executor);
         SetClientHostChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
         var awaiter = task.GetAwaiter();
@@ -134,7 +134,7 @@ public class CRpcClientTests : OrientTestBase
         Assert.Null(result);
         Assert.False(awaiter.IsCompleted);
 
-        loop.Tick();
+        executor.Tick();
 
         Assert.Same(response, result);
         Assert.Equal(loopThreadId, continuationThreadId);
@@ -143,10 +143,10 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void CallAsyncMatchesOutOfOrderResponsesToPendingCalls()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var client = new CRpcClient(loop);
+        var client = new CRpcClient(executor);
         SetClientHostChannel(client, new EmbeddedChannel());
         var firstTask = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
         var secondTask = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
@@ -172,7 +172,7 @@ public class CRpcClientTests : OrientTestBase
         Assert.False(firstAwaiter.IsCompleted);
         Assert.False(secondAwaiter.IsCompleted);
 
-        loop.Tick();
+        executor.Tick();
 
         Assert.Same(firstResponse, firstResult);
         Assert.Same(secondResponse, secondResult);
@@ -181,10 +181,10 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void CallAsyncResponsePostedBeforeDueTimeoutCompletesWithResult()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var client = new CRpcClient(loop);
+        var client = new CRpcClient(executor);
         SetClientHostChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 1);
         var awaiter = task.GetAwaiter();
@@ -196,7 +196,7 @@ public class CRpcClientTests : OrientTestBase
         var response = CRpcTestMessages.CreateResponse(7, 8, reqSequence: 1);
         client.OnReceiveResponse(response);
 
-        loop.Tick();
+        executor.Tick();
 
         Assert.Same(response, result);
         Assert.True(awaiter.IsCompleted);
@@ -205,22 +205,22 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void CallAsyncLateResponseAfterTimeoutIsIgnored()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var client = new CRpcClient(loop);
+        var client = new CRpcClient(executor);
         SetClientHostChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 1);
         var awaiter = task.GetAwaiter();
 
         Thread.Sleep(20);
-        loop.Tick();
+        executor.Tick();
 
         Assert.Throws<TimeoutException>(() => awaiter.GetResult());
 
         var lateResponse = CRpcTestMessages.CreateResponse(7, 8, reqSequence: 1);
         client.OnReceiveResponse(lateResponse);
-        loop.Tick();
+        executor.Tick();
 
         Assert.Throws<TimeoutException>(() => awaiter.GetResult());
     }
@@ -228,10 +228,10 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void CallAsyncTimeoutCompletesOnlyWhenCallingLoopTicks()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var client = new CRpcClient(loop);
+        var client = new CRpcClient(executor);
         SetClientHostChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 1);
         var awaiter = task.GetAwaiter();
@@ -240,7 +240,7 @@ public class CRpcClientTests : OrientTestBase
 
         Assert.False(awaiter.IsCompleted);
 
-        loop.Tick();
+        executor.Tick();
 
         Assert.True(awaiter.IsCompleted);
         Assert.Throws<TimeoutException>(() => awaiter.GetResult());
@@ -249,12 +249,12 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void CloseAsyncFailsPendingCalls()
     {
-        var loop = new OrientLoop();
-        var client = new CRpcClient(loop);
+        var executor = new OrientExecutor();
+        var client = new CRpcClient(executor);
         var channel = new EmbeddedChannel();
         ConnectionClosedException? callException = null;
 
-        OrientLoopRunner.RunUntilComplete(loop, async () =>
+        OrientExecutorRunner.RunUntilComplete(executor, async () =>
         {
             SetClientHostChannel(client, channel);
             var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
@@ -278,18 +278,18 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void ChannelInactiveFailsPendingCalls()
     {
-        var loop = new OrientLoop();
-        var client = new CRpcClient(loop);
+        var executor = new OrientExecutor();
+        var client = new CRpcClient(executor);
         ConnectionClosedException? callException = null;
 
-        OrientLoopRunner.RunUntilComplete(loop, async () =>
+        OrientExecutorRunner.RunUntilComplete(executor, async () =>
         {
             var channel = new EmbeddedChannel();
             SetClientHostChannel(client, channel);
             var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
 
             GetClientHost(client).PostChannelInactive(channel);
-            loop.Tick();
+            executor.Tick();
 
             try
             {
@@ -307,19 +307,19 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void ExceptionCaughtFailsPendingCalls()
     {
-        var loop = new OrientLoop();
-        var client = new CRpcClient(loop);
+        var executor = new OrientExecutor();
+        var client = new CRpcClient(executor);
         ConnectionClosedException? callException = null;
         var pipelineException = new InvalidOperationException("boom");
 
-        OrientLoopRunner.RunUntilComplete(loop, async () =>
+        OrientExecutorRunner.RunUntilComplete(executor, async () =>
         {
             var channel = new EmbeddedChannel();
             SetClientHostChannel(client, channel);
             var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
 
             GetClientHost(client).PostChannelException(channel, pipelineException);
-            loop.Tick();
+            executor.Tick();
 
             try
             {
@@ -338,16 +338,16 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void ChannelInactiveRaisesConnectionLostOnOwnerLoop()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
-        var client = new CRpcClient(loop);
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
+        var client = new CRpcClient(executor);
         var channel = new EmbeddedChannel();
         SetClientHostChannel(client, channel);
         var lost = false;
         client.ConnectionLost += () => lost = true;
 
         GetClientHost(client).PostChannelInactive(channel);
-        loop.Tick();
+        executor.Tick();
 
         Assert.True(lost);
     }
@@ -355,14 +355,14 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void InboundHeartbeatIsIgnored()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
-        var client = new CRpcClient(loop);
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
+        var client = new CRpcClient(executor);
         SetClientHostChannel(client, new EmbeddedChannel());
 
         var task = client.CallAsync(1, 1, Array.Empty<byte>(), timeout: 5000);
         InvokeHostInboundMessage(client, CRpcMessage.CreateHeartbeat());
-        loop.Tick();
+        executor.Tick();
 
         Assert.False(task.GetAwaiter().IsCompleted);
     }
@@ -370,10 +370,10 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void StaleChannelInactiveDoesNotFailCurrentChannelPendingCalls()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var client = new CRpcClient(loop);
+        var client = new CRpcClient(executor);
         var oldChannel = new EmbeddedChannel();
         var newChannel = new EmbeddedChannel();
         SetClientHostChannel(client, newChannel);
@@ -381,7 +381,7 @@ public class CRpcClientTests : OrientTestBase
         var awaiter = task.GetAwaiter();
 
         GetClientHost(client).PostChannelInactive(oldChannel);
-        loop.Tick();
+        executor.Tick();
 
         Assert.False(awaiter.IsCompleted);
     }
@@ -389,11 +389,11 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void CloseAsyncClosesConnectedChannel()
     {
-        var loop = new OrientLoop();
-        var client = new CRpcClient(loop);
+        var executor = new OrientExecutor();
+        var client = new CRpcClient(executor);
         var channel = new EmbeddedChannel();
 
-        OrientLoopRunner.RunUntilComplete(loop, async () =>
+        OrientExecutorRunner.RunUntilComplete(executor, async () =>
         {
             SetClientHostChannel(client, channel);
             await client.CloseAsync();
@@ -405,11 +405,11 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void DisposeAsyncClosesConnectedChannel()
     {
-        var loop = new OrientLoop();
-        var client = new CRpcClient(loop);
+        var executor = new OrientExecutor();
+        var client = new CRpcClient(executor);
         var channel = new EmbeddedChannel();
 
-        OrientLoopRunner.RunUntilComplete(loop, async () =>
+        OrientExecutorRunner.RunUntilComplete(executor, async () =>
         {
             SetClientHostChannel(client, channel);
             await client.DisposeAsync();
@@ -421,12 +421,12 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void ConstructorAllowsTestHostInjection()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var options = new CRpcClientOptions();
-        var host = new TcpChannelHost(loop, new CRpcClientPipelineFactory(options));
+        var host = new TcpChannelHost(executor, new CRpcClientPipelineFactory(options));
 
-        var client = new CRpcClient(loop, options, host);
+        var client = new CRpcClient(executor, options, host);
 
         Assert.Same(options, client.Options);
     }
@@ -434,10 +434,10 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void HostInboundMessageCompletesPendingCall()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var client = new CRpcClient(loop);
+        var client = new CRpcClient(executor);
         SetClientHostChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
         var awaiter = task.GetAwaiter();
@@ -445,7 +445,7 @@ public class CRpcClientTests : OrientTestBase
         awaiter.OnCompleted(() => result = awaiter.GetResult());
 
         GetClientHost(client).PostInboundMessage(CRpcTestMessages.CreateResponse(7, 8, reqSequence: 1));
-        loop.Tick();
+        executor.Tick();
 
         Assert.True(awaiter.IsCompleted);
         Assert.Same(result, awaiter.GetResult());
@@ -454,16 +454,16 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void UnexpectedHostInboundMessageFailsPendingCalls()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
 
-        var client = new CRpcClient(loop);
+        var client = new CRpcClient(executor);
         SetClientHostChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(7, 8, Array.Empty<byte>(), timeout: 5000);
         var awaiter = task.GetAwaiter();
 
         GetClientHost(client).PostInboundMessage(new object());
-        loop.Tick();
+        executor.Tick();
 
         var exception = Assert.Throws<ConnectionClosedException>(() => awaiter.GetResult());
         Assert.IsType<InvalidOperationException>(exception.InnerException);
@@ -472,14 +472,14 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void ClientLoopHostRunsUntilCancelled()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         using var cts = new CancellationTokenSource();
 
-        var runner = new Thread(() => OrientLoopHost.RunUntilCancelled(loop, cts.Token));
+        var runner = new Thread(() => OrientExecutorHost.RunUntilCancelled(executor, cts.Token));
         runner.Start();
 
         var posted = new ManualResetEventSlim(false);
-        loop.Post(() => posted.Set());
+        executor.Post(() => posted.Set());
 
         Assert.True(posted.Wait(TimeSpan.FromSeconds(5)));
         cts.Cancel();
@@ -500,10 +500,10 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void PushMessageDispatchesRegisteredHandlerOnOwnerLoop()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var loopThreadId = Environment.CurrentManagedThreadId;
-        var client = new CRpcClient(loop);
+        var client = new CRpcClient(executor);
 
         CRpcPushContext? capturedContext = null;
         byte[]? capturedBody = null;
@@ -516,7 +516,7 @@ public class CRpcClientTests : OrientTestBase
                 capturedContext = context;
                 capturedBody = body;
                 handlerThreadId = Environment.CurrentManagedThreadId;
-                return OrientTask.CompletedTask(context.Loop);
+                return OrientTask.CompletedTask(context.Executor);
             });
 
         var push = CRpcTestMessages.CreatePush(10, 20, [1, 2, 3]);
@@ -526,10 +526,10 @@ public class CRpcClientTests : OrientTestBase
 
         Assert.Null(capturedContext);
 
-        loop.Tick();
+        executor.Tick();
 
         Assert.NotNull(capturedContext);
-        Assert.Same(loop, capturedContext!.Loop);
+        Assert.Same(executor, capturedContext!.Executor);
         Assert.Equal(10, capturedContext.ServiceId);
         Assert.Equal(20, capturedContext.MethodId);
         Assert.Equal([1, 2, 3], capturedBody);
@@ -539,15 +539,15 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void PushMessageDoesNotCompletePendingCallWithSameSequence()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
-        var client = new CRpcClient(loop);
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
+        var client = new CRpcClient(executor);
         SetClientHostChannel(client, new EmbeddedChannel());
         var task = client.CallAsync(10, 20, Array.Empty<byte>(), timeout: 5000);
         var awaiter = task.GetAwaiter();
 
         client.OnReceiveResponse(CRpcTestMessages.CreatePush(10, 20, Array.Empty<byte>()));
-        loop.Tick();
+        executor.Tick();
 
         Assert.False(awaiter.IsCompleted);
         Assert.Equal(1, GetPendingCallCount(client));
@@ -556,14 +556,14 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void UnknownPushInvokesUnhandledCallbackAndKeepsConnectionUsable()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
-        var client = new CRpcClient(loop);
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
+        var client = new CRpcClient(executor);
         CRpcPushContext? unhandled = null;
         client.OnUnhandledPush = context => unhandled = context;
 
         client.OnReceiveResponse(CRpcTestMessages.CreatePush(77, 88, [9]));
-        loop.Tick();
+        executor.Tick();
 
         Assert.NotNull(unhandled);
         Assert.Equal(77, unhandled!.ServiceId);
@@ -573,9 +573,9 @@ public class CRpcClientTests : OrientTestBase
     [Fact]
     public void PushHandlerExceptionInvokesExceptionCallback()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
-        var client = new CRpcClient(loop);
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
+        var client = new CRpcClient(executor);
         var expected = new InvalidOperationException("push failed");
         Exception? captured = null;
         CRpcPushContext? capturedContext = null;
@@ -591,7 +591,7 @@ public class CRpcClientTests : OrientTestBase
         };
 
         client.OnReceiveResponse(CRpcTestMessages.CreatePush(1, 2, Array.Empty<byte>()));
-        loop.Tick();
+        executor.Tick();
 
         Assert.Same(expected, captured);
         Assert.Equal(1, capturedContext!.ServiceId);

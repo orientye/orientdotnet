@@ -13,11 +13,11 @@ public sealed class GreeterHttpHandler : SimpleChannelInboundHandler<IFullHttpRe
 {
     private const string SayHelloPath = "/api/greeter/say-hello";
 
-    private readonly OrientLoop loop;
+    private readonly OrientExecutor loop;
     private readonly CRpcConnectionRegistry connections;
     private readonly HelloworldServiceImpl greeter;
 
-    public GreeterHttpHandler(OrientLoop loop, CRpcConnectionRegistry connections, HelloworldServiceImpl greeter)
+    public GreeterHttpHandler(OrientExecutor loop, CRpcConnectionRegistry connections, HelloworldServiceImpl greeter)
     {
         this.loop = loop;
         this.connections = connections;

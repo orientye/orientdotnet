@@ -15,7 +15,7 @@ public class HelloworldServiceImpl : GreeterServiceBase
 
         return OrientTask.FromResult(
             (0, new HelloReply { Msg = $"Hello {request.Msg}" }),
-            OrientLoop.Current);
+            OrientExecutor.Current);
     }
 
     public OrientTask<(int, HelloReply)> InvokeSayHelloAsync(CRpcContext context, HelloRequest request)

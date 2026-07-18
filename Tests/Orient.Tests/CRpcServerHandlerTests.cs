@@ -40,13 +40,13 @@ public class CRpcServerHandlerTests : OrientTestBase
     [Fact]
     public void ChannelActiveRegistersConnection()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
-        var server = new CRpcServer(loop);
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
+        var server = new CRpcServer(executor);
         var channel = CreateHandlerChannel(server);
 
         channel.Pipeline.FireChannelActive();
-        loop.Tick();
+        executor.Tick();
 
         var connection = Assert.Single(server.Connections.Snapshot());
         Assert.True(connection.IsActive);
@@ -55,16 +55,16 @@ public class CRpcServerHandlerTests : OrientTestBase
     [Fact]
     public void ChannelInactiveUnregistersConnection()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
-        var server = new CRpcServer(loop);
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
+        var server = new CRpcServer(executor);
         var channel = CreateHandlerChannel(server);
         channel.Pipeline.FireChannelActive();
-        loop.Tick();
+        executor.Tick();
         var connection = Assert.Single(server.Connections.Snapshot());
 
         channel.Pipeline.FireChannelInactive();
-        loop.Tick();
+        executor.Tick();
 
         Assert.Empty(server.Connections.Snapshot());
         Assert.False(connection.IsActive);
@@ -73,36 +73,36 @@ public class CRpcServerHandlerTests : OrientTestBase
     [Fact]
     public void ServiceReceivesCurrentConnectionInContext()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         var service = new ContextRecordingService(NextServiceId());
-        var server = new CRpcServer(loop);
+        var server = new CRpcServer(executor);
         RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
 
         channel.Pipeline.FireChannelActive();
-        loop.Tick();
+        executor.Tick();
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
-        loop.Tick();
+        executor.Tick();
 
         Assert.NotNull(service.Connection);
         Assert.Equal(1, service.Connection!.ConnectionId);
     }
 
     [Fact]
-    public void ChannelReadDispatchesServiceWorkToOrientLoop()
+    public void ChannelReadDispatchesServiceWorkToOrientExecutor()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         var service = new RecordingService(NextServiceId());
-        var server = new CRpcServer(loop);
+        var server = new CRpcServer(executor);
         RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
-        ActivateChannel(loop, channel);
+        ActivateChannel(executor, channel);
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
 
         Assert.Equal(0, service.CallCount);
 
-        loop.Tick();
+        executor.Tick();
 
         Assert.Equal(1, service.CallCount);
     }
@@ -111,21 +111,21 @@ public class CRpcServerHandlerTests : OrientTestBase
     public void HandlerUsesBoundLoopRegistry()
     {
         var serviceId = NextServiceId();
-        var firstLoop = new OrientLoop();
-        var secondLoop = new OrientLoop();
+        var firstLoop = new OrientExecutor();
+        var secondLoop = new OrientExecutor();
         var firstService = new RecordingService(serviceId);
         var secondService = new RecordingService(serviceId);
         var firstServer = new CRpcServer(firstLoop);
 
         var secondServer = new CRpcServer(secondLoop);
 
-        DedicatedLoopThread.Run(secondLoop, loop =>
+        DedicatedExecutorThread.Run(secondLoop, executor =>
         {
-            loop.Post(() => secondServer.Services.Register(secondService));
-            loop.Tick();
+            executor.Post(() => secondServer.Services.Register(secondService));
+            executor.Tick();
         });
 
-        using var firstDriver = new LoopTestDriver(firstLoop);
+        using var firstDriver = new ExecutorTestDriver(firstLoop);
         firstDriver.Run(() => firstLoop.Post(() => firstServer.Services.Register(firstService)));
 
         var channel = CreateHandlerChannel(firstServer);
@@ -147,38 +147,38 @@ public class CRpcServerHandlerTests : OrientTestBase
     }
 
     [Fact]
-    public void ServiceLogicRunsOnOrientLoopThread()
+    public void ServiceLogicRunsOnOrientExecutorThread()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         var service = new RecordingService(NextServiceId());
-        var server = new CRpcServer(loop);
+        var server = new CRpcServer(executor);
         RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
-        ActivateChannel(loop, channel);
+        ActivateChannel(executor, channel);
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
         var loopThreadId = Environment.CurrentManagedThreadId;
 
-        loop.Tick();
+        executor.Tick();
 
         Assert.Equal(loopThreadId, service.LastThreadId);
-        Assert.Same(loop, service.LastLoop);
+        Assert.Same(executor, service.LastLoop);
     }
 
     [Fact]
     public void ChannelReadDoesNotWaitForOutboundWriteCompletion()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         var service = new RecordingService(NextServiceId());
-        var server = new CRpcServer(loop);
+        var server = new CRpcServer(executor);
         RegisterOnServer(server, service);
         var delayedWrite = new DelayedWriteHandler();
         var channel = CreateHandlerChannel(server, headHandlers: new IChannelHandler[] { delayedWrite });
-        ActivateChannel(loop, channel);
+        ActivateChannel(executor, channel);
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
 
-        loop.Tick();
+        executor.Tick();
 
         Assert.Equal(1, service.CallCount);
         Assert.NotNull(delayedWrite.WrittenMessage);
@@ -188,17 +188,17 @@ public class CRpcServerHandlerTests : OrientTestBase
     [Fact]
     public void ResponseWriteDoesNotMutateInboundRequest()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         var service = new RecordingService(NextServiceId());
-        var server = new CRpcServer(loop);
+        var server = new CRpcServer(executor);
         RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
-        ActivateChannel(loop, channel);
+        ActivateChannel(executor, channel);
         var request = CreateRequest(service.GetServiceId());
 
         Assert.False(channel.WriteInbound(request));
 
-        loop.Tick();
+        executor.Tick();
 
         Assert.Equal(CRpcMessageType.Request, request.MessageType);
         Assert.Empty(request.Body);
@@ -208,7 +208,7 @@ public class CRpcServerHandlerTests : OrientTestBase
     public void ConnectionResetByPeerIsHandledAsNormalDisconnect()
     {
         var exceptions = new ExceptionCaptureHandler();
-        var server = new CRpcServer(new OrientLoop());
+        var server = new CRpcServer(new OrientExecutor());
         var channel = CreateHandlerChannel(server, tailHandlers: new IChannelHandler[] { exceptions });
 
         channel.Pipeline.FireExceptionCaught(new SocketException(10054));
@@ -220,7 +220,7 @@ public class CRpcServerHandlerTests : OrientTestBase
     public void ChannelInactiveLogsNormalClientDisconnect()
     {
         var inactive = new InactiveCaptureHandler();
-        var server = new CRpcServer(new OrientLoop());
+        var server = new CRpcServer(new OrientExecutor());
         var channel = CreateHandlerChannel(server, tailHandlers: new IChannelHandler[] { inactive });
 
         var output = ConsoleTestOutput.Capture(() => channel.Pipeline.FireChannelInactive());
@@ -233,7 +233,7 @@ public class CRpcServerHandlerTests : OrientTestBase
     public void UnexpectedExceptionsContinueThroughPipeline()
     {
         var exceptions = new ExceptionCaptureHandler();
-        var server = new CRpcServer(new OrientLoop());
+        var server = new CRpcServer(new OrientExecutor());
         var channel = CreateHandlerChannel(server, tailHandlers: new IChannelHandler[] { exceptions });
         var exception = new InvalidOperationException("boom");
 
@@ -245,16 +245,16 @@ public class CRpcServerHandlerTests : OrientTestBase
     [Fact]
     public void HeartbeatIsIgnoredWithoutDispatchingToService()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var service = new RecordingService(NextServiceId());
-        var server = new CRpcServer(loop);
+        var server = new CRpcServer(executor);
         RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
-        ActivateChannel(loop, channel);
+        ActivateChannel(executor, channel);
 
         Assert.False(channel.WriteInbound(CRpcMessage.CreateHeartbeat()));
-        loop.Tick();
+        executor.Tick();
 
         Assert.Equal(0, service.CallCount);
         Assert.Empty(channel.OutboundMessages);
@@ -263,15 +263,15 @@ public class CRpcServerHandlerTests : OrientTestBase
     [Fact]
     public void UnknownServiceWritesServiceNotFoundResponse()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
-        var server = new CRpcServer(loop);
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
+        var server = new CRpcServer(executor);
         var channel = CreateHandlerChannel(server);
-        ActivateChannel(loop, channel);
+        ActivateChannel(executor, channel);
         var request = CRpcTestMessages.CreateRequest(serviceId: 9999, methodId: 1, reqSequence: 42);
 
         Assert.False(channel.WriteInbound(request));
-        loop.Tick();
+        executor.Tick();
 
         var response = ReadOutboundCrpcMessage(channel);
         Assert.Equal(CRpcMessageType.Response, response.MessageType);
@@ -285,17 +285,17 @@ public class CRpcServerHandlerTests : OrientTestBase
     [Fact]
     public void UnknownMethodWritesMethodNotFoundResponse()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var service = new MethodRoutingService(NextServiceId());
-        var server = new CRpcServer(loop);
+        var server = new CRpcServer(executor);
         RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
-        ActivateChannel(loop, channel);
+        ActivateChannel(executor, channel);
         var request = CRpcTestMessages.CreateRequest(service.GetServiceId(), methodId: 99, reqSequence: 7);
 
         Assert.False(channel.WriteInbound(request));
-        loop.Tick();
+        executor.Tick();
 
         var response = ReadOutboundCrpcMessage(channel);
         Assert.Equal(CRpcMessageType.Response, response.MessageType);
@@ -306,17 +306,17 @@ public class CRpcServerHandlerTests : OrientTestBase
     [Fact]
     public void ServiceExceptionWritesInternalErrorResponse()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var service = new ThrowingService(NextServiceId());
-        var server = new CRpcServer(loop);
+        var server = new CRpcServer(executor);
         RegisterOnServer(server, service);
         var channel = CreateHandlerChannel(server);
-        ActivateChannel(loop, channel);
+        ActivateChannel(executor, channel);
 
         Assert.False(channel.WriteInbound(CreateRequest(service.GetServiceId())));
-        loop.Tick();
-        loop.Tick();
+        executor.Tick();
+        executor.Tick();
 
         var response = ReadOutboundCrpcMessage(channel);
         Assert.Equal(CRpcMessageType.Response, response.MessageType);
@@ -343,14 +343,14 @@ public class CRpcServerHandlerTests : OrientTestBase
 
     private static void RegisterOnServer(CRpcServer server, IRpcService service)
     {
-        server.Loop.Post(() => server.Services.Register(service));
-        server.Loop.Tick();
+        server.Executor.Post(() => server.Services.Register(service));
+        server.Executor.Tick();
     }
 
-    private static void ActivateChannel(OrientLoop loop, EmbeddedChannel channel)
+    private static void ActivateChannel(OrientExecutor executor, EmbeddedChannel channel)
     {
         channel.Pipeline.FireChannelActive();
-        loop.Tick();
+        executor.Tick();
     }
 
     private sealed class ContextRecordingService : IRpcService
@@ -369,7 +369,7 @@ public class CRpcServerHandlerTests : OrientTestBase
         public OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
         {
             Connection = ((CRpcContext)context).Connection;
-            return OrientTask.FromResult((0, Array.Empty<byte>()), OrientLoop.Current);
+            return OrientTask.FromResult((0, Array.Empty<byte>()), OrientExecutor.Current);
         }
     }
 
@@ -386,7 +386,7 @@ public class CRpcServerHandlerTests : OrientTestBase
 
         public int? LastThreadId { get; private set; }
 
-        public OrientLoop? LastLoop { get; private set; }
+        public OrientExecutor? LastLoop { get; private set; }
 
         public ushort GetServiceId()
         {
@@ -397,8 +397,8 @@ public class CRpcServerHandlerTests : OrientTestBase
         {
             CallCount++;
             LastThreadId = Environment.CurrentManagedThreadId;
-            LastLoop = OrientLoop.Current;
-            return OrientTask.FromResult((0, Array.Empty<byte>()), OrientLoop.Current);
+            LastLoop = OrientExecutor.Current;
+            return OrientTask.FromResult((0, Array.Empty<byte>()), OrientExecutor.Current);
         }
     }
 
@@ -450,10 +450,10 @@ public class CRpcServerHandlerTests : OrientTestBase
         {
             if (((CRpcMessage)req).MethodId == 1)
             {
-                return OrientTask.FromResult((0, Array.Empty<byte>()), OrientLoop.Current);
+                return OrientTask.FromResult((0, Array.Empty<byte>()), OrientExecutor.Current);
             }
 
-            return OrientTask.FromResult(((int)CRpcStatusCode.MethodNotFound, Array.Empty<byte>()), OrientLoop.Current);
+            return OrientTask.FromResult(((int)CRpcStatusCode.MethodNotFound, Array.Empty<byte>()), OrientExecutor.Current);
         }
     }
 

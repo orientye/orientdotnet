@@ -1,11 +1,11 @@
 namespace Orient.Runtime;
 
-internal sealed class OrientLoopTimer
+internal sealed class OrientExecutorTimer
 {
     private readonly Action action;
     private Action? removeFromScheduler;
 
-    public OrientLoopTimer(Action action)
+    public OrientExecutorTimer(Action action)
     {
         this.action = action;
     }

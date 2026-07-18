@@ -2,9 +2,9 @@ using System.Runtime.ExceptionServices;
 
 namespace Orient.Runtime;
 
-public static class OrientLoopRunner
+public static class OrientExecutorRunner
 {
-    public static void RunUntilComplete(OrientLoop loop, Func<OrientTask> operation)
+    public static void RunUntilComplete(OrientExecutor loop, Func<OrientTask> operation)
     {
         RunUntilComplete(
             loop,
@@ -15,7 +15,7 @@ public static class OrientLoopRunner
             });
     }
 
-    public static T RunUntilComplete<T>(OrientLoop loop, Func<OrientTask<T>> operation)
+    public static T RunUntilComplete<T>(OrientExecutor loop, Func<OrientTask<T>> operation)
     {
         ArgumentNullException.ThrowIfNull(loop);
         ArgumentNullException.ThrowIfNull(operation);
@@ -57,7 +57,7 @@ public static class OrientLoopRunner
             }
             catch (Exception tickException)
             {
-                Console.Error.WriteLine($"OrientLoopRunner: unexpected exception escaped Tick: {tickException}");
+                Console.Error.WriteLine($"OrientExecutorRunner: unexpected exception escaped Tick: {tickException}");
             }
 
             if (!completed)

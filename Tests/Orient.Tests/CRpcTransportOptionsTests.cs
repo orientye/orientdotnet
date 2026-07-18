@@ -52,9 +52,9 @@ public class CRpcTransportOptionsTests
     [Fact]
     public void CRpcClientExposesConfiguredOptions()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         var configured = new CRpcClientOptions { MaxFrameLength = 1024 * 1024 };
-        var client = new CRpcClient(loop, configured);
+        var client = new CRpcClient(executor, configured);
 
         Assert.Same(configured, client.Options);
     }
@@ -62,9 +62,9 @@ public class CRpcTransportOptionsTests
     [Fact]
     public void CRpcServerExposesConfiguredOptions()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         var configured = new CRpcServerOptions { Port = 9001, SoBacklog = 1024 };
-        var server = new CRpcServer(loop, configured);
+        var server = new CRpcServer(executor, configured);
 
         Assert.Same(configured, server.Options);
     }
@@ -192,10 +192,10 @@ public class CRpcTransportOptionsTests
     [Fact]
     public void CRpcClientConstructorRejectsInvalidOptionsBeforeConnect()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         var options = new CRpcClientOptions { IoThreadCount = 0 };
 
-        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => new CRpcClient(loop, options));
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => new CRpcClient(executor, options));
         Assert.Equal(nameof(CRpcClientOptions.IoThreadCount), ex.ParamName);
     }
 }

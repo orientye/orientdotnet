@@ -35,19 +35,19 @@ public sealed class CRpcReferenceBuilder<TProxy>
 
     /// <summary>
     /// Connects via <see cref="CRpcClient.ConnectAsync(string, int)"/> and returns a typed proxy.
-    /// Must be called on the bound owner loop thread while the loop is driven.
+    /// Must be called on the bound owner executor thread while the executor is driven.
     /// </summary>
-    public OrientTask<CRpcReference<TProxy>> ConnectAsync(OrientLoop loop)
+    public OrientTask<CRpcReference<TProxy>> ConnectAsync(OrientExecutor executor)
     {
-        ArgumentNullException.ThrowIfNull(loop);
+        ArgumentNullException.ThrowIfNull(executor);
         var target = uri ?? throw new InvalidOperationException("CRpc reference URL is required.");
 
-        return ConnectAsyncCore(loop, target);
+        return ConnectAsyncCore(executor, target);
     }
 
-    private async OrientTask<CRpcReference<TProxy>> ConnectAsyncCore(OrientLoop loop, Uri target)
+    private async OrientTask<CRpcReference<TProxy>> ConnectAsyncCore(OrientExecutor executor, Uri target)
     {
-        var client = new CRpcClient(loop, clientOptions);
+        var client = new CRpcClient(executor, clientOptions);
         await client.ConnectAsync(target.Host, target.Port);
 
         var proxy = CRpcProxyActivator.Create<TProxy>(client);

@@ -10,7 +10,7 @@ namespace Example.Http;
 
 public sealed class HttpListenServer
 {
-    private readonly OrientLoop loop;
+    private readonly OrientExecutor loop;
     private readonly CRpcServer crpcServer;
     private readonly HelloworldServiceImpl greeter;
     private readonly int port;
@@ -18,7 +18,7 @@ public sealed class HttpListenServer
     private IEventLoopGroup? bossGroup;
     private IEventLoopGroup? workerGroup;
 
-    public HttpListenServer(OrientLoop loop, CRpcServer crpcServer, HelloworldServiceImpl greeter, int port)
+    public HttpListenServer(OrientExecutor loop, CRpcServer crpcServer, HelloworldServiceImpl greeter, int port)
     {
         this.loop = loop;
         this.crpcServer = crpcServer;

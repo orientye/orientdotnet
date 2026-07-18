@@ -10,10 +10,10 @@ public class CRpcConnectionTests : OrientTestBase
     [Fact]
     public void SendPushAsyncWritesStatePushMessage()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var channel = new EmbeddedChannel();
-        var connection = new CRpcConnection(loop, id: 42, channel);
+        var connection = new CRpcConnection(executor, id: 42, channel);
 
         var task = connection.SendPushAsync(1000, 2, [1, 2, 3]);
         var awaiter = task.GetAwaiter();
@@ -32,10 +32,10 @@ public class CRpcConnectionTests : OrientTestBase
     [Fact]
     public void SendPushAsyncReturnsFalseWhenConnectionInactive()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var channel = new EmbeddedChannel();
-        var connection = new CRpcConnection(loop, id: 42, channel);
+        var connection = new CRpcConnection(executor, id: 42, channel);
         connection.MarkInactive();
 
         var awaiter = connection.SendPushAsync(1000, 2, Array.Empty<byte>()).GetAwaiter();
@@ -47,15 +47,15 @@ public class CRpcConnectionTests : OrientTestBase
     [Fact]
     public void SendPushAsyncThrowsWhenCalledOutsideOwnerLoop()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         var channel = new EmbeddedChannel();
-        var connection = new CRpcConnection(loop, id: 42, channel);
+        var connection = new CRpcConnection(executor, id: 42, channel);
 
-        var otherLoop = new OrientLoop();
+        var otherLoop = new OrientExecutor();
         otherLoop.BindToCurrentThread();
         var exception = Assert.Throws<InvalidOperationException>(
             () => connection.SendPushAsync(1000, 2, Array.Empty<byte>()));
 
-        Assert.Contains("owner OrientLoop", exception.Message);
+        Assert.Contains("owner OrientExecutor", exception.Message);
     }
 }

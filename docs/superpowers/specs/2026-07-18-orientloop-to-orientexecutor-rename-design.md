@@ -1,7 +1,7 @@
 # Design: Rename `OrientLoop` → `OrientExecutor`
 
 Date: 2026-07-18  
-Status: Approved  
+Status: Implemented  
 Scope: Naming / API surface only — **no behavior changes**
 
 ## Goal

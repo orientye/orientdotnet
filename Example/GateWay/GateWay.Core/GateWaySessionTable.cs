@@ -31,7 +31,7 @@ public sealed class GateWaySessionTable
     public async OrientTask<GateWayBackendLink?> GetOrCreateAsync(
         CRpcConnection inbound,
         ushort serviceId,
-        OrientLoop loop)
+        OrientExecutor loop)
     {
         if (links.TryGetValue(inbound.ConnectionId, out var existing))
         {

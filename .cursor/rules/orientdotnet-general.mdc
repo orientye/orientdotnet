@@ -12,12 +12,12 @@ alwaysApply: true
 - Use `RpcTask` for asynchronous flows in this project.
 - Do not use C# `Task` / `Task<T>` for project async APIs or implementations.
 - Do not introduce `System.Threading.Tasks.Task` unless the user explicitly approves an exception.
-- `CRpcLoop` is the business-thread runtime. Business state, pending RPC calls, CRpc timers, and `CRpcTask` completion must run on the owning `CRpcLoop` thread.
-- `CRpcTaskCompletionSource.TrySetResult`, `TrySetException`, and `TrySetCanceled` must only be called from the owning loop thread.
-- Do not use `System.Threading.Timer` for CRpc async timers. Use `CRpcLoop` timer scheduling and let `CRpcLoop.Tick()` drive timer completion.
-- DotNetty IO threads must not execute business logic directly. They may only enqueue work into the business `CRpcLoop`.
-- `CRpcLoop.Post` is the boundary for external thread ingress into the business loop. Keep business state access on the loop side of this boundary.
-- Normal RPC responses should submit `WriteAndFlushAsync` without awaiting write completion. If write completion must affect business state, post the result back to the business `CRpcLoop` first.
-- `CRpcTask.FromTask` is only for explicit interop with external `.NET Task` APIs. Its completion must be marshaled back to the owning `CRpcLoop` before touching CRpc state.
-- Avoid `Task.Run`, raw `Thread`, thread-pool callbacks, or arbitrary `.NET Task` continuations in CRpc async implementation code unless they are explicitly treated as external interop and post back to `CRpcLoop`.
+- `OrientExecutor` is the business-thread runtime. Business state, pending RPC calls, CRpc timers, and `OrientTask` completion must run on the owning `OrientExecutor` thread.
+- `OrientTaskCompletionSource.TrySetResult`, `TrySetException`, and `TrySetCanceled` must only be called from the owning executor thread.
+- Do not use `System.Threading.Timer` for CRpc async timers. Use `OrientExecutor` timer scheduling and let `OrientExecutor.Tick()` drive timer completion.
+- DotNetty IO threads must not execute business logic directly. They may only enqueue work into the business `OrientExecutor`.
+- `OrientExecutor.Post` is the boundary for external thread ingress into the business executor. Keep business state access on the executor side of this boundary.
+- Normal RPC responses should submit `WriteAndFlushAsync` without awaiting write completion. If write completion must affect business state, post the result back to the business `OrientExecutor` first.
+- `OrientTask.FromTask` is only for explicit interop with external `.NET Task` APIs. Its completion must be marshaled back to the owning `OrientExecutor` before touching CRpc state.
+- Avoid `Task.Run`, raw `Thread`, thread-pool callbacks, or arbitrary `.NET Task` continuations in CRpc async implementation code unless they are explicitly treated as external interop and post back to `OrientExecutor`.
 - Timer queues and continuation lists inside the CRpc async runtime are single-thread-owned; do not make them concurrent unless they are an intentional cross-thread mailbox.

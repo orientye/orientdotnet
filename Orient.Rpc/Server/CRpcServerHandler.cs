@@ -20,7 +20,7 @@ public class CRpcServerHandler : ChannelHandlerAdapter
 
     public override void ChannelActive(IChannelHandlerContext context)
     {
-        server.Loop.Post(() => server.Connections.Register(context.Channel));
+        server.Executor.Post(() => server.Connections.Register(context.Channel));
         base.ChannelActive(context);
     }
 
@@ -42,7 +42,7 @@ public class CRpcServerHandler : ChannelHandlerAdapter
 
         var serviceId = message.ServiceId;
         var methodId = message.MethodId;
-        server.Loop.Post(() =>
+        server.Executor.Post(() =>
         {
             if (server.Services.TryGet(serviceId, out var rpcService))
             {
@@ -116,7 +116,7 @@ public class CRpcServerHandler : ChannelHandlerAdapter
 
     public override void ChannelInactive(IChannelHandlerContext context)
     {
-        server.Loop.Post(() => server.Connections.Unregister(context.Channel));
+        server.Executor.Post(() => server.Connections.Unregister(context.Channel));
         Console.WriteLine($"CRpcServerHandler client disconnected: {context.Channel.RemoteAddress}");
         context.FireChannelInactive();
     }

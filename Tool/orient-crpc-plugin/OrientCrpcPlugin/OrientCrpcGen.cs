@@ -152,7 +152,7 @@ public static class OrientCrpcGen
                     sb.AppendLine();
                     sb.AppendLine($"    protected virtual OrientTask OnPush{method.Name}Async(CRpcPushContext context, {inType} message)");
                     sb.AppendLine("    {");
-                    sb.AppendLine("        return OrientTask.CompletedTask(context.Loop);");
+                    sb.AppendLine("        return OrientTask.CompletedTask(context.Executor);");
                     sb.AppendLine("    }");
                     sb.AppendLine();
                     continue;

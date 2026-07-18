@@ -10,15 +10,15 @@ namespace Orient.Tests;
 public sealed class CRpcClientPipelineFactoryTests : OrientTestBase
 {
     [Fact]
-    public void ConfigureAddsClientCodecAndLoopInboundHandler()
+    public void ConfigureAddsClientCodecAndExecutorInboundHandler()
     {
         var options = new CRpcClientOptions
         {
             HeartbeatIntervalSeconds = 17,
             MaxFrameLength = 4096,
         };
-        var loop = new OrientLoop();
-        var host = new TcpChannelHost(loop, new CRpcClientPipelineFactory(options));
+        var executor = new OrientExecutor();
+        var host = new TcpChannelHost(executor, new CRpcClientPipelineFactory(options));
         var channel = new EmbeddedChannel();
 
         host.PipelineFactory.Configure(channel.Pipeline, host);
@@ -27,15 +27,15 @@ public sealed class CRpcClientPipelineFactoryTests : OrientTestBase
         Assert.NotNull(channel.Pipeline.Get<CRpcClientHeartbeatHandler>());
         Assert.NotNull(channel.Pipeline.Get<CRpcMessageDecoder>());
         Assert.NotNull(channel.Pipeline.Get<CRpcMessageEncoder>());
-        Assert.NotNull(channel.Pipeline.Get<LoopInboundHandler>());
+        Assert.NotNull(channel.Pipeline.Get<ExecutorInboundHandler>());
     }
 
     [Fact]
     public void ConfigureOmitsIdleHandlersWhenDisabled()
     {
         var options = new CRpcClientOptions { HeartbeatEnabled = false };
-        var loop = new OrientLoop();
-        var host = new TcpChannelHost(loop, new CRpcClientPipelineFactory(options));
+        var executor = new OrientExecutor();
+        var host = new TcpChannelHost(executor, new CRpcClientPipelineFactory(options));
         var channel = new EmbeddedChannel();
 
         host.PipelineFactory.Configure(channel.Pipeline, host);

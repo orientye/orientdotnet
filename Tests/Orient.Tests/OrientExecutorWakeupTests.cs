@@ -3,17 +3,17 @@ using Orient.Runtime;
 
 namespace Orient.Tests;
 
-public class OrientLoopWakeupTests : OrientTestBase
+public class OrientExecutorWakeupTests : OrientTestBase
 {
     [Fact]
     public void WaitForWorkOrTimerReturnsImmediatelyWhenActionsPending()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
-        loop.Post(() => { });
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
+        executor.Post(() => { });
 
         var sw = Stopwatch.StartNew();
-        loop.WaitForWorkOrTimer(CancellationToken.None);
+        executor.WaitForWorkOrTimer(CancellationToken.None);
         sw.Stop();
 
         Assert.True(sw.ElapsedMilliseconds < 50);
@@ -22,15 +22,15 @@ public class OrientLoopWakeupTests : OrientTestBase
     [Fact]
     public void PostFromAnotherThreadWakesWaitForWorkOrTimer()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         using var driverReady = new ManualResetEventSlim(false);
         using var waitReturned = new ManualResetEventSlim(false);
 
         var driver = new Thread(() =>
         {
-            loop.BindToCurrentThread();
+            executor.BindToCurrentThread();
             driverReady.Set();
-            loop.WaitForWorkOrTimer(CancellationToken.None);
+            executor.WaitForWorkOrTimer(CancellationToken.None);
             waitReturned.Set();
         })
         {
@@ -40,7 +40,7 @@ public class OrientLoopWakeupTests : OrientTestBase
 
         Assert.True(driverReady.Wait(TimeSpan.FromSeconds(2)));
 
-        loop.Post(() => { });
+        executor.Post(() => { });
         Assert.True(waitReturned.Wait(TimeSpan.FromSeconds(2)));
         driver.Join(TimeSpan.FromSeconds(2));
     }
@@ -48,19 +48,19 @@ public class OrientLoopWakeupTests : OrientTestBase
     [Fact]
     public void WaitForWorkOrTimerWakesWhenTimerBecomesDue()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         var ran = false;
 
         var driver = new Thread(() =>
         {
-            loop.BindToCurrentThread();
-            loop.ScheduleDelay(50, () => ran = true);
+            executor.BindToCurrentThread();
+            executor.ScheduleDelay(50, () => ran = true);
             while (!ran)
             {
-                loop.Tick();
+                executor.Tick();
                 if (!ran)
                 {
-                    loop.WaitForWorkOrTimer(CancellationToken.None);
+                    executor.WaitForWorkOrTimer(CancellationToken.None);
                 }
             }
         })
@@ -76,15 +76,15 @@ public class OrientLoopWakeupTests : OrientTestBase
     [Fact]
     public void MultiplePostsCoalesceIntoSingleWakeup()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         using var driverReady = new ManualResetEventSlim(false);
         using var waitReturned = new ManualResetEventSlim(false);
 
         var driver = new Thread(() =>
         {
-            loop.BindToCurrentThread();
+            executor.BindToCurrentThread();
             driverReady.Set();
-            loop.WaitForWorkOrTimer(CancellationToken.None);
+            executor.WaitForWorkOrTimer(CancellationToken.None);
             waitReturned.Set();
         })
         {
@@ -96,7 +96,7 @@ public class OrientLoopWakeupTests : OrientTestBase
 
         for (var i = 0; i < 100; i++)
         {
-            loop.Post(() => { });
+            executor.Post(() => { });
         }
 
         Assert.True(waitReturned.Wait(TimeSpan.FromSeconds(2)));
@@ -106,15 +106,15 @@ public class OrientLoopWakeupTests : OrientTestBase
     [Fact]
     public void PostAfterResetIsObservedBeforeWait()
     {
-        var loop = new OrientLoop();
+        var executor = new OrientExecutor();
         using var driverReady = new ManualResetEventSlim(false);
         using var waitReturned = new ManualResetEventSlim(false);
 
         var driver = new Thread(() =>
         {
-            loop.BindToCurrentThread();
+            executor.BindToCurrentThread();
             driverReady.Set();
-            loop.WaitForWorkOrTimer(CancellationToken.None);
+            executor.WaitForWorkOrTimer(CancellationToken.None);
             waitReturned.Set();
         })
         {
@@ -123,7 +123,7 @@ public class OrientLoopWakeupTests : OrientTestBase
         driver.Start();
 
         Assert.True(driverReady.Wait(TimeSpan.FromSeconds(2)));
-        loop.Post(() => { });
+        executor.Post(() => { });
         Assert.True(waitReturned.Wait(TimeSpan.FromSeconds(2)));
         driver.Join(TimeSpan.FromSeconds(2));
     }

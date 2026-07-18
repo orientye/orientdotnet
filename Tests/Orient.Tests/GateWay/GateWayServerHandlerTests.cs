@@ -14,17 +14,17 @@ public class GateWayServerHandlerTests : OrientTestBase
     [Fact]
     public void NoFallbackRegisteredWritesErrorResponse()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var sessions = GateWayTestHelpers.CreateSessionTable(
             new global::GateWay.DefaultBackendClientFactory(),
             new NoOpBackendConnector());
-        var server = new CRpcServer(loop);
+        var server = new CRpcServer(executor);
         var channel = CreateHandlerChannel(server, sessions, fallbackServiceId: 0);
 
-        ActivateChannel(loop, channel);
+        ActivateChannel(executor, channel);
         Assert.False(channel.WriteInbound(CRpcTestMessages.CreateRequest(serviceId: 1000)));
-        loop.Tick();
+        executor.Tick();
 
         var response = ReadOutboundCrpcMessage(channel);
         Assert.Equal(CRpcMessageType.Response, response.MessageType);
@@ -34,16 +34,16 @@ public class GateWayServerHandlerTests : OrientTestBase
     [Fact]
     public void MissingInboundConnectionWritesErrorResponse()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var sessions = GateWayTestHelpers.CreateSessionTable(
             new global::GateWay.DefaultBackendClientFactory(),
             new NoOpBackendConnector());
-        var server = new CRpcServer(loop);
+        var server = new CRpcServer(executor);
         var channel = CreateHandlerChannel(server, sessions, fallbackServiceId: 0);
 
         Assert.False(channel.WriteInbound(CRpcTestMessages.CreateRequest(serviceId: 1000)));
-        loop.Tick();
+        executor.Tick();
 
         var response = ReadOutboundCrpcMessage(channel);
         Assert.Equal(CRpcMessageType.Response, response.MessageType);
@@ -53,19 +53,19 @@ public class GateWayServerHandlerTests : OrientTestBase
     [Fact]
     public void FallbackRoutesToRegisteredForwarder()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var sessions = GateWayTestHelpers.CreateSessionTable(
             new global::GateWay.DefaultBackendClientFactory(),
             new NoOpBackendConnector());
         var forwarder = new RecordingForwarderService(fallbackServiceId: 0);
-        var server = new CRpcServer(loop);
+        var server = new CRpcServer(executor);
         RegisterOnServer(server, forwarder);
         var channel = CreateHandlerChannel(server, sessions, fallbackServiceId: 0);
 
-        ActivateChannel(loop, channel);
+        ActivateChannel(executor, channel);
         Assert.False(channel.WriteInbound(CRpcTestMessages.CreateRequest(serviceId: 1000)));
-        loop.Tick();
+        executor.Tick();
 
         Assert.Equal(1, forwarder.CallCount);
         var response = ReadOutboundCrpcMessage(channel);
@@ -93,14 +93,14 @@ public class GateWayServerHandlerTests : OrientTestBase
 
     private static void RegisterOnServer(CRpcServer server, IRpcService service)
     {
-        server.Loop.Post(() => server.Services.Register(service));
-        server.Loop.Tick();
+        server.Executor.Post(() => server.Services.Register(service));
+        server.Executor.Tick();
     }
 
-    private static void ActivateChannel(OrientLoop loop, EmbeddedChannel channel)
+    private static void ActivateChannel(OrientExecutor executor, EmbeddedChannel channel)
     {
         channel.Pipeline.FireChannelActive();
-        loop.Tick();
+        executor.Tick();
     }
 
     private sealed class RecordingForwarderService : IRpcService
@@ -119,7 +119,7 @@ public class GateWayServerHandlerTests : OrientTestBase
         public OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
         {
             CallCount++;
-            return OrientTask.FromResult((-1, Array.Empty<byte>()), OrientLoop.Current);
+            return OrientTask.FromResult((-1, Array.Empty<byte>()), OrientExecutor.Current);
         }
     }
 
@@ -127,7 +127,7 @@ public class GateWayServerHandlerTests : OrientTestBase
     {
         public OrientTask ConnectAsync(Orient.Rpc.Client.CRpcClient client, global::GateWay.BackendEndpoint endpoint)
         {
-            return OrientTask.CompletedTask(OrientLoop.Current);
+            return OrientTask.CompletedTask(OrientExecutor.Current);
         }
     }
 }

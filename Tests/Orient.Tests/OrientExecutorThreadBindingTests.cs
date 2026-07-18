@@ -2,16 +2,16 @@
 
 namespace Orient.Tests;
 
-public class OrientLoopThreadBindingTests : OrientTestBase
+public class OrientExecutorThreadBindingTests : OrientTestBase
 {
     [Fact]
     public void TickOnWrongThreadThrowsAfterBind()
     {
-        var loop = new OrientLoop();
-        DedicatedLoopThread.Run(loop, _ => { });
+        var executor = new OrientExecutor();
+        DedicatedExecutorThread.Run(executor, _ => { });
 
-        var exception = Assert.Throws<InvalidOperationException>(() => loop.Tick());
-        Assert.Contains("loop thread", exception.Message, StringComparison.Ordinal);
+        var exception = Assert.Throws<InvalidOperationException>(() => executor.Tick());
+        Assert.Contains("executor thread", exception.Message, StringComparison.Ordinal);
     }
 
 #if DEBUG
@@ -23,8 +23,8 @@ public class OrientLoopThreadBindingTests : OrientTestBase
         {
             try
             {
-                var firstLoop = new OrientLoop();
-                var secondLoop = new OrientLoop();
+                var firstLoop = new OrientExecutor();
+                var secondLoop = new OrientExecutor();
                 firstLoop.BindToCurrentThread();
                 secondLoop.BindToCurrentThread();
             }

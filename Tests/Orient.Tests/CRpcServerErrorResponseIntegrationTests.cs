@@ -14,18 +14,18 @@ public class CRpcServerErrorResponseIntegrationTests : OrientTestBase
     [Fact]
     public void UnknownServiceReturnsServiceNotFoundOverTcp()
     {
-        var loop = new OrientLoop();
-        var server = new CRpcServer(loop, new CRpcServerOptions
+        var executor = new OrientExecutor();
+        var server = new CRpcServer(executor, new CRpcServerOptions
         {
             Address = IPAddress.Loopback,
             Port = 0,
         });
 
-        OrientLoopRunner.RunUntilComplete(loop, async () =>
+        OrientExecutorRunner.RunUntilComplete(executor, async () =>
         {
             await server.StartAsync();
             var port = GetBoundPort(server);
-            var client = new CRpcClient(loop);
+            var client = new CRpcClient(executor);
             await client.ConnectAsync(IPAddress.Loopback.ToString(), port);
 
             try

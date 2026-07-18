@@ -2,16 +2,16 @@ using System.Diagnostics;
 
 namespace Orient.Runtime;
 
-internal sealed class MinHeapTimerScheduler : IOrientLoopTimerScheduler
+internal sealed class MinHeapTimerScheduler : IOrientExecutorTimerScheduler
 {
     private readonly List<HeapEntry> heap = new();
 
     internal int TimerCount => heap.Count;
 
-    public OrientLoopTimer ScheduleAt(long dueTimestamp, Action callback)
+    public OrientExecutorTimer ScheduleAt(long dueTimestamp, Action callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
-        var timer = new OrientLoopTimer(callback);
+        var timer = new OrientExecutorTimer(callback);
         timer.BindToScheduler(() => RemoveTimer(timer));
 
         var index = heap.Count;
@@ -60,7 +60,7 @@ internal sealed class MinHeapTimerScheduler : IOrientLoopTimerScheduler
         return entry;
     }
 
-    private void RemoveTimer(OrientLoopTimer timer)
+    private void RemoveTimer(OrientExecutorTimer timer)
     {
         var index = timer.HeapIndex;
         if (index < 0)
@@ -151,13 +151,13 @@ internal sealed class MinHeapTimerScheduler : IOrientLoopTimerScheduler
 
     private sealed class HeapEntry
     {
-        public HeapEntry(OrientLoopTimer timer, long dueTimestamp)
+        public HeapEntry(OrientExecutorTimer timer, long dueTimestamp)
         {
             Timer = timer;
             DueTimestamp = dueTimestamp;
         }
 
-        public OrientLoopTimer Timer { get; }
+        public OrientExecutorTimer Timer { get; }
 
         public long DueTimestamp { get; }
     }

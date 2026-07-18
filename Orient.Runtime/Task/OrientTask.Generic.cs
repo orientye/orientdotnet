@@ -27,7 +27,7 @@ public readonly struct OrientTask<T>
         }
 
         /// <summary>
-        /// True when the task completed and the current thread is the task's owner <see cref="OrientLoop"/> thread.
+        /// True when the task completed and the current thread is the task's owner <see cref="OrientExecutor"/> thread.
         /// On other threads this is always false, even if the task has already completed.
         /// </summary>
         public bool IsCompleted => source is not null && source.IsCompletedOnCurrentThread;

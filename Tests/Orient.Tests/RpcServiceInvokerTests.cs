@@ -12,13 +12,13 @@ public class RpcServiceInvokerTests : OrientTestBase
     [Fact]
     public void InvokeAsyncReturnsServiceResult()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var service = new ByteReturnService(1000);
 
         (int code, byte[] body)? result = null;
         var request = CRpcTestMessages.CreateRequest(1000, methodId: 1, reqSequence: 1);
-        var registry = new CRpcConnectionRegistry(loop);
+        var registry = new CRpcConnectionRegistry(executor);
         var connection = registry.Register(new EmbeddedChannel());
         var task = RpcServiceInvoker.InvokeAsync(service, new CRpcContext(connection), request);
         var awaiter = task.GetAwaiter();

@@ -12,21 +12,21 @@ public class CRpcServerPushIntegrationTests : OrientTestBase
     [Fact]
     public void ServiceCanPushToCurrentConnectionWithoutClientAck()
     {
-        var loop = new OrientLoop();
-        loop.BindToCurrentThread();
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
         var service = new PushOnRequestService();
-        var server = new CRpcServer(loop);
+        var server = new CRpcServer(executor);
         server.Services.Register(service);
         var channel = new EmbeddedChannel(
             new CRpcMessageEncoder(),
             new CRpcServerHandler(server));
 
         channel.Pipeline.FireChannelActive();
-        loop.Tick();
+        executor.Tick();
 
         Assert.False(channel.WriteInbound(CRpcTestMessages.CreateRequest(PushOnRequestService.ServiceId)));
-        loop.Tick();
-        loop.Tick();
+        executor.Tick();
+        executor.Tick();
 
         var push = ReadOutboundCrpcMessage(channel);
         var response = ReadOutboundCrpcMessage(channel);

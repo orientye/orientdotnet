@@ -11,7 +11,7 @@ namespace Example.Http;
 
 public sealed class UnifiedServer
 {
-    private readonly OrientLoop loop;
+    private readonly OrientExecutor loop;
     private readonly CRpcServer crpcServer;
     private readonly HelloworldServiceImpl greeter;
     private readonly int port;
@@ -21,7 +21,7 @@ public sealed class UnifiedServer
     private IEventLoopGroup? workerGroup;
 
     public UnifiedServer(
-        OrientLoop loop,
+        OrientExecutor loop,
         CRpcServer crpcServer,
         HelloworldServiceImpl greeter,
         int port,

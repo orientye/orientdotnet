@@ -2,9 +2,9 @@
 
 namespace Orient.Tests;
 
-internal static class DedicatedLoopThread
+internal static class DedicatedExecutorThread
 {
-    public static void Run(OrientLoop loop, Action<OrientLoop> action)
+    public static void Run(OrientExecutor loop, Action<OrientExecutor> action)
     {
         ArgumentNullException.ThrowIfNull(loop);
         ArgumentNullException.ThrowIfNull(action);
@@ -24,7 +24,7 @@ internal static class DedicatedLoopThread
         })
         {
             IsBackground = true,
-            Name = "OrientLoop dedicated test thread",
+            Name = "OrientExecutor dedicated test thread",
         };
 
         thread.Start();

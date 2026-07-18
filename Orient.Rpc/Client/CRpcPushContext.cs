@@ -4,14 +4,14 @@ namespace Orient.Rpc.Client;
 
 public sealed class CRpcPushContext
 {
-    public CRpcPushContext(OrientLoop loop, ushort serviceId, ushort methodId)
+    public CRpcPushContext(OrientExecutor executor, ushort serviceId, ushort methodId)
     {
-        Loop = loop ?? throw new ArgumentNullException(nameof(loop));
+        Executor = executor ?? throw new ArgumentNullException(nameof(executor));
         ServiceId = serviceId;
         MethodId = methodId;
     }
 
-    public OrientLoop Loop { get; }
+    public OrientExecutor Executor { get; }
 
     public ushort ServiceId { get; }
 

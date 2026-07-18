@@ -1,8 +1,8 @@
 namespace Orient.Runtime;
 
-public sealed partial class OrientLoop
+public sealed partial class OrientExecutor
 {
-    public static OrientTask<T> InvokeAsync<T>(OrientLoop targetLoop, Func<OrientTask<T>> action)
+    public static OrientTask<T> InvokeAsync<T>(OrientExecutor targetLoop, Func<OrientTask<T>> action)
     {
         ArgumentNullException.ThrowIfNull(targetLoop);
         ArgumentNullException.ThrowIfNull(action);
@@ -20,7 +20,7 @@ public sealed partial class OrientLoop
         return source.Task;
     }
 
-    public static OrientTask InvokeAsync(OrientLoop targetLoop, Func<OrientTask> action)
+    public static OrientTask InvokeAsync(OrientExecutor targetLoop, Func<OrientTask> action)
     {
         ArgumentNullException.ThrowIfNull(targetLoop);
         ArgumentNullException.ThrowIfNull(action);
@@ -38,7 +38,7 @@ public sealed partial class OrientLoop
         return new OrientTask(source.Task);
     }
 
-    public static OrientTask<T> InvokeAsync<T>(OrientLoop targetLoop, Func<T> action)
+    public static OrientTask<T> InvokeAsync<T>(OrientExecutor targetLoop, Func<T> action)
     {
         ArgumentNullException.ThrowIfNull(targetLoop);
         ArgumentNullException.ThrowIfNull(action);
@@ -56,7 +56,7 @@ public sealed partial class OrientLoop
         return source.Task;
     }
 
-    public static OrientTask InvokeAsync(OrientLoop targetLoop, Action action)
+    public static OrientTask InvokeAsync(OrientExecutor targetLoop, Action action)
     {
         ArgumentNullException.ThrowIfNull(targetLoop);
         ArgumentNullException.ThrowIfNull(action);
@@ -74,13 +74,13 @@ public sealed partial class OrientLoop
         return new OrientTask(source.Task);
     }
 
-    private static OrientLoop RequireCallerLoop()
+    private static OrientExecutor RequireCallerLoop()
     {
         var callerLoop = Current
             ?? throw new InvalidOperationException(
-                "A OrientLoop must be provided explicitly or available via OrientLoop.Current.");
+                "A OrientExecutor must be provided explicitly or available via OrientExecutor.Current.");
 
-        callerLoop.EnsureInLoopThread();
+        callerLoop.EnsureInExecutorThread();
         return callerLoop;
     }
 
@@ -99,7 +99,7 @@ public sealed partial class OrientLoop
     private static void RunSyncOnTargetLoop<T>(
         Func<T> action,
         OrientTaskCompletionSource<T> source,
-        OrientLoop callerLoop)
+        OrientExecutor callerLoop)
     {
         try
         {
@@ -128,7 +128,7 @@ public sealed partial class OrientLoop
     private static void RunVoidOnTargetLoop(
         Action action,
         OrientTaskCompletionSource<OrientUnit> source,
-        OrientLoop callerLoop)
+        OrientExecutor callerLoop)
     {
         try
         {
@@ -143,7 +143,7 @@ public sealed partial class OrientLoop
 
     private static void StartAsyncRunner(OrientTask runner)
     {
-        // Runner continuations stay on the target loop; InvokeAsync returns before completion.
+        // Runner continuations stay on the target executor; InvokeAsync returns before completion.
         _ = runner;
     }
 
@@ -168,7 +168,7 @@ public sealed partial class OrientLoop
     private static async OrientTask RunAsyncOnTargetLoop<T>(
         Func<OrientTask<T>> action,
         OrientTaskCompletionSource<T> source,
-        OrientLoop callerLoop)
+        OrientExecutor callerLoop)
     {
         try
         {
@@ -207,7 +207,7 @@ public sealed partial class OrientLoop
     private static async OrientTask RunAsyncVoidOnTargetLoop(
         Func<OrientTask> action,
         OrientTaskCompletionSource<OrientUnit> source,
-        OrientLoop callerLoop)
+        OrientExecutor callerLoop)
     {
         try
         {

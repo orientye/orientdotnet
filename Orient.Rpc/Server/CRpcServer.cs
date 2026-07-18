@@ -18,16 +18,16 @@ public sealed class CRpcServer
     private IEventLoopGroup? workGroup;
     private int isRunning;
 
-    public CRpcServer(OrientLoop loop, CRpcServerOptions? options = null)
+    public CRpcServer(OrientExecutor executor, CRpcServerOptions? options = null)
     {
-        ArgumentNullException.ThrowIfNull(loop);
-        Loop = loop;
-        Connections = new CRpcConnectionRegistry(loop);
-        Services = new RpcServiceRegistry(loop);
+        ArgumentNullException.ThrowIfNull(executor);
+        Executor = executor;
+        Connections = new CRpcConnectionRegistry(executor);
+        Services = new RpcServiceRegistry(executor);
         this.options = options ?? new CRpcServerOptions();
     }
 
-    public OrientLoop Loop { get; }
+    public OrientExecutor Executor { get; }
 
     public CRpcConnectionRegistry Connections { get; }
 
@@ -38,13 +38,13 @@ public sealed class CRpcServer
     public bool IsRunning => Volatile.Read(ref isRunning) == 1;
 
     /// <summary>
-    /// Demo host helper: bind, run <see cref="OrientLoopHost.RunUntilCancelled"/> on the current thread, then stop.
-    /// Does not clear loop service registrations. Production hosts should use <see cref="StartAsync"/> +
-    /// <see cref="OrientLoopHost.RunUntilCancelled"/> + <see cref="StopAsync"/>.
+    /// Demo host helper: bind, run <see cref="OrientExecutorHost.RunUntilCancelled"/> on the current thread, then stop.
+    /// Does not clear executor service registrations. Production hosts should use <see cref="StartAsync"/> +
+    /// <see cref="OrientExecutorHost.RunUntilCancelled"/> + <see cref="StopAsync"/>.
     /// </summary>
     public OrientTask RunAsync(IPAddress address, int port, bool registerConsoleCancelHandler = true)
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
         var boundOptions = new CRpcServerOptions
         {
             Address = address,
@@ -83,7 +83,7 @@ public sealed class CRpcServer
         {
             var currentRunCancellation = runCancellation
                 ?? throw new InvalidOperationException("CRpcServer run cancellation was not initialized.");
-            OrientLoopHost.RunUntilCancelled(Loop, currentRunCancellation.Token);
+            OrientExecutorHost.RunUntilCancelled(Executor, currentRunCancellation.Token);
         }
         finally
         {
@@ -98,13 +98,13 @@ public sealed class CRpcServer
 
     public OrientTask StartAsync(CancellationToken cancellationToken = default)
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
         return StartInternalAsync(options, cancellationToken);
     }
 
     public OrientTask StopAsync()
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
         runCancellation?.Cancel();
         return StopInternalAsync();
     }
@@ -151,7 +151,7 @@ public sealed class CRpcServer
         {
             bootstrapChannel = await OrientTask.FromTask(
                 bootstrap.BindAsync(startOptions.Address, startOptions.Port),
-                Loop);
+                Executor);
             Volatile.Write(ref isRunning, 1);
         }
         catch
@@ -176,33 +176,33 @@ public sealed class CRpcServer
 
         if (currentBootstrapChannel is not null)
         {
-            await OrientTask.FromTask(currentBootstrapChannel.CloseAsync(), Loop);
+            await OrientTask.FromTask(currentBootstrapChannel.CloseAsync(), Executor);
         }
 
         if (currentWorkGroup is not null)
         {
             await OrientTask.FromTask(
                 currentWorkGroup.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)),
-                Loop);
+                Executor);
         }
 
         if (currentGroup is not null)
         {
             await OrientTask.FromTask(
                 currentGroup.ShutdownGracefullyAsync(TimeSpan.Zero, TimeSpan.FromSeconds(1)),
-                Loop);
+                Executor);
         }
 
         currentRunCancellation?.Dispose();
     }
 
-    private void EnsureOwnerLoopThread()
+    private void EnsureOwnerExecutorThread()
     {
-        var loop = OrientLoop.Current
-            ?? throw new InvalidOperationException("CRpcServer lifecycle operations must be called from a bound OrientLoop thread.");
-        if (!ReferenceEquals(Loop, loop))
+        var executor = OrientExecutor.Current
+            ?? throw new InvalidOperationException("CRpcServer lifecycle operations must be called from a bound OrientExecutor thread.");
+        if (!ReferenceEquals(Executor, executor))
         {
-            throw new InvalidOperationException("CRpcServer lifecycle operations must be called on the server's owner OrientLoop thread.");
+            throw new InvalidOperationException("CRpcServer lifecycle operations must be called on the server's owner OrientExecutor thread.");
         }
     }
 }

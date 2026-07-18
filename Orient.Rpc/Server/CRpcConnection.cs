@@ -6,13 +6,13 @@ namespace Orient.Rpc.Server;
 
 public sealed class CRpcConnection
 {
-    private readonly OrientLoop ownerLoop;
+    private readonly OrientExecutor ownerExecutor;
     private readonly IChannel channel;
     private bool isActive = true;
 
-    internal CRpcConnection(OrientLoop ownerLoop, long id, IChannel channel)
+    internal CRpcConnection(OrientExecutor ownerExecutor, long id, IChannel channel)
     {
-        this.ownerLoop = ownerLoop ?? throw new ArgumentNullException(nameof(ownerLoop));
+        this.ownerExecutor = ownerExecutor ?? throw new ArgumentNullException(nameof(ownerExecutor));
         this.channel = channel ?? throw new ArgumentNullException(nameof(channel));
         ConnectionId = id;
     }
@@ -23,12 +23,12 @@ public sealed class CRpcConnection
 
     public OrientTask<bool> SendPushAsync(ushort serviceId, ushort methodId, byte[] body)
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
         ArgumentNullException.ThrowIfNull(body);
 
         if (!IsActive)
         {
-            return OrientTask.FromResult(false, ownerLoop);
+            return OrientTask.FromResult(false, ownerExecutor);
         }
 
         var message = CRpcMessage.Create(
@@ -46,13 +46,13 @@ public sealed class CRpcConnection
         }
         catch
         {
-            return OrientTask.FromResult(false, ownerLoop);
+            return OrientTask.FromResult(false, ownerExecutor);
         }
     }
 
     internal void MarkInactive()
     {
-        EnsureOwnerLoopThread();
+        EnsureOwnerExecutorThread();
         isActive = false;
     }
 
@@ -60,7 +60,7 @@ public sealed class CRpcConnection
     {
         try
         {
-            await OrientTask.FromTask(writeTask, ownerLoop);
+            await OrientTask.FromTask(writeTask, ownerExecutor);
             return true;
         }
         catch
@@ -69,13 +69,13 @@ public sealed class CRpcConnection
         }
     }
 
-    private void EnsureOwnerLoopThread()
+    private void EnsureOwnerExecutorThread()
     {
-        var loop = OrientLoop.Current
-            ?? throw new InvalidOperationException("CRpcConnection operations must be called from a bound OrientLoop thread.");
-        if (!ReferenceEquals(ownerLoop, loop))
+        var executor = OrientExecutor.Current
+            ?? throw new InvalidOperationException("CRpcConnection operations must be called from a bound OrientExecutor thread.");
+        if (!ReferenceEquals(ownerExecutor, executor))
         {
-            throw new InvalidOperationException("CRpcConnection operations must be called on the connection's owner OrientLoop thread.");
+            throw new InvalidOperationException("CRpcConnection operations must be called on the connection's owner OrientExecutor thread.");
         }
     }
 }

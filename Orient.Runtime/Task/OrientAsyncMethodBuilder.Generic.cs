@@ -10,7 +10,7 @@ public struct OrientAsyncMethodBuilder<T>
     {
         return new OrientAsyncMethodBuilder<T>
         {
-            source = new OrientTaskCompletionSource<T>(OrientLoop.RequireCurrentOr())
+            source = new OrientTaskCompletionSource<T>(OrientExecutor.RequireCurrentOr())
         };
     }
 
@@ -58,7 +58,7 @@ public struct OrientAsyncMethodBuilder<T>
 
     private OrientTaskCompletionSource<T> GetSource()
     {
-        source ??= new OrientTaskCompletionSource<T>(OrientLoop.RequireCurrentOr());
+        source ??= new OrientTaskCompletionSource<T>(OrientExecutor.RequireCurrentOr());
         return source;
     }
 }

@@ -5,7 +5,7 @@ using Example.Http;
 
 Console.WriteLine("Hello, RPC Server!");
 
-var loop = new OrientLoop();
+var executor = new OrientExecutor();
 using var cts = new CancellationTokenSource();
 
 Console.CancelKeyPress += (_, e) =>
@@ -20,20 +20,20 @@ var crpcPort = ParsePort(args, defaultPort: 7999);
 var httpPort = crpcPort == 7999 ? 8080 : crpcPort + 1000;
 
 var impl = new HelloworldServiceImpl();
-var crpcServer = new CRpcServer(loop, new CRpcServerOptions { Port = crpcPort });
+var crpcServer = new CRpcServer(executor, new CRpcServerOptions { Port = crpcPort });
 HttpListenServer? httpListen = null;
 UnifiedServer? unifiedServer = null;
 
 if (unified)
 {
-    unifiedServer = new UnifiedServer(loop, crpcServer, impl, crpcPort);
+    unifiedServer = new UnifiedServer(executor, crpcServer, impl, crpcPort);
 }
 else if (withHttp)
 {
-    httpListen = new HttpListenServer(loop, crpcServer, impl, httpPort);
+    httpListen = new HttpListenServer(executor, crpcServer, impl, httpPort);
 }
 
-OrientLoopRunner.RunUntilComplete(loop, async () =>
+OrientExecutorRunner.RunUntilComplete(executor, async () =>
 {
     crpcServer.Services.Register(impl);
 
@@ -59,11 +59,11 @@ OrientLoopRunner.RunUntilComplete(loop, async () =>
 
 try
 {
-    OrientLoopHost.RunUntilCancelled(loop, cts.Token);
+    OrientExecutorHost.RunUntilCancelled(executor, cts.Token);
 }
 finally
 {
-    OrientLoopRunner.RunUntilComplete(loop, async () =>
+    OrientExecutorRunner.RunUntilComplete(executor, async () =>
     {
         if (unifiedServer is not null)
         {

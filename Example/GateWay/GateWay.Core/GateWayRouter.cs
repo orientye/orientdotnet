@@ -5,13 +5,13 @@ namespace GateWay;
 
 public sealed class GateWayRouter
 {
-    private readonly OrientLoop loop;
+    private readonly OrientExecutor loop;
     private readonly GateWayConfig config;
     private readonly GateWaySessionTable sessionTable;
     private readonly BackendPoolRegistry poolRegistry;
 
     public GateWayRouter(
-        OrientLoop loop,
+        OrientExecutor loop,
         GateWayConfig config,
         BackendPoolRegistry poolRegistry,
         GateWaySessionTable sessionTable)

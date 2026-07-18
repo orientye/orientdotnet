@@ -1,8 +1,8 @@
 namespace Orient.Runtime;
 
-public static class OrientLoopHost
+public static class OrientExecutorHost
 {
-    public static void RunUntilCancelled(OrientLoop loop, CancellationToken cancellationToken)
+    public static void RunUntilCancelled(OrientExecutor loop, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(loop);
         loop.BindToCurrentThread();
@@ -15,7 +15,7 @@ public static class OrientLoopHost
             }
             catch (Exception exception)
             {
-                Console.Error.WriteLine($"OrientLoopHost: unexpected exception escaped Tick: {exception}");
+                Console.Error.WriteLine($"OrientExecutorHost: unexpected exception escaped Tick: {exception}");
             }
 
             if (cancellationToken.IsCancellationRequested)

@@ -10,6 +10,6 @@ public sealed class GreeterClient : GreeterClientBase
         ServerHelloPush message)
     {
         Console.WriteLine($"server push: {message.Msg}");
-        return OrientTask.CompletedTask(context.Loop);
+        return OrientTask.CompletedTask(context.Executor);
     }
 }

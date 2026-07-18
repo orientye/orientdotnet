@@ -6,14 +6,14 @@ using Example;
 
 Console.WriteLine("Hello, GateWay Client!");
 
-var loop = new OrientLoop();
+var executor = new OrientExecutor();
 
-OrientLoopRunner.RunUntilComplete(loop, async () =>
+OrientExecutorRunner.RunUntilComplete(executor, async () =>
 {
     var reference = await CRpcReference
         .For<GreeterClient>()
         .Url("crpc://127.0.0.1:7000")  // Connect to Gateway instead of backend directly
-        .ConnectAsync(loop);
+        .ConnectAsync(executor);
 
     try
     {

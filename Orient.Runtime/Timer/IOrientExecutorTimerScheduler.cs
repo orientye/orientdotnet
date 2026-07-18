@@ -1,8 +1,8 @@
 namespace Orient.Runtime;
 
-internal interface IOrientLoopTimerScheduler
+internal interface IOrientExecutorTimerScheduler
 {
-    OrientLoopTimer ScheduleAt(long dueTimestamp, Action callback);
+    OrientExecutorTimer ScheduleAt(long dueTimestamp, Action callback);
 
     int RunDueTimers(long now, int maxTimers);
 
