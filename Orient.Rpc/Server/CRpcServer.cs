@@ -4,14 +4,17 @@ using DotNetty.Transport.Bootstrapping;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Sockets;
 
+using Orient.Logging;
 using Orient.Runtime;
 using Orient.Rpc.Codec;
+using Orient.Rpc.Logging;
 
 namespace Orient.Rpc.Server;
 
 public sealed class CRpcServer
 {
     private readonly CRpcServerOptions options;
+    private readonly IOrientLoggerFactory loggerFactory;
     private CancellationTokenSource? runCancellation;
     private IChannel? bootstrapChannel;
     private IEventLoopGroup? group;
@@ -25,6 +28,8 @@ public sealed class CRpcServer
         Connections = new CRpcConnectionRegistry(executor);
         Services = new RpcServiceRegistry(executor);
         this.options = options ?? new CRpcServerOptions();
+        loggerFactory = this.options.LoggerFactory ?? NullOrientLoggerFactory.Instance;
+        Logger = loggerFactory.CreateLogger("Orient.Rpc.Server.CRpcServer");
     }
 
     public OrientExecutor Executor { get; }
@@ -34,6 +39,8 @@ public sealed class CRpcServer
     public RpcServiceRegistry Services { get; }
 
     public CRpcServerOptions Options => options;
+
+    internal IOrientLogger Logger { get; }
 
     public bool IsRunning => Volatile.Read(ref isRunning) == 1;
 
@@ -53,6 +60,7 @@ public sealed class CRpcServer
             BossThreadCount = options.BossThreadCount,
             WorkerThreadCount = options.WorkerThreadCount,
             SoBacklog = options.SoBacklog,
+            LoggerFactory = options.LoggerFactory,
         };
 
         return RunInternalAsync(boundOptions, registerConsoleCancelHandler);
@@ -65,8 +73,12 @@ public sealed class CRpcServer
 
         var currentBootstrapChannel = bootstrapChannel
             ?? throw new InvalidOperationException("CRpcServer did not initialize its bootstrap channel.");
-        Console.WriteLine($"CRpcServer started, Listening on {currentBootstrapChannel.LocalAddress}");
-        Console.WriteLine("Press Ctrl+C to stop.");
+        if (Logger.IsEnabled(OrientLogLevel.Info))
+        {
+            Logger.Info(
+                OrientRpcLogEventIds.ServerStarted,
+                $"CRpcServer started, listening on {currentBootstrapChannel.LocalAddress}.");
+        }
 
         ConsoleCancelEventHandler? cancelHandler = null;
         if (registerConsoleCancelHandler)
@@ -137,7 +149,8 @@ public sealed class CRpcServer
             .ChildHandler(new ActionChannelInitializer<IChannel>(channel =>
             {
                 var handler = options.HandlerFactory?.Invoke(this) ?? new CRpcServerHandler(this);
-                new CRpcServerPipelineFactory(startOptions).Configure(channel.Pipeline, handler);
+                new CRpcServerPipelineFactory(startOptions, loggerFactory)
+                    .Configure(channel.Pipeline, handler);
             }));
 
         if (startOptions.WriteBufferWarningEnabled)

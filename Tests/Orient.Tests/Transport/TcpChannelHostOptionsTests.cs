@@ -12,6 +12,7 @@ public sealed class TcpChannelHostOptionsTests
         Assert.Equal(TcpChannelHostOptions.DefaultIoThreadCount, options.IoThreadCount);
         Assert.Equal(TcpChannelHostOptions.DefaultConnectTimeoutSeconds, options.ConnectTimeoutSeconds);
         Assert.True(options.TcpNoDelay);
+        Assert.False(options.ChannelLoggingEnabled);
         Assert.Equal("tcp-channel", options.LoggingName);
     }
 

@@ -11,6 +11,8 @@ public sealed class TcpChannelHostOptions
 
     public bool TcpNoDelay { get; init; } = true;
 
+    public bool ChannelLoggingEnabled { get; init; } = false;
+
     public string LoggingName { get; init; } = "tcp-channel";
 
     public void Validate()

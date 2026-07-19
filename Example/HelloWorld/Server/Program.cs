@@ -1,11 +1,18 @@
+using Orient.Logging;
 using Orient.Runtime;
+using Orient.Rpc.Logging;
 using Orient.Rpc.Server;
 using Example;
 using Example.Http;
 
-Console.WriteLine("Hello, RPC Server!");
+var sink = new ConsoleOrientLogSink();
+await using var logService = new OrientLogService(sink, minLevel: OrientLogLevel.Info);
+logService.Start();
+using var dotNettyLogging = OrientDotNettyLogging.Install(logService);
+var logger = logService.CreateLogger("HelloWorld.Server");
+logger.Info(0, "Hello, RPC Server!");
 
-var executor = new OrientExecutor();
+var executor = new OrientExecutor(new OrientExecutorOptions { LoggerFactory = logService });
 using var cts = new CancellationTokenSource();
 
 Console.CancelKeyPress += (_, e) =>
@@ -20,7 +27,11 @@ var crpcPort = ParsePort(args, defaultPort: 7999);
 var httpPort = crpcPort == 7999 ? 8080 : crpcPort + 1000;
 
 var impl = new HelloworldServiceImpl();
-var crpcServer = new CRpcServer(executor, new CRpcServerOptions { Port = crpcPort });
+var crpcServer = new CRpcServer(executor, new CRpcServerOptions
+{
+    Port = crpcPort,
+    LoggerFactory = logService,
+});
 HttpListenServer? httpListen = null;
 UnifiedServer? unifiedServer = null;
 
@@ -40,20 +51,20 @@ OrientExecutorRunner.RunUntilComplete(executor, async () =>
     if (unifiedServer is not null)
     {
         await unifiedServer.StartAsync(cts.Token);
-        Console.WriteLine($"Unified CRpc+HTTP listening on {crpcPort}");
-        Console.WriteLine($"POST http://127.0.0.1:{crpcPort}/api/greeter/say-hello");
+        logger.Info(0, $"Unified CRpc+HTTP listening on {crpcPort}");
+        logger.Info(0, $"POST http://127.0.0.1:{crpcPort}/api/greeter/say-hello");
     }
     else if (httpListen is not null)
     {
         await crpcServer.StartAsync(cts.Token);
         await httpListen.StartAsync(cts.Token);
-        Console.WriteLine($"CRpc listening on {crpcPort}, HTTP demo on {httpPort}");
-        Console.WriteLine($"POST http://127.0.0.1:{httpPort}/api/greeter/say-hello");
+        logger.Info(0, $"CRpc listening on {crpcPort}, HTTP demo on {httpPort}");
+        logger.Info(0, $"POST http://127.0.0.1:{httpPort}/api/greeter/say-hello");
     }
     else
     {
         await crpcServer.StartAsync(cts.Token);
-        Console.WriteLine($"CRpc listening on {crpcPort}");
+        logger.Info(0, $"CRpc listening on {crpcPort}");
     }
 });
 

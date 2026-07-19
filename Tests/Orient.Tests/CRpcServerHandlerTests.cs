@@ -1,9 +1,11 @@
 using System.Net.Sockets;
 using Orient.Runtime;
 using Orient.Rpc;
+using Orient.Rpc.Logging;
 using Orient.Rpc.Protocol;
 using Orient.Rpc.Codec;
 using Orient.Rpc.Server;
+using Orient.Tests.Logging;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Embedded;
 
@@ -220,13 +222,18 @@ public class CRpcServerHandlerTests : OrientTestBase
     public void ChannelInactiveLogsNormalClientDisconnect()
     {
         var inactive = new InactiveCaptureHandler();
-        var server = new CRpcServer(new OrientExecutor());
+        var loggerFactory = new RecordingOrientLoggerFactory();
+        var server = new CRpcServer(
+            new OrientExecutor(),
+            new CRpcServerOptions { LoggerFactory = loggerFactory });
         var channel = CreateHandlerChannel(server, tailHandlers: new IChannelHandler[] { inactive });
 
-        var output = ConsoleTestOutput.Capture(() => channel.Pipeline.FireChannelInactive());
+        channel.Pipeline.FireChannelInactive();
 
         Assert.True(inactive.WasInactive);
-        Assert.Contains("client disconnected", output);
+        var entry = Assert.Single(loggerFactory.Entries);
+        Assert.Equal(OrientRpcLogEventIds.ClientDisconnected, entry.EventId);
+        Assert.Contains("client disconnected", entry.Message);
     }
 
     [Fact]

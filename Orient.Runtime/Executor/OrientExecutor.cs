@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Orient.Logging;
 
 namespace Orient.Runtime;
 
@@ -38,15 +39,19 @@ public sealed partial class OrientExecutor
 
     public OrientExecutor(OrientExecutorOptions? options)
     {
-        timerScheduler = (options ?? new OrientExecutorOptions()).CreateTimerScheduler();
+        var resolvedOptions = options ?? new OrientExecutorOptions();
+        timerScheduler = resolvedOptions.CreateTimerScheduler();
+        Logger = resolvedOptions.CreateLogger("Orient.Runtime.OrientExecutor");
     }
 
     public bool IsInExecutorThread => threadId != 0 && Environment.CurrentManagedThreadId == threadId;
 
+    internal IOrientLogger Logger { get; }
+
     /// <summary>
     /// Raised on the executor thread when an action or timer callback throws.
-    /// Exceptions thrown from this handler are caught and written to <see cref="Console.Error"/>
-    /// to keep the executor alive.
+    /// Exceptions thrown from this handler are caught and logged, with
+    /// <see cref="Console.Error"/> as a last resort, to keep the executor alive.
     /// </summary>
     public event Action<Exception>? UnhandledException;
 
@@ -202,7 +207,7 @@ public sealed partial class OrientExecutor
         var handler = UnhandledException;
         if (handler is null)
         {
-            Console.Error.WriteLine($"OrientExecutor unhandled exception: {exception}");
+            LogErrorOrWriteToStderr("OrientExecutor unhandled exception", exception);
             return;
         }
 
@@ -212,9 +217,22 @@ public sealed partial class OrientExecutor
         }
         catch (Exception handlerException)
         {
-            Console.Error.WriteLine($"OrientExecutor unhandled exception handler threw: {handlerException}");
-            Console.Error.WriteLine($"original exception: {exception}");
+            LogErrorOrWriteToStderr(
+                "OrientExecutor unhandled exception handler threw",
+                handlerException);
+            LogErrorOrWriteToStderr("original exception", exception);
         }
+    }
+
+    private void LogErrorOrWriteToStderr(string message, Exception exception)
+    {
+        if (Logger.IsEnabled(OrientLogLevel.Error))
+        {
+            Logger.Log(OrientLogLevel.Error, 1001, message, exception);
+            return;
+        }
+
+        Console.Error.WriteLine($"{message}: {exception}");
     }
 
     private static long MillisecondsToStopwatchTicks(int millisecondsDelay)

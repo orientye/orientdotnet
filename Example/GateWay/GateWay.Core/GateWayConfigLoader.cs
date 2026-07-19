@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Orient.Logging;
 
 namespace GateWay;
 
@@ -12,11 +13,13 @@ public static class GateWayConfigLoader
         AllowTrailingCommas = true,
     };
 
-    public static GateWayConfig LoadOrDefault(string? path)
+    public static GateWayConfig LoadOrDefault(string? path, IOrientLogger logger)
     {
+        ArgumentNullException.ThrowIfNull(logger);
+
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
-            Console.WriteLine("GateWay: config file not found, using in-memory demo pool (7999 + 8001).");
+            logger.Warn(0, "Config file not found; using in-memory demo pool (7999 + 8001).");
             return GateWayConfig.CreateDefaultDemo();
         }
 

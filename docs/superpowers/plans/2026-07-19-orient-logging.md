@@ -1009,17 +1009,17 @@ Keep `Console.CancelKeyPress` / `Console.ReadKey` unchanged.
 - Verify: `orient-dotnet.sln` contains Orient.Logging
 - Verify: no remaining diagnostic Console in Runtime/Rpc/GateWay.Core (allowlisted exceptions)
 
-- [ ] **Step 1: Rewrite §8.6**
+- [x] **Step 1: Rewrite §8.6**
 
 Replace temporary Console observability note with: use `Orient.Logging`; events record `ManagedThreadId`; producers never write sinks directly.
 
-- [ ] **Step 2: Rewrite §10 item 4**
+- [x] **Step 2: Rewrite §10 item 4**
 
 ```markdown
 4. **替换诊断性 `Console.WriteLine`**：引入 `Orient.Logging`（有界队列 + 专用日志线程），记录 `ManagedThreadId`；DotNetty 经 Rpc 侧 `InternalLoggerFactory` 桥接。
 ```
 
-- [ ] **Step 3: Grep gate**
+- [x] **Step 3: Grep gate**
 
 ```powershell
 rg "Console\.(WriteLine|Error\.WriteLine)" Orient.Runtime Orient.Rpc Example/GateWay/GateWay.Core -g "*.cs"
@@ -1031,7 +1031,7 @@ Expected remaining: only intentional last-resort stderr in Runtime unhandled/Tic
 
 ### Task 9: Full verification
 
-- [ ] **Step 1: Build solution**
+- [x] **Step 1: Build solution**
 
 ```powershell
 dotnet build orient-dotnet.sln -c Release
@@ -1039,7 +1039,7 @@ dotnet build orient-dotnet.sln -c Release
 
 Expected: 0 errors
 
-- [ ] **Step 2: Run all tests**
+- [x] **Step 2: Run all tests**
 
 ```powershell
 dotnet test Tests/Orient.Tests/Orient.Tests.csproj -c Release
@@ -1047,7 +1047,7 @@ dotnet test Tests/Orient.Tests/Orient.Tests.csproj -c Release
 
 Expected: all PASS
 
-- [ ] **Step 3: Spec coverage checklist**
+- [x] **Step 3: Spec coverage checklist**
 
 Confirm each spec section has a task:
 

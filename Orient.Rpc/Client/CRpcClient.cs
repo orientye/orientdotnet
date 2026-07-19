@@ -1,5 +1,7 @@
+using Orient.Logging;
 using Orient.Runtime;
 using Orient.Rpc.Codec;
+using Orient.Rpc.Logging;
 using Orient.Rpc.Transport;
 using DotNetty.Transport.Channels;
 
@@ -11,6 +13,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     private readonly Dictionary<(ushort ServiceId, ushort MethodId), CRpcPushHandler> pushHandlers = new();
     private readonly CRpcClientOptions options;
     private readonly TcpChannelHost host;
+    private readonly IOrientLogger logger;
     private long reqSequence;
     private readonly OrientExecutor ownerExecutor;
 
@@ -36,6 +39,8 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
         ownerExecutor = executor;
         this.options = options;
         this.host = host;
+        logger = (options.LoggerFactory ?? NullOrientLoggerFactory.Instance)
+            .CreateLogger("Orient.Rpc.Client.CRpcClient");
         ConfigureHostCallbacks();
     }
 
@@ -180,10 +185,12 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
     private static TcpChannelHost CreateHost(OrientExecutor executor, CRpcClientOptions options)
     {
         options.Validate();
+        var loggerFactory = options.LoggerFactory ?? NullOrientLoggerFactory.Instance;
+        var decoderLogger = loggerFactory.CreateLogger("Orient.Rpc.Codec.CRpcMessageDecoder");
 
         return new TcpChannelHost(
             executor,
-            new CRpcClientPipelineFactory(options),
+            new CRpcClientPipelineFactory(options, decoderLogger),
             new TcpChannelHostOptions
             {
                 IoThreadCount = options.IoThreadCount,
@@ -232,8 +239,12 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
                 CompletePendingCall(message);
                 return;
             default:
-                Console.WriteLine(
-                    $"CRpcClient ignored inbound message type {message.MessageType}: serviceId={message.ServiceId}, methodId={message.MethodId}");
+                if (logger.IsEnabled(OrientLogLevel.Warn))
+                {
+                    logger.Warn(
+                        OrientRpcLogEventIds.IgnoredMessageType,
+                        $"CRpcClient ignored inbound message type {message.MessageType}: serviceId={message.ServiceId}, methodId={message.MethodId}");
+                }
                 return;
         }
     }
@@ -262,7 +273,12 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
             }
             else
             {
-                Console.WriteLine($"CRpcClient unhandled push: serviceId={serviceId}, methodId={methodId}");
+                if (logger.IsEnabled(OrientLogLevel.Warn))
+                {
+                    logger.Warn(
+                        OrientRpcLogEventIds.UnhandledPush,
+                        $"CRpcClient unhandled push: serviceId={serviceId}, methodId={methodId}");
+                }
             }
 
             return;
@@ -311,8 +327,13 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
             return;
         }
 
-        Console.WriteLine(
-            $"CRpcClient push handler exception: serviceId={context.ServiceId}, methodId={context.MethodId}, exception={exception}");
+        if (logger.IsEnabled(OrientLogLevel.Error))
+        {
+            logger.Error(
+                OrientRpcLogEventIds.PushHandlerException,
+                $"CRpcClient push handler exception: serviceId={context.ServiceId}, methodId={context.MethodId}",
+                exception);
+        }
     }
 
     private void __Send(long reqSeq, ushort serviceId, ushort methodId, byte[] bytes)
@@ -324,7 +345,6 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
             reqSeq,
             resultCode: 0,
             bytes);
-        Console.WriteLine($"*********CallAsync send");
         var writeTask = host.WriteAndFlushAsync(req);
         var awaiter = writeTask.GetAwaiter();
         if (awaiter.IsCompleted)
@@ -342,7 +362,12 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
             {
                 if (results.Remove(reqSeq, out var removed))
                 {
-                    Console.WriteLine($"*********CallAsync timeout: {timeout}");
+                    if (logger.IsEnabled(OrientLogLevel.Warn))
+                    {
+                        logger.Warn(
+                            OrientRpcLogEventIds.CallTimeout,
+                            $"CRpcClient CallAsync timeout: {timeout} ms");
+                    }
                     removed.Source.TrySetException(new TimeoutException());
                 }
             });

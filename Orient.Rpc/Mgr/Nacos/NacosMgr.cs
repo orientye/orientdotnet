@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Nacos.V2;
 using Nacos.V2.DependencyInjection;
 
@@ -55,7 +56,8 @@ namespace Orient.Rpc.Mgr.Nacos
                 x.NamingUseRpc = true;
             });
 
-            services.AddLogging(builder => { builder.AddConsole(); });
+            services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+            services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
 
             IServiceProvider serviceProvider = services.BuildServiceProvider();
 

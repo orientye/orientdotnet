@@ -1,4 +1,5 @@
 using System.Runtime.ExceptionServices;
+using Orient.Logging;
 
 namespace Orient.Runtime;
 
@@ -57,7 +58,15 @@ public static class OrientExecutorRunner
             }
             catch (Exception tickException)
             {
-                Console.Error.WriteLine($"OrientExecutorRunner: unexpected exception escaped Tick: {tickException}");
+                const string message = "OrientExecutorRunner: unexpected exception escaped Tick";
+                if (executor.Logger.IsEnabled(OrientLogLevel.Error))
+                {
+                    executor.Logger.Log(OrientLogLevel.Error, 1003, message, tickException);
+                }
+                else
+                {
+                    Console.Error.WriteLine($"{message}: {tickException}");
+                }
             }
 
             if (!completed)

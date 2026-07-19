@@ -41,7 +41,10 @@ public sealed class TcpChannelHost : IAsyncDisposable
             .Handler(new ActionChannelInitializer<ISocketChannel>(socket =>
             {
                 var pipeline = socket.Pipeline;
-                pipeline.AddLast(new LoggingHandler(this.options.LoggingName));
+                if (this.options.ChannelLoggingEnabled)
+                {
+                    pipeline.AddLast(new LoggingHandler(this.options.LoggingName));
+                }
                 this.pipelineFactory.Configure(pipeline, this);
             }));
     }

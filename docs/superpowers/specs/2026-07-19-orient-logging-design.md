@@ -152,7 +152,7 @@ Correctness of RPC/runtime must not depend on a log line being written successfu
 - Shutdown sequence: stop accepting → drain queue → flush sink → stop thread → dispose sink.
 - Sink or consumer exceptions are isolated: count/report them; never callback into a business `OrientExecutor`.
 - Process abort / hard crash is best-effort only.
-- When no factory is configured, Runtime/Rpc use Null loggers. Existing stderr fallbacks in `OrientExecutor` / Host / Runner should move to logger calls; if Null, those lines disappear unless the host subscribes `UnhandledException` (or configures logging). Document this behavior change for operators.
+- When no factory is configured, Runtime/Rpc use Null loggers. `OrientExecutor` / Host / Runner keep stderr only as a last resort for unhandled or Tick-escape exceptions when Error logging is disabled; configured Error logging suppresses that fallback.
 
 ## Migration scope
 

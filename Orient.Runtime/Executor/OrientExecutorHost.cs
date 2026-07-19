@@ -1,3 +1,5 @@
+using Orient.Logging;
+
 namespace Orient.Runtime;
 
 public static class OrientExecutorHost
@@ -15,7 +17,15 @@ public static class OrientExecutorHost
             }
             catch (Exception exception)
             {
-                Console.Error.WriteLine($"OrientExecutorHost: unexpected exception escaped Tick: {exception}");
+                const string message = "OrientExecutorHost: unexpected exception escaped Tick";
+                if (executor.Logger.IsEnabled(OrientLogLevel.Error))
+                {
+                    executor.Logger.Log(OrientLogLevel.Error, 1002, message, exception);
+                }
+                else
+                {
+                    Console.Error.WriteLine($"{message}: {exception}");
+                }
             }
 
             if (cancellationToken.IsCancellationRequested)

@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using Orient.Logging;
 using Orient.Runtime;
 using Orient.Rpc;
 using Orient.Rpc.Protocol;
@@ -14,12 +15,18 @@ public class GateWayServerHandler : ChannelHandlerAdapter
     private readonly CRpcServer server;
     private readonly GateWaySessionTable sessions;
     private readonly ushort fallbackServiceId;
+    private readonly IOrientLogger logger;
 
-    public GateWayServerHandler(CRpcServer server, GateWaySessionTable sessions, ushort fallbackServiceId = 0)
+    public GateWayServerHandler(
+        CRpcServer server,
+        GateWaySessionTable sessions,
+        ushort fallbackServiceId,
+        IOrientLogger logger)
     {
         this.server = server ?? throw new ArgumentNullException(nameof(server));
         this.sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         this.fallbackServiceId = fallbackServiceId;
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public override void ChannelActive(IChannelHandlerContext context)
@@ -86,7 +93,7 @@ public class GateWayServerHandler : ChannelHandlerAdapter
         ChannelWriteUtil.WriteAndFlushFireAndForget(ctx, rsp);
     }
 
-    private static void CompleteProcessMessage(OrientTask.Awaiter awaiter)
+    private void CompleteProcessMessage(OrientTask.Awaiter awaiter)
     {
         try
         {
@@ -94,7 +101,7 @@ public class GateWayServerHandler : ChannelHandlerAdapter
         }
         catch (Exception exception)
         {
-            Console.WriteLine($"GateWay process exception={exception}");
+            logger.Error(0, "GateWay message processing failed.", exception);
         }
     }
 
@@ -124,7 +131,7 @@ public class GateWayServerHandler : ChannelHandlerAdapter
                         }
                         catch (Exception exception)
                         {
-                            Console.WriteLine($"GateWay session remove exception={exception}");
+                            logger.Error(0, "GateWay session removal failed.", exception);
                         }
                     });
                 }

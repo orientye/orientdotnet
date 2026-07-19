@@ -4,6 +4,8 @@ using Orient.Rpc;
 using Orient.Rpc.Protocol;
 using Orient.Rpc.Util;
 using Orient.Rpc.Codec;
+using Orient.Logging;
+using Orient.Rpc.Logging;
 using DotNetty.Transport.Channels;
 
 namespace Orient.Rpc.Server;
@@ -35,8 +37,12 @@ public class CRpcServerHandler : ChannelHandlerAdapter
 
         if (message.MessageType != CRpcMessageType.Request)
         {
-            Console.WriteLine(
-                $"CRpcServerHandler ignored inbound message type {message.MessageType}: serviceId={message.ServiceId}, methodId={message.MethodId}");
+            if (server.Logger.IsEnabled(OrientLogLevel.Warn))
+            {
+                server.Logger.Warn(
+                    OrientRpcLogEventIds.IgnoredMessageType,
+                    $"CRpcServerHandler ignored inbound message type {message.MessageType}: serviceId={message.ServiceId}, methodId={message.MethodId}");
+            }
             return;
         }
 
@@ -53,9 +59,6 @@ public class CRpcServerHandler : ChannelHandlerAdapter
                 RpcServiceInvoker.WriteFrameworkErrorResponse(ctx, message, CRpcStatusCode.ServiceNotFound);
             }
         });
-        
-        Console.WriteLine($"CRpcServerHandler recv msg: serviceId={serviceId}, methodId={methodId}");
-
     }
 
     private void ProcessMessage(IRpcService rpcService, IChannelHandlerContext ctx, object msg)
@@ -78,7 +81,7 @@ public class CRpcServerHandler : ChannelHandlerAdapter
         awaiter.OnCompleted(() => CompleteProcessMessage(ctx, request, awaiter));
     }
 
-    private static async OrientTask ProcessMessageAsync(
+    private async OrientTask ProcessMessageAsync(
         IRpcService rpcService,
         CRpcConnection connection,
         IChannelHandlerContext ctx,
@@ -93,12 +96,12 @@ public class CRpcServerHandler : ChannelHandlerAdapter
         }
         catch (Exception exception)
         {
-            Console.WriteLine($"CRpcServerHandler process exception: serviceId={request.ServiceId}, methodId={request.MethodId}, exception={exception}");
+            LogProcessException(request, exception);
             RpcServiceInvoker.WriteFrameworkErrorResponse(ctx, request, CRpcStatusCode.InternalError);
         }
     }
 
-    private static void CompleteProcessMessage(
+    private void CompleteProcessMessage(
         IChannelHandlerContext ctx,
         CRpcMessage request,
         OrientTask.Awaiter awaiter)
@@ -109,7 +112,7 @@ public class CRpcServerHandler : ChannelHandlerAdapter
         }
         catch (Exception exception)
         {
-            Console.WriteLine($"CRpcServerHandler process exception: serviceId={request.ServiceId}, methodId={request.MethodId}, exception={exception}");
+            LogProcessException(request, exception);
             RpcServiceInvoker.WriteFrameworkErrorResponse(ctx, request, CRpcStatusCode.InternalError);
         }
     }
@@ -117,7 +120,12 @@ public class CRpcServerHandler : ChannelHandlerAdapter
     public override void ChannelInactive(IChannelHandlerContext context)
     {
         server.Executor.Post(() => server.Connections.Unregister(context.Channel));
-        Console.WriteLine($"CRpcServerHandler client disconnected: {context.Channel.RemoteAddress}");
+        if (server.Logger.IsEnabled(OrientLogLevel.Info))
+        {
+            server.Logger.Info(
+                OrientRpcLogEventIds.ClientDisconnected,
+                $"CRpcServerHandler client disconnected: {context.Channel.RemoteAddress}");
+        }
         context.FireChannelInactive();
     }
 
@@ -125,12 +133,34 @@ public class CRpcServerHandler : ChannelHandlerAdapter
     {
         if (IsRemoteDisconnect(exception))
         {
-            Console.WriteLine($"CRpcServerHandler remote disconnected: {exception.Message}");
+            if (server.Logger.IsEnabled(OrientLogLevel.Info))
+            {
+                server.Logger.Info(
+                    OrientRpcLogEventIds.RemoteDisconnect,
+                    $"CRpcServerHandler remote disconnected: {exception.Message}");
+            }
             return;
         }
 
-        Console.WriteLine($"******************exception={exception}");
+        if (server.Logger.IsEnabled(OrientLogLevel.Error))
+        {
+            server.Logger.Error(
+                OrientRpcLogEventIds.ChannelException,
+                "CRpcServerHandler channel exception.",
+                exception);
+        }
         context.FireExceptionCaught(exception);
+    }
+
+    private void LogProcessException(CRpcMessage request, Exception exception)
+    {
+        if (server.Logger.IsEnabled(OrientLogLevel.Error))
+        {
+            server.Logger.Error(
+                OrientRpcLogEventIds.ProcessException,
+                $"CRpcServerHandler process exception: serviceId={request.ServiceId}, methodId={request.MethodId}",
+                exception);
+        }
     }
 
     private static bool IsRemoteDisconnect(Exception exception)

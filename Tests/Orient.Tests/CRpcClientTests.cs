@@ -1,3 +1,4 @@
+using Orient.Logging;
 using Orient.Runtime;
 using Orient.Rpc.Client;
 using Orient.Rpc.Codec;
@@ -424,7 +425,9 @@ public class CRpcClientTests : OrientTestBase
         var executor = new OrientExecutor();
         executor.BindToCurrentThread();
         var options = new CRpcClientOptions();
-        var host = new TcpChannelHost(executor, new CRpcClientPipelineFactory(options));
+        var host = new TcpChannelHost(
+            executor,
+            new CRpcClientPipelineFactory(options, NullOrientLogger.Instance));
 
         var client = new CRpcClient(executor, options, host);
 

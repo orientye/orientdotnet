@@ -806,10 +806,12 @@ OrientExecutorRunner.RunUntilComplete(executor, async () =>
 
 - 已提供 `CRpcReference`；`RunUntilComplete` 适合 main 线程一次性脚本，常驻客户端用 `OrientExecutorHost.RunUntilCancelled`。
 
-#### 8.6 业务回调里 `Console.WriteLine` 当作可观测性
+#### 8.6 Console 不是可观测性通道
 
-- `CRpcServerHandler` / `CRpcClient` 等处有大量 `Console.WriteLine($"*******…");`（`ExecutorInboundHandler` 本身无日志）。
-- 这是临时调试，**不是架构**。后续应该走 `Microsoft.Extensions.Logging` 之类的抽象，并能区分 IO 线程 / executor 线程的来源。
+- Runtime、Rpc、Gateway 与示例中的诊断事件统一使用项目自有的 `Orient.Logging`；生产者只向有界队列提交事件，不直接执行 Console 或其他 sink I/O。
+- 每个事件在生产线程自动记录 `ManagedThreadId`，以 category + thread id 关联上下文；调用点不再猜测或标注 `[executor|io|tp]` 线程角色。
+- DotNetty 日志由 Rpc 侧 bridge 接入 `InternalLoggerFactory.DefaultFactory`，与应用日志共用宿主配置的 logger factory。
+- 未配置 logger factory 时使用 Null logger。仅 Runtime 的 unhandled / Tick-escape 保留 stderr 最后兜底，并且只在 Error 级别被禁用时触发。
 
 ---
 
@@ -1207,4 +1209,4 @@ while (!cancellationToken.IsCancellationRequested)
 1. **`ExecutorRoute` 钩子**：`CRpcServer` / `HttpServer` 增加 `Func<..., OrientExecutor>? ExecutorRoute`，支持按消息路由到不同 executor（见 §9.2）。
 2. **共享 IO group 注入**：`TcpChannelHost` 已支持注入共享 group；`CRpcServerOptions` / `CRpcClientOptions` 对 CRPC 服务端与 Reference 客户端暴露注入仍待做。
 3. **多 executor 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 executor"的 demo，覆盖跨 executor 调用 / 路由 / 关闭顺序。
-4. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[executor|io|tp]` 来源。
+4. **替换诊断性 `Console.WriteLine`**：引入 `Orient.Logging`（有界队列 + 专用日志线程），记录 `ManagedThreadId`；DotNetty 由 Rpc 侧 bridge 通过 `InternalLoggerFactory.DefaultFactory` 接入。

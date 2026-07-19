@@ -3,6 +3,7 @@ using Orient.Rpc;
 using Orient.Rpc.Protocol;
 using Orient.Rpc.Codec;
 using Orient.Rpc.Server;
+using Orient.Tests.Logging;
 using DotNetty.Buffers;
 using DotNetty.Transport.Channels;
 using DotNetty.Transport.Channels.Embedded;
@@ -73,14 +74,49 @@ public class GateWayServerHandlerTests : OrientTestBase
         Assert.Equal(-1, response.ResultCode);
     }
 
+    [Fact]
+    public void ProcessingFailureIsLogged()
+    {
+        var executor = new OrientExecutor();
+        executor.BindToCurrentThread();
+        var sessions = GateWayTestHelpers.CreateSessionTable(
+            new global::GateWay.DefaultBackendClientFactory(),
+            new NoOpBackendConnector());
+        var service = new FailingService(serviceId: 1000, executor);
+        var server = new CRpcServer(executor);
+        RegisterOnServer(server, service);
+        var loggerFactory = new RecordingOrientLoggerFactory();
+        var channel = CreateHandlerChannel(
+            server,
+            sessions,
+            fallbackServiceId: 0,
+            loggerFactory);
+
+        ActivateChannel(executor, channel);
+        Assert.False(channel.WriteInbound(CRpcTestMessages.CreateRequest(serviceId: 1000)));
+        executor.Tick();
+
+        var entry = Assert.Single(loggerFactory.Entries);
+        Assert.Equal("GateWay.ServerHandler", entry.Category);
+        Assert.Equal(Orient.Logging.OrientLogLevel.Error, entry.Level);
+        Assert.Equal("GateWay message processing failed.", entry.Message);
+        Assert.Same(service.Failure, entry.Exception);
+    }
+
     private static EmbeddedChannel CreateHandlerChannel(
         CRpcServer server,
         global::GateWay.GateWaySessionTable sessions,
-        ushort fallbackServiceId)
+        ushort fallbackServiceId,
+        RecordingOrientLoggerFactory? loggerFactory = null)
     {
         return new EmbeddedChannel(
             new CRpcMessageEncoder(),
-            new global::GateWay.GateWayServerHandler(server, sessions, fallbackServiceId));
+            new global::GateWay.GateWayServerHandler(
+                server,
+                sessions,
+                fallbackServiceId,
+                (loggerFactory ?? new RecordingOrientLoggerFactory())
+                    .CreateLogger("GateWay.ServerHandler")));
     }
 
     private static CRpcMessage ReadOutboundCrpcMessage(EmbeddedChannel channel)
@@ -120,6 +156,29 @@ public class GateWayServerHandlerTests : OrientTestBase
         {
             CallCount++;
             return OrientTask.FromResult((-1, Array.Empty<byte>()), OrientExecutor.Current);
+        }
+    }
+
+    private sealed class FailingService : IRpcService
+    {
+        private readonly ushort serviceId;
+        private readonly OrientExecutor executor;
+
+        public FailingService(ushort serviceId, OrientExecutor executor)
+        {
+            this.serviceId = serviceId;
+            this.executor = executor;
+        }
+
+        public Exception Failure { get; } = new InvalidOperationException("expected");
+
+        public ushort GetServiceId() => serviceId;
+
+        public OrientTask<(int, byte[])> OnMessageAsync(IRpcContext context, IRpcMessage req)
+        {
+            var source = new OrientTaskCompletionSource<(int, byte[])>(executor);
+            source.TrySetException(Failure);
+            return source.Task;
         }
     }
 

@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GateWayClient", "Example\Ga
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Orient.DataManager", "Orient.DataManager\Orient.DataManager.csproj", "{962CFA73-6F3A-4EE2-A325-50C54927DC17}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Orient.Logging", "Orient.Logging\Orient.Logging.csproj", "{8CC513AC-BD8C-4F7C-8187-BF471394420F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -71,6 +73,10 @@ Global
 		{962CFA73-6F3A-4EE2-A325-50C54927DC17}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{962CFA73-6F3A-4EE2-A325-50C54927DC17}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{962CFA73-6F3A-4EE2-A325-50C54927DC17}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8CC513AC-BD8C-4F7C-8187-BF471394420F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8CC513AC-BD8C-4F7C-8187-BF471394420F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8CC513AC-BD8C-4F7C-8187-BF471394420F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8CC513AC-BD8C-4F7C-8187-BF471394420F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

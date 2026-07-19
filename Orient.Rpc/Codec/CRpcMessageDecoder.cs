@@ -2,14 +2,19 @@ using DotNetty.Buffers;
 using DotNetty.Codecs;
 using DotNetty.Common.Utilities;
 using DotNetty.Transport.Channels;
+using Orient.Logging;
+using Orient.Rpc.Logging;
 
 namespace Orient.Rpc.Codec;
 
 public sealed class CRpcMessageDecoder : LengthFieldBasedFrameDecoder
 {
-    public CRpcMessageDecoder(int maxFrameLength)
+    private readonly IOrientLogger logger;
+
+    public CRpcMessageDecoder(int maxFrameLength, IOrientLogger logger)
         : base(maxFrameLength, lengthFieldOffset: 4, lengthFieldLength: 4, lengthAdjustment: 0, initialBytesToStrip: 8)
     {
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     protected override object Decode(IChannelHandlerContext context, IByteBuffer input)
@@ -19,10 +24,15 @@ public sealed class CRpcMessageDecoder : LengthFieldBasedFrameDecoder
             return null;
         }
 
-        if (input.GetInt(input.ReaderIndex) != CRpcMessage.Magic)
+        var magic = input.GetInt(input.ReaderIndex);
+        if (magic != CRpcMessage.Magic)
         {
-            Console.WriteLine(
-                $"{context.Channel} CRpc decode failed, closing connection: invalid magic 0x{input.GetInt(input.ReaderIndex):X8}.");
+            if (logger.IsEnabled(OrientLogLevel.Error))
+            {
+                logger.Error(
+                    OrientRpcLogEventIds.DecodeFailed,
+                    $"{context.Channel} CRpc decode failed, closing connection: invalid magic 0x{magic:X8}.");
+            }
             _ = context.CloseAsync();
             return null;
         }
@@ -40,7 +50,13 @@ public sealed class CRpcMessageDecoder : LengthFieldBasedFrameDecoder
         }
         catch (Exception exception)
         {
-            Console.WriteLine($"{context.Channel} CRpc decode failed, closing connection: {exception.Message}");
+            if (logger.IsEnabled(OrientLogLevel.Error))
+            {
+                logger.Error(
+                    OrientRpcLogEventIds.DecodeFailed,
+                    $"{context.Channel} CRpc decode failed, closing connection.",
+                    exception);
+            }
             _ = context.CloseAsync();
             return null;
         }

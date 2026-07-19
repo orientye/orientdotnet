@@ -1,23 +1,32 @@
+using Orient.Logging;
 using Orient.Runtime;
+using Orient.Rpc.Logging;
 using Orient.Rpc.Server;
 
 namespace GateWay;
 
 public static class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
-        Console.WriteLine("GateWay starting...");
+        var sink = new ConsoleOrientLogSink();
+        await using var logService = new OrientLogService(sink, minLevel: OrientLogLevel.Info);
+        logService.Start();
+        using var dotNettyLogging = OrientDotNettyLogging.Install(logService);
+        var logger = logService.CreateLogger("GateWay.Server");
+        logger.Info(0, "GateWay starting...");
 
         var configPath = ResolveConfigPath(args);
-        var config = GateWayConfigLoader.LoadOrDefault(configPath);
+        var config = GateWayConfigLoader.LoadOrDefault(
+            configPath,
+            logService.CreateLogger("GateWay.Config"));
         var poolRegistry = config.BuildRegistry();
 
-        var executor = new OrientExecutor();
+        var executor = new OrientExecutor(new OrientExecutorOptions { LoggerFactory = logService });
         var pushRelay = new GateWayPushRelay();
         var sessionTable = new GateWaySessionTable(
             poolRegistry,
-            new DefaultBackendClientFactory(),
+            new DefaultBackendClientFactory(logService),
             new TcpBackendConnector(),
             pushRelay);
         var router = new GateWayRouter(executor, config, poolRegistry, sessionTable);
@@ -32,7 +41,12 @@ public static class Program
         var server = new CRpcServer(executor, new CRpcServerOptions
         {
             Port = config.ListenPort,
-            HandlerFactory = srv => new GateWayServerHandler(srv, sessionTable, config.FallbackServiceId),
+            LoggerFactory = logService,
+            HandlerFactory = srv => new GateWayServerHandler(
+                srv,
+                sessionTable,
+                config.FallbackServiceId,
+                logService.CreateLogger("GateWay.ServerHandler")),
         });
 
         OrientExecutorRunner.RunUntilComplete(executor, async () =>
@@ -41,13 +55,13 @@ public static class Program
             await server.StartAsync(cts.Token);
         });
 
-        Console.WriteLine($"GateWay listening on {config.ListenPort}");
+        logger.Info(0, $"GateWay listening on {config.ListenPort}");
         foreach (var serviceId in poolRegistry.ServiceIds)
         {
             if (poolRegistry.TryGetPool(serviceId, out var pool))
             {
                 var endpoints = string.Join(", ", pool.Endpoints.Select(endpoint => endpoint.ToString()));
-                Console.WriteLine($"GateWay pool serviceId={serviceId}: {endpoints}");
+                logger.Info(0, $"GateWay pool serviceId={serviceId}: {endpoints}");
             }
         }
 
@@ -64,7 +78,7 @@ public static class Program
             });
         }
 
-        Console.WriteLine("GateWay stopped.");
+        logger.Info(0, "GateWay stopped.");
     }
 
     private static string? ResolveConfigPath(string[] args)

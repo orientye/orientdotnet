@@ -1,3 +1,4 @@
+using Orient.Logging;
 using Orient.Runtime;
 using Orient.Rpc.Client;
 
@@ -10,5 +11,13 @@ public interface IBackendClientFactory
 
 public sealed class DefaultBackendClientFactory : IBackendClientFactory
 {
-    public CRpcClient Create(OrientExecutor executor) => new CRpcClient(executor);
+    private readonly IOrientLoggerFactory loggerFactory;
+
+    public DefaultBackendClientFactory(IOrientLoggerFactory? loggerFactory = null)
+    {
+        this.loggerFactory = loggerFactory ?? NullOrientLoggerFactory.Instance;
+    }
+
+    public CRpcClient Create(OrientExecutor executor) =>
+        new(executor, new CRpcClientOptions { LoggerFactory = loggerFactory });
 }

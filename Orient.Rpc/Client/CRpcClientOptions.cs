@@ -1,3 +1,4 @@
+using Orient.Logging;
 using Orient.Rpc.Codec;
 
 namespace Orient.Rpc.Client;
@@ -27,6 +28,8 @@ public sealed class CRpcClientOptions
     public int MaxFrameLength { get; init; } = DefaultMaxFrameLength;
 
     public int CallTimeoutMilliseconds { get; init; } = DefaultCallTimeoutMilliseconds;
+
+    public IOrientLoggerFactory? LoggerFactory { get; init; }
 
     public void Validate()
     {

@@ -1,4 +1,5 @@
 using System.Net;
+using Orient.Logging;
 using Orient.Rpc.Client;
 using Orient.Rpc.Codec;
 using DotNetty.Transport.Channels;
@@ -50,6 +51,8 @@ public sealed class CRpcServerOptions
     public int WriteBufferLowWaterMark { get; init; } = DefaultWriteBufferLowWaterMark;
 
     public int WriteBufferHighWaterMark { get; init; } = DefaultWriteBufferHighWaterMark;
+
+    public IOrientLoggerFactory? LoggerFactory { get; init; }
 
     /// <summary>
     /// Optional factory for creating the channel handler added to each child channel's pipeline.

@@ -2,16 +2,19 @@ using Orient.Rpc.Codec;
 using Orient.Rpc.Transport;
 using DotNetty.Handlers.Timeout;
 using DotNetty.Transport.Channels;
+using Orient.Logging;
 
 namespace Orient.Rpc.Client;
 
 internal sealed class CRpcClientPipelineFactory : IChannelPipelineFactory
 {
     private readonly CRpcClientOptions options;
+    private readonly IOrientLogger decoderLogger;
 
-    public CRpcClientPipelineFactory(CRpcClientOptions options)
+    public CRpcClientPipelineFactory(CRpcClientOptions options, IOrientLogger decoderLogger)
     {
         this.options = options ?? throw new ArgumentNullException(nameof(options));
+        this.decoderLogger = decoderLogger ?? throw new ArgumentNullException(nameof(decoderLogger));
     }
 
     public void Configure(IChannelPipeline pipeline, TcpChannelHost host)
@@ -31,7 +34,7 @@ internal sealed class CRpcClientPipelineFactory : IChannelPipelineFactory
 
         pipeline.AddLast(
             "decoder",
-            new CRpcMessageDecoder(options.MaxFrameLength));
+            new CRpcMessageDecoder(options.MaxFrameLength, decoderLogger));
         pipeline.AddLast(
             "encoder",
             new CRpcMessageEncoder());

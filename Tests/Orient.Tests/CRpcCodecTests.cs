@@ -1,4 +1,7 @@
-﻿using Orient.Rpc.Codec;
+﻿using Orient.Logging;
+using Orient.Rpc.Codec;
+using Orient.Rpc.Logging;
+using Orient.Tests.Logging;
 using DotNetty.Buffers;
 using DotNetty.Transport.Channels.Embedded;
 
@@ -148,7 +151,9 @@ public class CRpcCodecTests
     public void DecoderRoundTripsEncodedRequestThroughPipeline()
     {
         var encoder = new CRpcMessageEncoder();
-        var decoder = new CRpcMessageDecoder(maxFrameLength: 1024 * 1024);
+        var decoder = new CRpcMessageDecoder(
+            maxFrameLength: 1024 * 1024,
+            NullOrientLogger.Instance);
         var original = CRpcMessage.Create(
             CRpcMessageType.Request,
             serviceId: 1000,
@@ -193,7 +198,9 @@ public class CRpcCodecTests
     {
         var original = CRpcMessage.CreateHeartbeat();
         var encoder = new CRpcMessageEncoder();
-        var decoder = new CRpcMessageDecoder(maxFrameLength: 1024);
+        var decoder = new CRpcMessageDecoder(
+            maxFrameLength: 1024,
+            new RecordingOrientLoggerFactory().CreateLogger("test.decoder"));
         var encodeChannel = new EmbeddedChannel(encoder);
         Assert.True(encodeChannel.WriteOutbound(original));
         var frame = encodeChannel.ReadOutbound<IByteBuffer>();
@@ -207,6 +214,26 @@ public class CRpcCodecTests
         Assert.Equal(0, decoded.ServiceId);
         Assert.Equal(0, decoded.MethodId);
         Assert.Equal(0, decoded.ReqSequence);
+    }
+
+    [Fact]
+    public void DecoderLogsInvalidMagic()
+    {
+        var loggerFactory = new RecordingOrientLoggerFactory();
+        var decoder = new CRpcMessageDecoder(
+            maxFrameLength: 1024,
+            loggerFactory.CreateLogger("test.decoder"));
+        var channel = new EmbeddedChannel(decoder);
+        var invalidFrame = Unpooled.Buffer();
+        invalidFrame.WriteInt(unchecked((int)0xDEADBEEF));
+        invalidFrame.WriteInt(CRpcMessageHeader.FixedLength);
+
+        channel.WriteInbound(invalidFrame);
+
+        Assert.Contains(
+            loggerFactory.Entries,
+            entry => entry.EventId == OrientRpcLogEventIds.DecodeFailed
+                && entry.Message.Contains("invalid magic", StringComparison.Ordinal));
     }
 
     [Fact]

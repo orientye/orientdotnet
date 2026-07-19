@@ -1,4 +1,5 @@
-﻿using Orient.Runtime;
+﻿using Orient.Logging;
+using Orient.Runtime;
 using Orient.Rpc.Client;
 using Orient.Rpc.Codec;
 using Orient.Rpc.Transport;
@@ -18,7 +19,9 @@ public sealed class CRpcClientPipelineFactoryTests : OrientTestBase
             MaxFrameLength = 4096,
         };
         var executor = new OrientExecutor();
-        var host = new TcpChannelHost(executor, new CRpcClientPipelineFactory(options));
+        var host = new TcpChannelHost(
+            executor,
+            new CRpcClientPipelineFactory(options, NullOrientLogger.Instance));
         var channel = new EmbeddedChannel();
 
         host.PipelineFactory.Configure(channel.Pipeline, host);
@@ -35,7 +38,9 @@ public sealed class CRpcClientPipelineFactoryTests : OrientTestBase
     {
         var options = new CRpcClientOptions { HeartbeatEnabled = false };
         var executor = new OrientExecutor();
-        var host = new TcpChannelHost(executor, new CRpcClientPipelineFactory(options));
+        var host = new TcpChannelHost(
+            executor,
+            new CRpcClientPipelineFactory(options, NullOrientLogger.Instance));
         var channel = new EmbeddedChannel();
 
         host.PipelineFactory.Configure(channel.Pipeline, host);
@@ -47,6 +52,14 @@ public sealed class CRpcClientPipelineFactoryTests : OrientTestBase
     [Fact]
     public void ConstructorThrowsWhenOptionsIsNull()
     {
-        Assert.Throws<ArgumentNullException>(() => new CRpcClientPipelineFactory(null!));
+        Assert.Throws<ArgumentNullException>(
+            () => new CRpcClientPipelineFactory(null!, NullOrientLogger.Instance));
+    }
+
+    [Fact]
+    public void ConstructorThrowsWhenDecoderLoggerIsNull()
+    {
+        Assert.Throws<ArgumentNullException>(
+            () => new CRpcClientPipelineFactory(new CRpcClientOptions(), null!));
     }
 }
