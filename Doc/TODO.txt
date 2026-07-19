@@ -51,13 +51,3 @@
    - DotNetty `0.7.6` 长期维护风险仍在。
    - 当前已有 `TcpChannelHost`、`IChannelPipelineFactory` 等传输边界雏形；继续把协议/业务层与 DotNetty 解耦，为 System.IO.Pipelines、Kestrel transport、SuperSocket 或直接 Socket 留迁移空间。
 
-## 已完成归档
-
-### 2026-07-19
-
-- 项目自有日志通道已落地。
-  - 新增 BCL-only 的 `Orient.Logging`：有界非阻塞队列、专用消费线程、批量 sink、级别过滤、Null logger 与丢弃计数/摘要。
-  - 日志事件自动记录时间、级别、event id、category、`ManagedThreadId`、消息与可选异常。
-  - Runtime、Rpc、Gateway 和示例的诊断输出已迁移；仅 Runtime unhandled / Tick-escape 在 Error 日志未启用时保留 stderr 兜底。
-  - DotNetty 通过 Rpc 侧 bridge 接入统一 logger factory，channel `LoggingHandler` 默认关闭。
-  - `Orient.Rpc` 已移除未使用的 `Microsoft.Extensions.Logging.Console` 包引用。
