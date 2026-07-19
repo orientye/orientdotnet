@@ -787,19 +787,19 @@ sequenceDiagram
 
 `ChannelRead` 里固定 `server.Executor.Post(...)` —— 一个 `CRpcServer` 实例只绑一个 executor。若需"按连接 / 按 serviceId / 按用户 ID 路由到不同 executor"，须改 handler 或增加路由抽象（例如在 `CRpcServer` 上加 `Func<CRpcMessage, OrientExecutor>? ExecutorRoute`）。应用层 `GreeterHttpHandler` 同样固定单 executor。
 
-#### 8.3 `CRpcClient` 的 owner executor 绑定（已落地）
+#### 8.3 `CRpcClient` 的 owner executor 绑定
 
 - `pending calls` 表与 `channel` 连接状态均在 client 实例上，访问约定为 **owner executor 线程**（见 [§9.4 关键不变量](#94-关键不变量重申)）。
 - 生命周期 API（`ConnectAsync` / `CloseAsync` / `ShutdownIoAsync`）已统一为 `OrientTask`；DotNetty `.NET Task` 仅作 IO interop，completion 必须回到 owner executor。
 - 推荐 teardown：`await reference.CloseAsync()` → `await reference.ShutdownIoAsync()`；`IAsyncDisposable.DisposeAsync` 保留兼容，但不适合在 executor 内 `await using` 等待异步 close。
 
-#### 8.4 Server / HTTP endpoint 生命周期绑定（已落地）
+#### 8.4 Server / HTTP endpoint 生命周期绑定
 
 - `CRpcServer.StartAsync` / `StopAsync` 与应用层 `HttpListenServer.StartAsync` / `StopAsync`（及 `UnifiedServer`）已统一为 `OrientTask`，必须在 owner executor 线程调用。
 - `bootstrapChannel`、IO groups、运行状态的写入收束到 owner executor；对外 `IsRunning` 是 `Volatile` 快照。
 - `CRpcServer.RunAsync` 仅作为 demo host helper 保留；生产组合为 `StartAsync` + `OrientExecutorHost.RunUntilCancelled` + `StopAsync`（见 HelloWorld `Program.cs`）。
 
-#### 8.5 `OrientExecutorRunner.RunUntilComplete` 的使用方式（已落地）
+#### 8.5 `OrientExecutorRunner.RunUntilComplete` 的使用方式
 
 `HelloWorld/Client/Program.cs` 里（connect / call / close 均在 executor 内）：
 
