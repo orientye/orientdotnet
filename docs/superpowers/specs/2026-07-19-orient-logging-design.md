@@ -13,7 +13,7 @@ Introduce a lightweight, project-owned logging stack so that:
 3. Call sites remain simple: category + level + message; each event automatically records `ManagedThreadId`.
 4. Hosts that do not configure logging stay silent by default.
 
-This addresses [architecture.md §8.6](../../../Doc/architecture.md) and [§10 item 4](../../../Doc/architecture.md).
+This addresses [architecture.md §8.6](../../../Doc/architecture.md).
 
 ## Non-goals
 
@@ -162,7 +162,7 @@ Correctness of RPC/runtime must not depend on a log line being written successfu
 - `Orient.Rpc`: `CRpcClient`, `CRpcServer`, `CRpcServerHandler`, decoder, write-buffer warning, related diagnostics
 - `Example/GateWay/GateWay.Core` and Example `Program` / client display logs
 - DotNetty internal logger bridge + optional channel logging option
-- Update `Doc/architecture.md` §8.6 and §10 item 4 to match this design (ThreadId, not source tags)
+- Update `Doc/architecture.md` §8.6 to match this design (ThreadId, not source tags)
 - Remove unused MEL Console package reference from `Orient.Rpc`
 
 ### Out of scope / leave alone
@@ -185,7 +185,6 @@ Correctness of RPC/runtime must not depend on a log line being written successfu
 After implementation (or as part of the same change set as the logging feature):
 
 - Rewrite §8.6: Console is not the observability path; use `Orient.Logging` and record `ThreadId`.
-- Rewrite §10 item 4: “Introduce Orient.Logging; replace diagnostic Console writes; record thread id.”
 - Spec location: this file under `docs/superpowers/specs/`.
 
 ## Open implementation details (left to the plan)

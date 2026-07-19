@@ -85,7 +85,7 @@
 | `Example/GateWay/GateWayServer/Program.cs` | Same |
 | `Example/GateWay/Client/Program.cs` | Same |
 | `Example/GateWay/GateWay.Core/*` | Replace diagnostic Console |
-| `Doc/architecture.md` | §8.6 + §10 item 4 |
+| `Doc/architecture.md` | §8.6 |
 | `Tests/Orient.Tests/Logging/*` | **Create** unit tests |
 
 Keep: `Console.CancelKeyPress`, `Console.ReadKey`, `Tool/orient-crpc-plugin` stdio.
@@ -1005,7 +1005,7 @@ Keep `Console.CancelKeyPress` / `Console.ReadKey` unchanged.
 ### Task 8: Docs + solution polish
 
 **Files:**
-- Modify: `Doc/architecture.md` §8.6 and §10 item 4
+- Modify: `Doc/architecture.md` §8.6（§10 已移除；待办见 `Doc/TODO.txt`）
 - Verify: `orient-dotnet.sln` contains Orient.Logging
 - Verify: no remaining diagnostic Console in Runtime/Rpc/GateWay.Core (allowlisted exceptions)
 
@@ -1013,11 +1013,7 @@ Keep `Console.CancelKeyPress` / `Console.ReadKey` unchanged.
 
 Replace temporary Console observability note with: use `Orient.Logging`; events record `ManagedThreadId`; producers never write sinks directly.
 
-- [x] **Step 2: Rewrite §10 item 4**
-
-```markdown
-4. **替换诊断性 `Console.WriteLine`**：引入 `Orient.Logging`（有界队列 + 专用日志线程），记录 `ManagedThreadId`；DotNetty 经 Rpc 侧 `InternalLoggerFactory` 桥接。
-```
+- [x] **Step 2: ~~Rewrite §10 item 4~~（跳过：§10 已不存在）
 
 - [x] **Step 3: Grep gate**
 

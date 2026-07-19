@@ -54,10 +54,10 @@
 
 | 篇章 | 章节 | 内容 |
 | --- | --- | --- |
-| [第一部分 · 原则与模型](#第一部分--原则与模型) | [§1](#1-设计目标与不变量)–[§4](#4-关系总览) | 不变量、组件、线程、拓扑与边界 |
+| [第一部分 · 原则与模型](#第一部分--原则与模型) | [§1](#1-设计目标)–[§4](#4-关系总览) | 不变量、组件、线程、拓扑与边界 |
 | [第二部分 · Service 通信](#第二部分--service-通信) | [§5](#5-service-间通信模型) | 同线程 / 跨 executor / 跨进程选型与示例 |
 | [第三部分 · 实现剖析](#第三部分--实现剖析) | [§6](#6-关键类的职责切片)–[§7](#7-完整请求生命周期) | 关键类代码切片、请求时序 |
-| [第四部分 · 现状、目标与演进](#第四部分--现状目标与演进) | [§8](#8-现状中的设计问题按严重程度)–[§9](#9-目标架构建议方向不是当前实现) | 问题清单、目标架构、待办项 |
+| [第四部分 · 现状、目标与演进](#第四部分--现状目标与演进) | [§8](#8-现状中的设计问题按严重程度)–[§9](#9-目标架构建议方向不是当前实现) | 问题清单、目标架构；待办见 `Doc/TODO.txt` |
 
 ---
 
@@ -99,8 +99,8 @@ CRpc 想要的核心模型是 **单线程业务循环 + 异步状态机**：
 | RPC 异步原语 | `OrientTask` / `OrientTask<T>` / `OrientTaskCompletionSource<T>` / `OrientAsyncMethodBuilder*` | 自定义 await 状态机；continuation 通过 `executor.Post` 回到 executor 线程恢复。 |
 | Service 注册表 | `RpcServiceRegistry` | 由 `CRpcServer.Services` 持有；`Register` / `TryGet` / `Unregister` 均 `EnsureInExecutorThread`（A2）。 |
 | 服务端 | `CRpcServer` | 协议端点：持有 `Executor`、`Services`、`Connections`；`StartAsync`/`StopAsync` 返回 `OrientTask`，在 owner executor 上管理 DotNetty 监听。 |
-| HTTP 端点 | `HttpServer` | 与 `CRpcServer` 相同模式：生命周期在 owner executor 上，HTTP/JSON 入站后 `Post` 到 executor，经 `RpcServiceInvoker` 调 service。 |
-| 入站 dispatch | `RpcServiceInvoker` | executor 线程上统一 CRpc/HTTP 的 `OnMessageAsync` 调用与响应构造。 |
+| HTTP 端点（应用层） | `HttpListenServer` / `UnifiedServer` | HelloWorld 示例，不在 `Orient.Rpc` 核心：生命周期在 owner executor 上；HTTP/JSON 入站后 `Post` 到 executor，再调 typed 方法（见 `GreeterHttpHandler`）。不经 `RpcServiceInvoker`。 |
+| 入站 dispatch | `RpcServiceInvoker` | executor 线程上统一 **CRpc** 的 `OnMessageAsync` 调用与响应构造；HelloWorld HTTP 不经此路径。 |
 | 服务端 IO 处理器 | `CRpcServerHandler` | DotNetty `ChannelHandlerAdapter`；`ChannelRead` → `server.Executor.Post` → `server.Services.TryGet`。不持有业务状态。 |
 | 客户端 | `CRpcClient` | 持有 `pending calls` 表；经 `TcpChannelHost` 管理出站 TCP 连接；`CallAsync` 要求显式正数 `timeout` 并在 **owner executor timer** 上注册；连接关闭时 `FailPendingCalls`；详见 [§6.3](#63-出站传输tcpchannelhost与-crpcclient)；response/timeout/断连竞争语义见 [§9.5.8](#958-rpc-timeout-语义) / [§9.5.9](#959-pending-call-生命周期)。 |
 | 出站 IO 入站 handler | `ExecutorInboundHandler` | DotNetty `ChannelHandlerAdapter`；`ChannelRead` / `ChannelInactive` / `ExceptionCaught` → `TcpChannelHost.Post*` → `ownerExecutor.Post`；不持有 RPC 业务状态。 |
@@ -145,7 +145,7 @@ flowchart TB
 
     subgraph Endpoints["协议端点 (持 Executor 引用)"]
         CrpcSrv["CRpcServer<br/>Services + Connections"]
-        HttpSrv["HttpServer"]
+        HttpSrv["HttpListenServer / UnifiedServer<br/>(应用层示例)"]
     end
 
     subgraph NettyServer["DotNetty 服务端 IO 线程"]
@@ -264,7 +264,7 @@ serviceId + methodId + request body + IRpcContext
 ```
 
 - CRpc 二进制端点：`TCP bytes -> CRpcMessage -> executor.Post -> RpcServiceInvoker -> CRpcMessage response -> TCP frame`。
-- HTTP 端点：`HTTP/JSON -> serviceId/methodId/body -> executor.Post -> RpcServiceInvoker -> HTTP response`（参考 `HttpServerHandler`；应用层 HTTP 亦可 `executor.Post` 后直接调 typed 方法，见 `GreeterHttpHandler`）。
+- HTTP 端点（HelloWorld 现状）：`HTTP/JSON -> executor.Post -> GreeterHttpHandler 调 typed 方法 -> HTTP response`。不经 `RpcServiceInvoker`；`Orient.Rpc` 核心目前无通用 HTTP server 类型。
 
 ---
 
@@ -384,9 +384,10 @@ await OrientExecutor.InvokeAsync(
 - `callerExecutor == targetExecutor` 时可直接执行 `action`，不必再绕 mailbox。
 - `action` 抛出的异常，或其返回的 `OrientTask` faulted / canceled，应传播到调用方 executor 上完成的返回任务。
 
-更友好的 `UserServiceLocalRef` 可以建立在 `InvokeAsync` 上。它只负责绑定目标 executor 和目标 service，不重复实现跨 executor 调度逻辑：
+更友好的 `UserServiceLocalRef` 可以建立在 `InvokeAsync` 上（**示意 / 尚未实现**；当前业务直接调用 `InvokeAsync`）。它只负责绑定目标 executor 和目标 service，不重复实现跨 executor 调度逻辑：
 
 ```csharp
+// 示意：LocalRef 包装尚未由框架或 codegen 提供
 public sealed class UserServiceLocalRef
 {
     private readonly OrientExecutor targetExecutor;
@@ -407,7 +408,7 @@ public sealed class UserServiceLocalRef
 }
 ```
 
-`LocalRef` 是同进程跨 executor 引用，不是 `CRpcClient`：不走网络、不序列化、不通过 `IRpcService.OnMessageAsync`。
+`LocalRef`（未来）是同进程跨 executor 引用，不是 `CRpcClient`：不走网络、不序列化、不通过 `IRpcService.OnMessageAsync`。
 未来可能由代码生成器自动生成 `LocalRef`。
 
 ##### 跨 executor 的线程安全边界
@@ -422,9 +423,10 @@ public sealed class UserServiceLocalRef
 - **`CRpcContext` / `CRpcConnection`** 不跨 executor 传递；它们绑定连接和所属 executor。若需要 traceId、callerId 等信息，应抽成不可变的跨 executor DTO。
 - **`byte[]` / 大 buffer** 默认也应复制；只有显式所有权转移 API 才允许零拷贝传递。
 
-例如，`LocalRef` 生成代码在处理 protobuf 参数和返回值时应做快照：
+例如，未来 `LocalRef` 生成代码在处理 protobuf 参数和返回值时应做快照（**示意 / 尚未实现**）：
 
 ```csharp
+// 示意：codegen 自动 Clone 尚未实现；手写 InvokeAsync 时由调用方自行保证快照
 public OrientTask<HelloReply> SayHelloAsync(HelloRequest request)
 {
     var requestSnapshot = request.Clone();
@@ -439,11 +441,11 @@ public OrientTask<HelloReply> SayHelloAsync(HelloRequest request)
 }
 ```
 
-这里的 `Clone()` 是同进程跨 executor 的默认快照机制；跨进程 RPC 仍然使用 `ToByteArray()` / `ParseFrom()` 完成序列化边界。
+这里的 `Clone()` 是同进程跨 executor 的**推荐**默认快照机制；跨进程 RPC 仍然使用 `ToByteArray()` / `ParseFrom()` 完成序列化边界。
 
-##### 显式所有权转移
+##### 显式所有权转移（未来）
 
-默认跨 executor 调用按快照传递。对大块 payload，可在性能热点上提供显式所有权转移 API，例如 `InvokeOwnedAsync` / `PostOwned`。
+默认跨 executor 调用按快照传递。对大块 payload，可在性能热点上提供显式所有权转移 API，例如 `InvokeOwnedAsync` / `PostOwned`（**尚未实现**）。
 
 所有权转移 API 的语义是：
 
@@ -504,11 +506,12 @@ var (code, reply) = await greeterClient.SayHelloAsync(request);
 
 #### 6.1 OrientExecutor
 
-```6:42:Orient.Runtime/Executor/OrientExecutor.cs
-public sealed class OrientExecutor
+```7:45:Orient.Runtime/Executor/OrientExecutor.cs
+public sealed partial class OrientExecutor
 {
     [ThreadStatic]
     private static OrientExecutor? current;
+    // ... DEBUG thread binding, Logger ...
 
     private readonly ConcurrentQueue<Action> actions = new();
     private readonly IOrientExecutorTimerScheduler timerScheduler;
@@ -522,7 +525,9 @@ public sealed class OrientExecutor
 
     public OrientExecutor(OrientExecutorOptions? options)
     {
-        timerScheduler = (options ?? new OrientExecutorOptions()).CreateTimerScheduler();
+        var resolvedOptions = options ?? new OrientExecutorOptions();
+        timerScheduler = resolvedOptions.CreateTimerScheduler();
+        Logger = resolvedOptions.CreateLogger("Orient.Runtime.OrientExecutor");
     }
     // Post, Tick, WaitForWorkOrTimer, BindToCurrentThread ...
 }
@@ -561,7 +566,7 @@ public sealed class OrientExecutor
 - `Executor` 在构造时**必须显式传入**；`Services` 与 `Connections` 在构造时创建并绑定同一 executor。
 - **推荐启动形态**（HelloWorld）：在 `OrientExecutorRunner.RunUntilComplete` 中 `crpcServer.Services.Register(impl)` → `await crpcServer.StartAsync`（+ 可选 HTTP），再 `OrientExecutorHost.RunUntilCancelled` 常驻驱动，退出时回到 executor 内 `await StopAsync`。
 - `StartAsync` / `StopAsync` 返回 `OrientTask`，必须在 owner executor 线程调用；DotNetty `BindAsync` / `CloseAsync` / `ShutdownGracefullyAsync` 经 `OrientTask.FromTask(..., Executor)` 回到 executor 后再修改端点状态。
-- `RunAsync` 也返回 `OrientTask`，内部完成启动后嵌入 `OrientExecutorHost.RunUntilCancelled`；**不再**在退出时清 registry（见 [§8.4](#84-server--http-endpoint-生命周期绑定)）。
+- `RunAsync` 也返回 `OrientTask`，内部完成启动后嵌入 `OrientExecutorHost.RunUntilCancelled`；**不再**在退出时清 registry。
 - DotNetty IO 线程数已通过 `CRpcServerOptions.BossThreadCount` / `WorkerThreadCount` 可配置（默认各 1）；共享 `IEventLoopGroup` 注入仍待做；见 [§8.1](#81-io-线程组与业务-executor-的拓扑)。
 
 ```45:55:Orient.Rpc/Server/CRpcServerHandler.cs
@@ -595,13 +600,13 @@ public sealed class OrientExecutor
             ChannelWriteUtil.WriteAndFlushFireAndForget(ctx, rsp);
 ```
 
-`HttpServerHandler` / 应用层 HTTP 可走同一路径：解析 HTTP/JSON 后在 executor 线程 `Services.TryGet` + `RpcServiceInvoker.InvokeAsync`；HelloWorld 的 `GreeterHttpHandler` 亦可 `executor.Post` 后直接调 typed 方法。
+HelloWorld 应用层 HTTP（`GreeterHttpHandler`）路径不同：`executor.Post` 后直接调 typed 方法（如 `InvokeSayHelloAsync`），**不**经 `Services.TryGet` / `RpcServiceInvoker`。
 
-注意 response 写回经 `ChannelWriteUtil.WriteAndFlushFireAndForget` —— 与 `orientdotnet-general.mdc` 里"正常 RPC 响应不要 await 写完成"一致。
+注意 CRpc response 写回经 `ChannelWriteUtil.WriteAndFlushFireAndForget` —— 与 `orientdotnet-general.mdc` 里"正常 RPC 响应不要 await 写完成"一致。
 
 #### 6.3 出站传输（TcpChannelHost）与 CRpcClient
 
-`TcpChannelHost`（`Orient.Rpc/Transport/TcpChannelHost.cs`）是**出站、单 TCP 连接**的 DotNetty 传输层：`Bootstrap`、`ConnectAsync` / write / close、可选 IO group 生命周期。服务端 listen/accept **不走**这一层——`CRpcServer` / `HttpServer` 各自持 `ServerBootstrap`（见 [§6.2](#62-crpcserver--crpcserverhandler--rpcserviceinvoker)）。
+`TcpChannelHost`（`Orient.Rpc/Transport/TcpChannelHost.cs`）是**出站、单 TCP 连接**的 DotNetty 传输层：`Bootstrap`、`ConnectAsync` / write / close、可选 IO group 生命周期。服务端 listen/accept **不走**这一层——`CRpcServer` 与应用层 `HttpListenServer` / `UnifiedServer` 各自持 `ServerBootstrap`（见 [§6.2](#62-crpcserver--crpcserverhandler--rpcserviceinvoker)）。
 
 | 层 | 类型 | 职责 |
 | --- | --- | --- |
@@ -628,7 +633,7 @@ public sealed class CRpcClient : IRpcClient, IAsyncDisposable
 - 连接状态由 `TcpChannelHost` 持有；`ConnectAsync` / `CloseAsync` 在 owner executor 线程调用；DotNetty connect/close 经 `OrientTask.FromTask` 回到 executor。
 - 入站：`ExecutorInboundHandler` → `host.PostInboundMessage` → `ownerExecutor.Post` → `InboundMessageReceived` → `OnHostInboundMessage` → `CompleteReceiveResponse`。
 - `ownerExecutor` 在构造时显式绑定；`ConnectAsync` / `CloseAsync` / `CallAsync` 均要求 `OrientExecutor.Current` 与 owner 为同一实例。
-- `reqSequence` 用 `Interlocked.Increment` —— 对外是线程安全的，但目前实际只可能从 owner executor 调用。
+- `reqSequence` 用 `Interlocked.Increment` —— 防御性写法；契约上仍只从 owner executor 调用，并非跨线程分配 seq。
 
 连接与调用流程：
 
@@ -757,7 +762,7 @@ sequenceDiagram
 
 ### 8. 现状中的设计问题（按严重程度）
 
-> 这一节是"现有代码不一定是好的设计"的具体落点，便于后续重构。
+> 这一节是"现有代码不一定是好的设计"的具体落点，便于后续重构。部分条目已缓解或已落地（见各小节「已部分落地」/ 正文说明）；未解项与跨文档待办以 `Doc/TODO.txt` 为准。
 
 #### 8.1 IO 线程组与业务 executor 的拓扑
 
@@ -768,7 +773,7 @@ sequenceDiagram
 
 **仍为现状 / 待做**
 
-- `HttpServer` / `UnifiedServer` 的 `StartAsync` 里仍硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）。
+- 应用层 `HttpListenServer` / `UnifiedServer` 的 `StartAsync` 里仍硬编码 `MultithreadEventLoopGroup(1)`（boss + worker 各 1）。
 - `CRpcClient` / `TcpChannelHost` 默认路径仍为每连接一个 group；`CRpcServerOptions` / `CRpcClientOptions` 注入共享 `IEventLoopGroup` 尚未暴露给业务 API。
 - 业务 executor 线程来自 `OrientExecutorHost.RunUntilCancelled` 调用线程（推荐）或 `RunAsync` 内嵌驱动（遗留）。
 - 后果：
@@ -780,21 +785,21 @@ sequenceDiagram
 
 #### 8.2 `CRpcServerHandler` 的 owner executor 选择不灵活
 
-`ChannelRead` 里固定 `server.Executor.Post(...)` —— 一个 `CRpcServer` 实例只绑一个 executor。若需"按连接 / 按 serviceId / 按用户 ID 路由到不同 executor"，须改 handler 或增加路由抽象（例如在 `CRpcServer` 上加 `Func<CRpcMessage, OrientExecutor>? ExecutorRoute`）。`HttpServerHandler` 同样固定单 executor。
+`ChannelRead` 里固定 `server.Executor.Post(...)` —— 一个 `CRpcServer` 实例只绑一个 executor。若需"按连接 / 按 serviceId / 按用户 ID 路由到不同 executor"，须改 handler 或增加路由抽象（例如在 `CRpcServer` 上加 `Func<CRpcMessage, OrientExecutor>? ExecutorRoute`）。应用层 `GreeterHttpHandler` 同样固定单 executor。
 
-#### 8.3 `CRpcClient` 的 owner executor 绑定
+#### 8.3 `CRpcClient` 的 owner executor 绑定（已落地）
 
 - `pending calls` 表与 `channel` 连接状态均在 client 实例上，访问约定为 **owner executor 线程**（见 [§9.4 关键不变量](#94-关键不变量重申)）。
 - 生命周期 API（`ConnectAsync` / `CloseAsync` / `ShutdownIoAsync`）已统一为 `OrientTask`；DotNetty `.NET Task` 仅作 IO interop，completion 必须回到 owner executor。
 - 推荐 teardown：`await reference.CloseAsync()` → `await reference.ShutdownIoAsync()`；`IAsyncDisposable.DisposeAsync` 保留兼容，但不适合在 executor 内 `await using` 等待异步 close。
 
-#### 8.4 Server / HTTP endpoint 生命周期绑定
+#### 8.4 Server / HTTP endpoint 生命周期绑定（已落地）
 
-- `CRpcServer.StartAsync` / `StopAsync` 与 `HttpServer.StartAsync` / `StopAsync` 已统一为 `OrientTask`，必须在 owner executor 线程调用。
+- `CRpcServer.StartAsync` / `StopAsync` 与应用层 `HttpListenServer.StartAsync` / `StopAsync`（及 `UnifiedServer`）已统一为 `OrientTask`，必须在 owner executor 线程调用。
 - `bootstrapChannel`、IO groups、运行状态的写入收束到 owner executor；对外 `IsRunning` 是 `Volatile` 快照。
-- `CRpcServer.RunAsync` 仅作为 demo host helper 保留；生产组合为 `StartAsync` + `OrientExecutorHost.RunUntilCancelled` + `StopAsync`（见 [§8.4](#84-server--http-endpoint-生命周期绑定)）。
+- `CRpcServer.RunAsync` 仅作为 demo host helper 保留；生产组合为 `StartAsync` + `OrientExecutorHost.RunUntilCancelled` + `StopAsync`（见 HelloWorld `Program.cs`）。
 
-#### 8.5 `OrientExecutorRunner.RunUntilComplete` 的使用方式
+#### 8.5 `OrientExecutorRunner.RunUntilComplete` 的使用方式（已落地）
 
 `HelloWorld/Client/Program.cs` 里（connect / call / close 均在 executor 内）：
 
@@ -818,6 +823,8 @@ OrientExecutorRunner.RunUntilComplete(executor, async () =>
 ---
 
 ### 9. 目标架构（建议方向，不是当前实现）
+
+> **阅读边界**：§9.1–§9.2 的多 executor 路由、`ExecutorRoute`、以及下方 API 草稿中标注为未来的部分，仍是方向。§9.3–§9.4 与 §9.5 中大量调度 / timer / timeout / pending 语义**已是当前实现**（与代码一致）；不要把整章当成「尚未落地」。待办清单见 `Doc/TODO.txt`。
 
 #### 9.1 线程模型分层
 
@@ -896,12 +903,9 @@ public sealed class CRpcServer {
     public Func<CRpcMessage, OrientExecutor>? ExecutorRoute;            // 可选：按消息路由到不同 executor（未来）
 }
 
-// 其它协议端点同样只负责协议适配，然后投递到 executor
-public sealed class HttpServer {
-    public HttpServer(OrientExecutor executor, HttpServerOptions opts);
-    public OrientTask StartAsync(CancellationToken ct = default);
-    public OrientTask StopAsync();
-}
+// 应用层 HTTP 端点（现状：HelloWorld HttpListenServer / UnifiedServer；非 Orient.Rpc 核心类型）
+// public sealed class HttpListenServer { ... StartAsync / StopAsync -> OrientTask ... }
+
 public sealed class CRpcClient {
     public CRpcClient(OrientExecutor executor, CRpcClientOptions opts); // 显式 executor
 }
@@ -948,7 +952,7 @@ OrientExecutorHost.RunUntilCancelled(executor, cancellationToken);
 4. `WriteAndFlushAsync` 不 await 完成（除非要影响业务状态，那就 `Post` 回来）。
 5. `Task.Run` / `System.Threading.Timer` / 线程池续延 在 CRpc 实现里**禁用**；只允许显式 interop 后 `Post` 回 executor。
 6. **Timer 永远是 executor-owned**：`ScheduleDelay` / `ScheduleAt` 只能在 owner executor 线程调用；timer callback 只在 owner executor 线程执行；不做全局 timer 线程直接完成 RPC timeout。外部线程若要安排延迟逻辑，先 `executor.Post(...)` 进入 owner executor 再注册 timer。
-7. **Endpoint 生命周期 CRpc 化**：`CRpcServer` / `HttpServer` 的 `StartAsync` / `StopAsync`，以及 `CRpcClient` 的 `ConnectAsync` / `CloseAsync` / `ShutdownIoAsync` 返回 `OrientTask`；DotNetty `.NET Task` 只做 IO interop，状态变更 completion 回到 owner executor。
+7. **Endpoint 生命周期 CRpc 化**：`CRpcServer` 与应用层 HTTP 端点（`HttpListenServer` / `UnifiedServer`）的 `StartAsync` / `StopAsync`，以及 `CRpcClient` 的 `ConnectAsync` / `CloseAsync` / `ShutdownIoAsync` 返回 `OrientTask`；DotNetty `.NET Task` 只做 IO interop，状态变更 completion 回到 owner executor。
 
 #### 9.5 OrientExecutor 调度、Timer 与 RPC Timeout
 
@@ -1030,7 +1034,7 @@ Tick(maxActions):
   3. drain actions（最多 maxActions）   // timer 回调里的 TrySet* → continuation → Post 同轮推进
 ```
 
-相对现状（timer-first）的调整目的：**已进入 mailbox 的 response 优先于本轮 due timeout**，避免 response 已 `Post` 却被 timeout 抢先完成。
+**现状顺序**即上表：已进入 mailbox 的 response 在同一轮 `Tick` 中优先于 due timeout，避免 response 已 `Post` 却被 timeout 抢先完成（早期曾为 timer-first，现已改为 actions-first）。
 
 ##### 9.5.5 Tick 异常隔离
 
@@ -1097,7 +1101,7 @@ internal interface IOrientExecutorTimerScheduler
 | `MinHeapTimerScheduler` | **第一版默认** | `PriorityQueue`，精确 deadline，类似 libuv | 堆顶 `due - now`；已 due → `Zero` |
 | `TimingWheelTimerScheduler` | 预留 | executor-owned timing wheel，仅在 `Tick()` 推进、无额外线程 | 下一 tick 或下一非空 slot 距 `now` 多久 |
 
-`OrientExecutorOptions` 可预留 `TimerSchedulerFactory`，默认 `() => new MinHeapTimerScheduler()`。Public API 不暴露 backend 细节，业务只调用 `ScheduleDelay` / `ScheduleAt`。
+`OrientExecutorOptions` 已有 **internal** `TimerSchedulerFactory`（默认 `() => new MinHeapTimerScheduler()`）。Public API 不暴露 backend 细节，业务只调用 `ScheduleDelay` / `ScheduleAt`。
 
 ##### 9.5.7 换成 Timing Wheel 后
 
