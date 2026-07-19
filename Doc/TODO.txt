@@ -1,6 +1,6 @@
 # Orient / CRpc TODO
 
-> 2026-06-28 按当前实现重新整理。已落地的历史 TODO 见文末归档；本文件只跟踪还需要继续推进的事项。
+> 2026-07-19 按当前实现重新整理。已落地的历史 TODO 见文末归档；本文件只跟踪还需要继续推进的事项。
 > 架构对照：`Doc/architecture.md`
 
 ## P1：协议与并发模型完善
@@ -18,39 +18,46 @@
 
 ## P2：可观测性、测试和代码卫生
 
-1. 用结构化日志替换 `Console.WriteLine` / `Console.Error`。
-   - 当前仍分散在 `CRpcServer`、`CRpcServerHandler`、`CRpcMessageDecoder`、`CRpcClient`、示例和 Gateway 中。
-   - 建议先引入一个轻量 `CRpcLog` / `ILogger` 适配点，字段至少包含 `connectionId`、`serviceId`、`methodId`、`reqSequence`、`resultCode`、异常。
-
-2. 增加 metrics / tracing 钩子。
+1. 增加 metrics / tracing 钩子。
    - 需要能观察 QPS、pending 数、超时率、连接数、push 失败、请求耗时分布。
    - tracing 可以先预留 OpenTelemetry / W3C TraceContext 入口，不必一次性接完整链路。
 
-3. 扩充端到端与压力测试。
+2. 扩充端到端与压力测试。
    - 已有 loop、timer、codec、pipeline、heartbeat、client pending、push、server handler、`RpcServiceRegistry` 等单测（`Tests/Orient.Tests`）。
    - 仍建议补真实 client + server TCP 集成测试：正常响应、未知 service 错误、超时、断线、并发、慢消费者、超过 frame 上限。
    - 减少通过反射读取私有字段的测试，优先从公开行为断言。
 
-4. 清理命名和占位代码。
+3. 清理命名和占位代码。
    - `CRpcContext` 已实现 `IRpcContext` 并携带连接，但 `IRpcContext` 仍为空接口。
    - Nacos 相关路径已迁至 `Orient.Rpc/Mgr/Nacos`、`Orient.Rpc/Registry/Nacos`、`Orient.Rpc/ConfigCenter/Nacos`；其余命名空间风格可继续统一。
    - `Orient.Rpc/Mgr/Nacos/Test/NacosTest.cs` 仍在生产工程中，应移到测试/示例，或删除。
 
-5. Nacos 组件改造成可注入服务。
+4. Nacos 组件改造成可注入服务。
    - `NacosMgr.Instance` 是强单例，`Srv` 可为空且很多方法静默返回默认值。
    - `NacosRegistry` / `NacosConfig` 目前直接暴露或隐藏 `Task` API，需要明确这是外部 interop 边界，并加初始化状态检查。
 
-6. 错误模型增强（现状可用，按需推进）。
+5. 错误模型增强（现状可用，按需推进）。
    - 现状：框架层已有 `CRpcStatusCode` 分段（1000–1999 框架 / 10001+ 应用）与 `RpcServiceInvoker` 框架错误响应；应用返回 `(int, byte[])` 裸 int，够内部单语言场景用，暂不需要 `CRpcError` 信封 / 字段级 details。
    - 需要修：客户端 codegen 把所有非零码折叠成 `(-1, null)`（见 `OrientCrpcGen.cs` 生成的 `*Async`），丢掉了服务端已区分的 `resultCode`。应改为透传真实 code（如 `return (result, null);`），调用方才能区分 MethodNotFound / InternalError / 应用错误。纯 codegen 改动，不动协议与 wire。
-   - 按需再做（出现跨语言客户端 / 对外 API / 需向调用方传 message 时）：`CRpcError` 信封（code + message + 可选 details）、异常 → 稳定框架码的集中映射；异常 detail 可随 P2 结构化日志一并落到服务端，默认不向客户端暴露 stack。
+   - 按需再做（出现跨语言客户端 / 对外 API / 需向调用方传 message 时）：`CRpcError` 信封（code + message + 可选 details）、异常 → 稳定框架码的集中映射；异常 detail 可写入现有服务端日志，默认不向客户端暴露 stack。
 
 ## P3：依赖与长期演进
 
 1. 依赖版本治理。
-   - `Google.Protobuf` / `Google.Protobuf.Tools` 仍是 `3.35.0-rc1`，`Microsoft.Extensions.Logging.Console` 仍是 `11.0.0-preview.3...`。
+   - `Google.Protobuf` / `Google.Protobuf.Tools` 仍是 `3.35.0-rc1`。
    - 建议加 `Directory.Packages.props` 统一版本，并优先固定到稳定版。
 
 2. DotNetty 替换路线。
    - DotNetty `0.7.6` 长期维护风险仍在。
    - 当前已有 `TcpChannelHost`、`IChannelPipelineFactory` 等传输边界雏形；继续把协议/业务层与 DotNetty 解耦，为 System.IO.Pipelines、Kestrel transport、SuperSocket 或直接 Socket 留迁移空间。
+
+## 已完成归档
+
+### 2026-07-19
+
+- 项目自有日志通道已落地。
+  - 新增 BCL-only 的 `Orient.Logging`：有界非阻塞队列、专用消费线程、批量 sink、级别过滤、Null logger 与丢弃计数/摘要。
+  - 日志事件自动记录时间、级别、event id、category、`ManagedThreadId`、消息与可选异常。
+  - Runtime、Rpc、Gateway 和示例的诊断输出已迁移；仅 Runtime unhandled / Tick-escape 在 Error 日志未启用时保留 stderr 兜底。
+  - DotNetty 通过 Rpc 侧 bridge 接入统一 logger factory，channel `LoggingHandler` 默认关闭。
+  - `Orient.Rpc` 已移除未使用的 `Microsoft.Extensions.Logging.Console` 包引用。

@@ -806,12 +806,14 @@ OrientExecutorRunner.RunUntilComplete(executor, async () =>
 
 - 已提供 `CRpcReference`；`RunUntilComplete` 适合 main 线程一次性脚本，常驻客户端用 `OrientExecutorHost.RunUntilCancelled`。
 
-#### 8.6 Console 不是可观测性通道
+#### 8.6 `Orient.Logging` 可观测性通道
 
-- Runtime、Rpc、Gateway 与示例中的诊断事件统一使用项目自有的 `Orient.Logging`；生产者只向有界队列提交事件，不直接执行 Console 或其他 sink I/O。
-- 每个事件在生产线程自动记录 `ManagedThreadId`，以 category + thread id 关联上下文；调用点不再猜测或标注 `[executor|io|tp]` 线程角色。
-- DotNetty 日志由 Rpc 侧 bridge 接入 `InternalLoggerFactory.DefaultFactory`，与应用日志共用宿主配置的 logger factory。
-- 未配置 logger factory 时使用 Null logger。仅 Runtime 的 unhandled / Tick-escape 保留 stderr 最后兜底，并且只在 Error 级别被禁用时触发。
+- Runtime、Rpc、Gateway 与示例中的诊断事件已统一使用项目自有的 `Orient.Logging`；生产者只通过非阻塞 `TryWrite` 向有界队列提交事件，不直接执行 Console 或其他 sink I/O。
+- `OrientLogEvent` 在生产线程记录时间、级别、event id、category、`ManagedThreadId`、消息与可选异常；调用点以 category + thread id 关联上下文，不再猜测或标注 `[executor|io|tp]` 线程角色。
+- `OrientLogService` 使用单独日志线程批量写入 `IOrientLogSink`。默认容量为 8192、批量大小为 256；队列满时丢弃事件并累计计数，由消费线程直接向 sink 输出丢弃摘要。
+- 日志级别为 Trace / Debug / Info / Warn / Error / Fatal。宿主可注入 `IOrientLoggerFactory`；未配置时使用 Null logger，核心库保持静默。
+- DotNetty 日志由 Rpc 侧 `OrientDotNettyLogging` bridge 接入进程级 `InternalLoggerFactory.DefaultFactory`，与应用日志共用宿主配置的 logger factory；channel `LoggingHandler` 默认关闭。
+- 仅 Runtime 的 unhandled / Tick-escape 在 Error 日志未启用时保留 stderr 最后兜底；启用 Error 日志后不重复写 stderr。
 
 ---
 
@@ -1041,8 +1043,8 @@ Tick(maxActions):
 | Posted action | `DrainActions`：每个 `action()` 独立 try/catch |
 | Timer 回调 | `RunExpiredTimers`：每次 `RunDueTimers(..., maxTimers: 1)` 独立 try/catch |
 | 上报 | 捕获后调用 `HandleUnhandledException` → 触发 `UnhandledException` 事件 |
-| 无订阅者 | 写 `Console.Error`，循环继续 |
-| Handler 自身抛异常 | 二次 catch，写 `Console.Error`，循环继续 |
+| 无订阅者 | Error logger 启用时写 `Orient.Logging`；否则写 stderr，循环继续 |
+| Handler 自身抛异常 | 二次 catch；handler 异常与原异常按同一 logger / stderr 规则上报，循环继续 |
 
 ```csharp
 /// Raised on the executor thread when an action or timer callback throws.
@@ -1051,7 +1053,7 @@ public event Action<Exception>? UnhandledException;
 
 订阅方在 executor 线程收到异常，可用于日志、指标或告警；handler 内不应再抛未处理异常。
 
-**Driver 兜底**：`OrientExecutorHost` / `OrientExecutorRunner` 在 `executor.Tick()` 外另有 try/catch，防止仍有异常逃出时终止 driver 线程（打 stderr 后继续循环）。
+**Driver 兜底**：`OrientExecutorHost` / `OrientExecutorRunner` 在 `executor.Tick()` 外另有 try/catch，防止仍有异常逃出时终止 driver 线程。Error logger 启用时写日志，否则写 stderr，随后继续循环。
 
 **行为保证**
 
@@ -1059,9 +1061,9 @@ public event Action<Exception>? UnhandledException;
 - `Tick()` 本身不向调用方传播业务异常
 - 有 / 无 `UnhandledException` 订阅者，循环均保持存活
 
-**测试**：`Tests/Orient.Tests/OrientExecutorExceptionIsolationTests.cs`（action / timer 连续执行、事件上报、无 handler、handler 自身抛异常）。
+**测试**：`Tests/Orient.Tests/OrientExecutorExceptionIsolationTests.cs` 覆盖 action / timer 连续执行、事件上报、无 handler、handler 自身抛异常；`Tests/Orient.Tests/Logging/OrientExecutorLoggingTests.cs` 覆盖 logger 与 stderr 兜底分支。
 
-**后续可选**：生产 server 尚未统一订阅 `UnhandledException`，默认仅 stderr；若需集中日志 / 监控，可在 `CRpcServer` 启动处挂载 handler。
+宿主通过 `OrientExecutorOptions.LoggerFactory` 注入统一 logger factory；仍可订阅 `UnhandledException` 承接额外的指标或告警逻辑。
 
 ##### 9.5.6 Timer Scheduler 抽象
 
@@ -1189,7 +1191,12 @@ while (!cancellationToken.IsCancellationRequested)
     }
     catch (Exception exception)
     {
-        Console.Error.WriteLine($"OrientExecutorHost: unexpected exception escaped Tick: {exception}");
+        if (executor.Logger.IsEnabled(OrientLogLevel.Error))
+            executor.Logger.Log(OrientLogLevel.Error, 1002,
+                "OrientExecutorHost: unexpected exception escaped Tick", exception);
+        else
+            Console.Error.WriteLine(
+                $"OrientExecutorHost: unexpected exception escaped Tick: {exception}");
     }
 
     executor.WaitForWorkOrTimer(cancellationToken);
@@ -1209,4 +1216,7 @@ while (!cancellationToken.IsCancellationRequested)
 1. **`ExecutorRoute` 钩子**：`CRpcServer` / `HttpServer` 增加 `Func<..., OrientExecutor>? ExecutorRoute`，支持按消息路由到不同 executor（见 §9.2）。
 2. **共享 IO group 注入**：`TcpChannelHost` 已支持注入共享 group；`CRpcServerOptions` / `CRpcClientOptions` 对 CRPC 服务端与 Reference 客户端暴露注入仍待做。
 3. **多 executor 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 executor"的 demo，覆盖跨 executor 调用 / 路由 / 关闭顺序。
-4. **替换诊断性 `Console.WriteLine`**：引入 `Orient.Logging`（有界队列 + 专用日志线程），记录 `ManagedThreadId`；DotNetty 由 Rpc 侧 bridge 通过 `InternalLoggerFactory.DefaultFactory` 接入。
+
+**已完成**
+
+- **统一日志通道**：已引入 `Orient.Logging`（有界队列 + 专用日志线程），Runtime、Rpc、Gateway 与示例的诊断输出已迁移；事件自动记录 `ManagedThreadId`，DotNetty 由 Rpc 侧 bridge 通过 `InternalLoggerFactory.DefaultFactory` 接入。
