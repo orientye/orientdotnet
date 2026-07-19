@@ -1206,6 +1206,5 @@ while (!cancellationToken.IsCancellationRequested)
 
 1. **`ExecutorRoute` 钩子**：`CRpcServer` / `HttpServer` 增加 `Func<..., OrientExecutor>? ExecutorRoute`，支持按消息路由到不同 executor（见 §9.2）。
 2. **共享 IO group 注入**：`TcpChannelHost` 已支持注入共享 group；`CRpcServerOptions` / `CRpcClientOptions` 对 CRPC 服务端与 Reference 客户端暴露注入仍待做。
-3. **多协议示例变体**：HelloWorld 默认即为纯 CRpc；已支持 `--unified`（**推荐**，单端口 Port Unification）与 `--http`（可选，CRpc 7999 + HTTP 8080）；仍缺管理端口、第二个 CRpc 端口等变体示例。
-4. **多 executor 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 executor"的 demo，覆盖跨 executor 调用 / 路由 / 关闭顺序。
-5. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[executor|io|tp]` 来源。
+3. **多 executor 真用起来**：示例工程加一个"按用户 ID hash 分两个业务 executor"的 demo，覆盖跨 executor 调用 / 路由 / 关闭顺序。
+4. **替换 `Console.WriteLine`**：引入日志抽象，并标注 `[executor|io|tp]` 来源。
